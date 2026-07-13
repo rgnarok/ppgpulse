@@ -7,3 +7,6 @@ Log of completed tasks: date · task id · what shipped.
 - 2026-07-13 · T0.3 · docker-compose Postgres, .env.example, zod-validated config module (throws on missing/invalid env) + tests.
 - 2026-07-13 · T1.1 · Prisma schema (all SPEC §1 models, enums, indexes) + init migration; schema/migration test on temp DB.
 - 2026-07-13 · T1.2 · Idempotent seed (3 roles+perms, 13 users argon2, 10 consultants, 145 requirements, 138 HDIS+owners+zeroed pipeline); npm run seed/reset; counts + Kushagra super_admin tests.
+- 2026-07-13 · T2.1 · argon2 password hash/verify + JWT access/refresh sign/verify with rotation (RefreshToken model); tests incl. expired-token rejection.
+- 2026-07-13 · T2.2 · Fastify app (helmet/cors/rate-limit/multipart/static prototype), auth plugin, POST /auth/login|refresh|logout + GET /me (effective perms+scope); good/bad login, /me shape, rotation, logout-invalidation tests.
+- 2026-07-13 · T2.3 · RBAC engine: can()/effectivePermissions (role ∪ overrides), scopeUserIds/scopeNames (org/team/own, cycle-safe subtree), HR-cannot-touch-super_admin + role-edit guards; full SPEC §2 matrix tests.

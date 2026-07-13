@@ -30,12 +30,12 @@ Legend: **AC** = acceptance criteria, **Tests** = tests to write, **Deps** = dep
   Tests: after seed, counts assert 13/10/145/138; Kushagra = super_admin.
 
 ## Phase 2 — Auth & RBAC core
-- [ ] **T2.1 Password + JWT services.** Deps: T1.2. AC: argon2 hash/verify; sign/verify
+- [x] **T2.1 Password + JWT services.** Deps: T1.2. AC: argon2 hash/verify; sign/verify
   access+refresh; refresh rotation. Tests: hash roundtrip, expired token rejected.
-- [ ] **T2.2 Auth routes.** Deps: T2.1. AC: `POST /auth/login|refresh|logout`, `GET /me`
+- [x] **T2.2 Auth routes.** Deps: T2.1. AC: `POST /auth/login|refresh|logout`, `GET /me`
   returns user + effective permissions + scope. Tests: good/bad login, /me shape,
   refresh rotates, logout invalidates.
-- [ ] **T2.3 RBAC engine.** Deps: T2.1. AC: `can(user, section, cap)` = rolePerms ∪
+- [x] **T2.3 RBAC engine.** Deps: T2.1. AC: `can(user, section, cap)` = rolePerms ∪
   overrides; `scopeNames(user)` resolves org/team (subtree + peers); `assert(...)`
   middleware. **HR-cannot-touch-super_admin** guard implemented here.
   Tests: matrix from SPEC §2 verified for all 3 roles; override grants; HR blocked from

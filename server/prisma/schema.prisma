@@ -66,9 +66,22 @@ model User {
   consultant   Consultant?
   hdisActivity HdisActivity[]
   interviews   Interview[]
+  refreshTokens RefreshToken[]
 
   @@index([email])
   @@index([managerId])
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  jti       String    @unique
+  userId    String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model UserOverride {
