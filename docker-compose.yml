@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: ppg-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ppg
+      POSTGRES_PASSWORD: ppg
+      POSTGRES_DB: ppgpulse
+    ports:
+      - '5432:5432'
+    volumes:
+      - ppg-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ppg -d ppgpulse']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  ppg-pgdata:

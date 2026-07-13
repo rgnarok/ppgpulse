@@ -9,13 +9,13 @@ Legend: **AC** = acceptance criteria, **Tests** = tests to write, **Deps** = dep
 ---
 
 ## Phase 0 — Scaffold & tooling
-- [ ] **T0.1 Monorepo scaffold.** Deps: none.
+- [x] **T0.1 Monorepo scaffold.** Deps: none.
   AC: npm workspaces with `/server` + `/web`; root scripts `dev`, `build`, `test`,
   `lint`, `typecheck`, `verify`(=typecheck→lint→test→build); Node 20 engines pin.
   Tests: a trivial passing unit test in each workspace so `verify` runs green.
-- [ ] **T0.2 Lint/format/hooks.** Deps: T0.1. AC: ESLint+Prettier configured, Husky
+- [x] **T0.2 Lint/format/hooks.** Deps: T0.1. AC: ESLint+Prettier configured, Husky
   pre-commit runs lint+typecheck on staged files; `npm run lint` clean.
-- [ ] **T0.3 Docker Postgres + env.** Deps: T0.1. AC: `docker-compose.yml` with Postgres;
+- [x] **T0.3 Docker Postgres + env.** Deps: T0.1. AC: `docker-compose.yml` with Postgres;
   `.env.example` documents `DATABASE_URL`, `JWT_SECRET`, `JWT_REFRESH_SECRET`,
   `WEB_ORIGIN`, `UPLOAD_DIR`; server reads env via a validated config module.
   Tests: config module throws on missing required env (unit).
