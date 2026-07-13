@@ -1,0 +1,135 @@
+const ACCESS_KEY = 'ppg_access';
+const REFRESH_KEY = 'ppg_refresh';
+
+export const tokenStore = {
+  getAccess: () => localStorage.getItem(ACCESS_KEY),
+  getRefresh: () => localStorage.getItem(REFRESH_KEY),
+  set: (access: string, refresh: string) => {
+    localStorage.setItem(ACCESS_KEY, access);
+    localStorage.setItem(REFRESH_KEY, refresh);
+  },
+  clear: () => {
+    localStorage.removeItem(ACCESS_KEY);
+    localStorage.removeItem(REFRESH_KEY);
+  },
+};
+
+export class ApiError extends Error {
+  status: number;
+  code: string;
+  constructor(status: number, message: string, code = 'error') {
+    super(message);
+    this.status = status;
+    this.code = code;
+  }
+}
+
+const BASE = '/api';
+let refreshInFlight: Promise<boolean> | null = null;
+
+/** Attempt to rotate tokens using the stored refresh token. Deduped. */
+async function tryRefresh(): Promise<boolean> {
+  const refresh = tokenStore.getRefresh();
+  if (!refresh) return false;
+  if (!refreshInFlight) {
+    refreshInFlight = (async () => {
+      try {
+        const res = await fetch(`${BASE}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh }),
+        });
+        if (!res.ok) return false;
+        const data = (await res.json()) as { access: string; refresh: string };
+        tokenStore.set(data.access, data.refresh);
+        return true;
+      } catch {
+        return false;
+      } finally {
+        refreshInFlight = null;
+      }
+    })();
+  }
+  return refreshInFlight;
+}
+
+interface RequestOptions {
+  method?: string;
+  body?: unknown;
+  raw?: boolean; // return the Response instead of parsed JSON
+  isForm?: boolean;
+}
+
+/** Authenticated fetch with a single transparent refresh-and-retry on 401. */
+export async function api<T = unknown>(path: string, options: RequestOptions = {}): Promise<T> {
+  const doFetch = async (): Promise<Response> => {
+    const headers: Record<string, string> = {};
+    const access = tokenStore.getAccess();
+    if (access) headers.Authorization = `Bearer ${access}`;
+    let body: BodyInit | undefined;
+    if (options.body !== undefined) {
+      if (options.isForm) {
+        body = options.body as BodyInit;
+      } else {
+        headers['Content-Type'] = 'application/json';
+        body = JSON.stringify(options.body);
+      }
+    }
+    return fetch(`${BASE}${path}`, { method: options.method ?? 'GET', headers, body });
+  };
+
+  let res = await doFetch();
+  if (res.status === 401 && (await tryRefresh())) {
+    res = await doFetch();
+  }
+
+  if (!res.ok) {
+    let code = 'error';
+    let message = res.statusText;
+    try {
+      const err = await res.json();
+      code = err.error ?? code;
+      message = err.message ?? message;
+    } catch {
+      /* non-JSON error */
+    }
+    throw new ApiError(res.status, message, code);
+  }
+
+  if (options.raw) return res as unknown as T;
+  if (res.status === 204) return undefined as T;
+  return (await res.json()) as T;
+}
+
+/** Login stores tokens and returns the user summary. */
+export async function loginRequest(email: string, password: string) {
+  const res = await fetch(`${BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) {
+    throw new ApiError(res.status, 'Invalid email or password', 'bad_credentials');
+  }
+  const data = (await res.json()) as {
+    access: string;
+    refresh: string;
+    user: { id: string; name: string; email: string; role: { key: string; label: string } };
+  };
+  tokenStore.set(data.access, data.refresh);
+  return data.user;
+}
+
+export async function logoutRequest() {
+  const refresh = tokenStore.getRefresh();
+  try {
+    await fetch(`${BASE}/auth/logout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh }),
+    });
+  } catch {
+    /* ignore */
+  }
+  tokenStore.clear();
+}

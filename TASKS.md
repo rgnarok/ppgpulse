@@ -87,53 +87,53 @@ Legend: **AC** = acceptance criteria, **Tests** = tests to write, **Deps** = dep
   day + month count; consultant can edit; scope of `ppgConsultantId` list respected.
 
 ## Phase 7 — Web shell & auth
-- [ ] **T7.1 Web scaffold + design tokens.** Deps: T0.2. AC: Vite React TS + Tailwind;
+- [x] **T7.1 Web scaffold + design tokens.** Deps: T0.2. AC: Vite React TS + Tailwind;
   port the prototype's tokens (dark sidebar, ABC tiles, chart cards, fonts). Tests: a
   component render test.
-- [ ] **T7.2 Auth flow + API client.** Deps: T7.1,T2.2. AC: login page, token storage,
+- [x] **T7.2 Auth flow + API client.** Deps: T7.1,T2.2. AC: login page, token storage,
   TanStack Query client with auth + refresh; `useMe()`. Tests: login redirects; 401
   triggers refresh then retry.
-- [ ] **T7.3 App shell + RBAC nav.** Deps: T7.2,T2.3. AC: left sidebar + topbar; nav
+- [x] **T7.3 App shell + RBAC nav.** Deps: T7.2,T2.3. AC: left sidebar + topbar; nav
   items filtered by `can(section,'view')`; role/user context; logout. (No "PPG Report"
   item — Home is the report.) Tests: consultant sees no Admin items.
 
 ## Phase 8 — Web: Home report
-- [ ] **T8.1 Filter bar.** Deps: T7.3,T4.2. AC: Consultant / FY / Month / From / To /
+- [x] **T8.1 Filter bar.** Deps: T7.3,T4.2. AC: Consultant / FY / Month / From / To /
   "All Q1"; drives queries. Tests: changing month refetches with range.
-- [ ] **T8.2 Overview (tiles + charts).** Deps: T8.1,T4.3. AC: 7 ABC tiles + 4 Chart.js
+- [x] **T8.2 Overview (tiles + charts).** Deps: T8.1,T4.3. AC: 7 ABC tiles + 4 Chart.js
   charts matching the prototype; bar click opens that consultant. Tests: renders tiles
   from mocked API; click handler navigates.
-- [ ] **T8.3 Consultant view + requirement drilldown.** Deps: T8.1,T4.4. AC: gauge +
+- [x] **T8.3 Consultant view + requirement drilldown.** Deps: T8.1,T4.4. AC: gauge +
   factor rings + funnel + requirements table; row → requirement detail; empty-period
   state. Tests: renders from mocked API; empty state shows.
 
 ## Phase 9 — Web: Interviews
-- [ ] **T9.1 Interviews UI.** Deps: T7.3,T6.1. AC: month calendar w/ counts; day panels
+- [x] **T9.1 Interviews UI.** Deps: T7.3,T6.1. AC: month calendar w/ counts; day panels
   (mid/end) editable inline; consultant-wise view; read-only when lacking edit.
   Tests: add row persists via API; read-only hides inputs.
 
 ## Phase 10 — Web: HDIS
-- [ ] **T10.1 HDIS list + monthly.** Deps: T7.3,T5.1. AC: month pills + table + activity
+- [x] **T10.1 HDIS list + monthly.** Deps: T7.3,T5.1. AC: month pills + table + activity
   feed; add button gated. Tests: list renders; consultant sees no add/edit.
-- [ ] **T10.2 HDIS form.** Deps: T10.1,T5.4. AC: fields + **owners multiselect (chips)** +
+- [x] **T10.2 HDIS form.** Deps: T10.1,T5.4. AC: fields + **owners multiselect (chips)** +
   **JD link input + PDF/DOC upload**; validation. Tests: add/remove owner chip; upload
   calls API; save creates record.
-- [ ] **T10.3 HDIS detail + pipeline recorder.** Deps: T10.2,T5.3. AC: banner + owners +
+- [x] **T10.3 HDIS detail + pipeline recorder.** Deps: T10.2,T5.3. AC: banner + owners +
   attachment/link + **R0–R5 inputs & stage/status "Log update"** + per-record activity
   log. Tests: pipeline save posts + shows new activity; read-only shows values only.
 
 ## Phase 11 — Web: People
-- [ ] **T11.1 My Team.** Deps: T7.3,T4.1. AC: scoped member cards; click a consultant →
+- [x] **T11.1 My Team.** Deps: T7.3,T4.1. AC: scoped member cards; click a consultant →
   opens their Home report with filters. Tests: click sets consultant + routes to Home.
-- [ ] **T11.2 Profile.** Deps: T7.3,T2.2. AC: account + role + access summary + (for
+- [x] **T11.2 Profile.** Deps: T7.3,T2.2. AC: account + role + access summary + (for
   consultants) personal stats. Tests: renders access grid from /me.
 
 ## Phase 12 — Web: Admin
-- [ ] **T12.1 Users admin.** Deps: T7.3,T3.2. AC: table with role/team/manager editors +
+- [x] **T12.1 Users admin.** Deps: T7.3,T3.2. AC: table with role/team/manager editors +
   overrides; super_admin rows locked for HR. Tests: HR cannot edit super_admin row.
-- [ ] **T12.2 Roles admin.** Deps: T7.3,T3.3. AC: role cards + permission-matrix builder.
+- [x] **T12.2 Roles admin.** Deps: T7.3,T3.3. AC: role cards + permission-matrix builder.
   Tests: create custom role updates nav for assigned users.
-- [ ] **T12.3 Hierarchy.** Deps: T7.3,T3.4. AC: org tree view. Tests: renders seed tree.
+- [x] **T12.3 Hierarchy.** Deps: T7.3,T3.4. AC: org tree view. Tests: renders seed tree.
 
 ## Phase 13 — E2E, hardening, deploy
 - [ ] **T13.1 Playwright e2e (6 flows).** Deps: all web+api. AC: (1) login; (2) super sees

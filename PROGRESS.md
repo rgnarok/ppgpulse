@@ -23,3 +23,9 @@ Log of completed tasks: date · task id · what shipped.
 - 2026-07-13 · T5.3 · PUT /hdis/:jdId/pipeline (R0–R5+stage) syncs status, logs field diffs.
 - 2026-07-13 · T5.4 · JD link set/clear + multipart attachment upload (mime+size validated via StorageService) + authorized download; rejects .exe/oversize.
 - 2026-07-13 · T6.1 · Interviews API: month counts, day view (mid/end + consultant-wise), add/patch/delete; team-scope visibility respected.
+- 2026-07-13 · T7.1-7.3 · Web scaffold (Vite+React+TS+Tailwind), prototype design tokens, API client with transparent refresh+retry, AuthProvider, RBAC-filtered app shell/nav.
+- 2026-07-13 · T8.1-8.3 · Home: filter bar (Consultant/FY/Month/From/To/All Q1), 7 ABC tiles + 4 Chart.js charts, consultant drilldown (gauge/funnel/requirements) + empty state.
+- 2026-07-13 · T9.1 · Interviews: month calendar w/ counts, day panels (mid/end + consultant-wise), inline add; read-only hides inputs.
+- 2026-07-13 · T10.1-10.3 · HDIS: month-filtered list (add gated), add form with owners multiselect chips + JD link, detail with pipeline recorder + activity log (read-only shows values only).
+- 2026-07-13 · T11.1-11.2 · My Team member cards → Home report; Profile account + stats + access grid.
+- 2026-07-13 · T12.1-12.3 · Admin: Users table (super_admin rows locked for HR), Roles cards + permission matrix, Team Hierarchy org tree.
