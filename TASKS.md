@@ -21,10 +21,10 @@ Legend: **AC** = acceptance criteria, **Tests** = tests to write, **Deps** = dep
   Tests: config module throws on missing required env (unit).
 
 ## Phase 1 — Database & seed
-- [ ] **T1.1 Prisma schema.** Deps: T0.3. AC: all models in SPEC §1 with relations,
+- [x] **T1.1 Prisma schema.** Deps: T0.3. AC: all models in SPEC §1 with relations,
   enums, indexes; `prisma migrate dev` creates the schema cleanly.
   Tests: schema compiles; a migration test spins up a temp DB and applies migrations.
-- [ ] **T1.2 Seed.** Deps: T1.1. AC: `npm run seed` loads `prisma/seed.json` →
+- [x] **T1.2 Seed.** Deps: T1.1. AC: `npm run seed` loads `prisma/seed.json` →
   3 roles + role permissions, 13 users (pw `Passw0rd!` argon2), 10 consultants,
   145 requirements, 138 HDIS (+owners, +zeroed pipeline). Idempotent. `npm run reset` works.
   Tests: after seed, counts assert 13/10/145/138; Kushagra = super_admin.

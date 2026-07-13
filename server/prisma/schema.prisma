@@ -1,0 +1,207 @@
+// PPG Pulse — data model (SPEC §1)
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Scope {
+  org
+  team
+  own
+}
+
+enum HdisType {
+  RADC
+  RADF
+  Internal
+}
+
+enum InterviewSession {
+  mid
+  end
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  key         String           @unique
+  label       String
+  sub         String
+  scope       Scope
+  isSystem    Boolean          @default(false)
+  isProtected Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+  permissions RolePermission[]
+  users       User[]
+}
+
+model RolePermission {
+  id         String @id @default(cuid())
+  roleId     String
+  section    String
+  capability String
+  role       Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, section, capability])
+  @@index([roleId])
+}
+
+model User {
+  id           String         @id @default(cuid())
+  name         String
+  email        String         @unique
+  passwordHash String
+  roleId       String
+  team         String
+  managerId    String?
+  isActive     Boolean        @default(true)
+  createdAt    DateTime       @default(now())
+  role         Role           @relation(fields: [roleId], references: [id])
+  manager      User?          @relation("Reports", fields: [managerId], references: [id])
+  reports      User[]         @relation("Reports")
+  overrides    UserOverride[]
+  consultant   Consultant?
+  hdisActivity HdisActivity[]
+  interviews   Interview[]
+
+  @@index([email])
+  @@index([managerId])
+}
+
+model UserOverride {
+  id         String @id @default(cuid())
+  userId     String
+  section    String
+  capability String
+  user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, section, capability])
+  @@index([userId])
+}
+
+model Consultant {
+  id                  String        @id @default(cuid())
+  userId              String        @unique
+  pod                 String
+  eventsHosted        Int           @default(0)
+  eventsParticipated  Int           @default(0)
+  insights            Int           @default(0)
+  user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requirements        Requirement[]
+}
+
+model Requirement {
+  id        String     @id @default(cuid())
+  code      String     @unique
+  jdId      String?
+  ownerId   String
+  title     String
+  client    String
+  reqDate   String // ISO YYYY-MM-DD
+  status    String // 'Active' | 'On Hold' | 'Closed'
+  profiles  Int        @default(0)
+  shortlist Int        @default(0)
+  l1        Int        @default(0)
+  l2        Int        @default(0)
+  l3        Int        @default(0)
+  onboard   Int        @default(0)
+  owner     Consultant @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  hdis      Hdis?      @relation(fields: [jdId], references: [jdId])
+
+  @@index([ownerId, reqDate])
+  @@index([reqDate])
+  @@index([jdId])
+}
+
+model Hdis {
+  jdId         String           @id
+  title        String
+  client       String
+  type         HdisType
+  openings     Int              @default(1)
+  status       String
+  priority     String           @default("NA")
+  confidence   String           @default("Medium")
+  reqDate      String // ISO YYYY-MM-DD
+  jdLink       String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  owners       HdisOwner[]
+  pipeline     HdisPipeline?
+  attachments  HdisAttachment[]
+  activity     HdisActivity[]
+  requirements Requirement[]
+
+  @@index([reqDate])
+  @@index([status])
+}
+
+model HdisOwner {
+  id               String @id @default(cuid())
+  jdId             String
+  consultantOrName String
+  hdis             Hdis   @relation(fields: [jdId], references: [jdId], onDelete: Cascade)
+
+  @@index([jdId])
+}
+
+model HdisPipeline {
+  jdId      String   @id
+  r0        Int      @default(0)
+  r1        Int      @default(0)
+  r2        Int      @default(0)
+  r3        Int      @default(0)
+  r4        Int      @default(0)
+  r5        Int      @default(0)
+  stage     String
+  updatedAt DateTime @updatedAt
+  hdis      Hdis     @relation(fields: [jdId], references: [jdId], onDelete: Cascade)
+}
+
+model HdisAttachment {
+  id          String   @id @default(cuid())
+  jdId        String
+  fileName    String
+  storageKey  String
+  contentType String
+  size        Int
+  uploadedBy  String
+  at          DateTime @default(now())
+  hdis        Hdis     @relation(fields: [jdId], references: [jdId], onDelete: Cascade)
+
+  @@index([jdId])
+}
+
+model HdisActivity {
+  id      String   @id @default(cuid())
+  jdId    String
+  actorId String
+  action  String
+  detail  String
+  at      DateTime @default(now())
+  hdis    Hdis     @relation(fields: [jdId], references: [jdId], onDelete: Cascade)
+  actor   User     @relation(fields: [actorId], references: [id])
+
+  @@index([jdId, at])
+}
+
+model Interview {
+  id             String           @id @default(cuid())
+  date           String // ISO YYYY-MM-DD
+  session        InterviewSession
+  time           String?
+  candidate      String
+  requirementRef String?
+  ppgConsultantId String?
+  stage          String?
+  status         String?
+  notes          String?
+  createdBy      String
+  createdAt      DateTime         @default(now())
+  creator        User             @relation(fields: [createdBy], references: [id])
+
+  @@index([date])
+}
