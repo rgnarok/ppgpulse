@@ -93,8 +93,15 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(interviewsRoutes, { prefix: '/api' });
 
   // In production (and e2e), serve the built web SPA from the same origin.
-  const webDist = path.resolve(here, '../../web/dist');
-  if (existsSync(path.join(webDist, 'index.html'))) {
+  // Try a few candidate locations so it works from Docker, native runtimes, or dev.
+  const webCandidates = [
+    path.resolve(here, '../../web/dist'), // server/dist/app.js → repo/web/dist
+    path.resolve(process.cwd(), 'web/dist'), // launched from repo root
+    path.resolve(here, '../../../web/dist'), // extra nesting safety
+  ];
+  const webDist = webCandidates.find((p) => existsSync(path.join(p, 'index.html')));
+  if (webDist) {
+    app.log.info(`Serving web SPA from ${webDist}`);
     await app.register(fastifyStatic, {
       root: webDist,
       prefix: '/',
@@ -107,6 +114,8 @@ export async function buildApp(): Promise<FastifyInstance> {
       }
       return reply.status(404).send({ error: 'not_found', message: 'Not found' });
     });
+  } else {
+    app.log.warn(`Web SPA bundle not found (checked: ${webCandidates.join(', ')}). API-only mode.`);
   }
 
   return app;

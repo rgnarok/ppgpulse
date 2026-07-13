@@ -1,7 +1,8 @@
 # Render Blueprint — one-click deploy of PPG Pulse (API + web) with Postgres.
-# In the Render dashboard: New → Blueprint → connect this repo. Render provisions
-# the database and the web service, injects DATABASE_URL, generates the JWT
-# secrets, and serves the app at https://<service>.onrender.com.
+# In the Render dashboard: New → Blueprint → connect this repo/branch. Render
+# provisions the database, injects DATABASE_URL, generates the JWT secrets, builds
+# both workspaces, applies the schema + seed, and serves the app single-origin at
+# https://<service>.onrender.com.
 databases:
   - name: ppg-postgres
     databaseName: ppgpulse
@@ -11,13 +12,15 @@ databases:
 services:
   - type: web
     name: ppg-pulse
-    runtime: docker
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
+    runtime: node
     plan: free
     region: oregon
     healthCheckPath: /api/health
     autoDeploy: true
+    # Install everything, build server + web, create schema, load demo data.
+    buildCommand: npm ci && npm run build && npm run db:push -w server && npm run seed
+    # Serve the API (which also serves web/dist single-origin).
+    startCommand: node server/dist/server.js
     envVars:
       - key: NODE_ENV
         value: production
@@ -32,9 +35,7 @@ services:
       - key: JWT_REFRESH_SECRET
         generateValue: true
       - key: UPLOAD_DIR
-        value: /app/server/uploads
+        value: /opt/render/project/src/server/uploads
       - key: MAX_UPLOAD_BYTES
         value: '10485760'
       # WEB_ORIGIN falls back to RENDER_EXTERNAL_URL automatically (single origin).
-      - key: SEED_ON_BOOT
-        value: 'true'
