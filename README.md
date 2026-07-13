@@ -48,6 +48,24 @@ Log in with any seeded email and the dev password **`Passw0rd!`**, e.g.
 `kushagra@vayuz.com` (Super Admin), `aarti@vayuz.com` (HR Manager),
 `abha@vayuz.com` (Consultant).
 
+## Deploy a public link (Render)
+
+The repo ships a [Render Blueprint](render.yaml) — a single Docker image serving the
+API + web, plus a managed Postgres.
+
+1. Push this repo to GitHub (already done for the working branch).
+2. In [Render](https://render.com): **New → Blueprint**, connect the repo, pick the branch.
+3. Render reads `render.yaml`, provisions Postgres, generates the JWT secrets, builds the
+   Docker image, and deploys.
+4. On boot the container runs `prisma migrate deploy` and seeds the demo data, then serves
+   the app at `https://<service>.onrender.com`.
+
+Log in with `kushagra@vayuz.com` / `Passw0rd!` (or any seeded user). `WEB_ORIGIN` defaults to
+Render's external URL automatically, so it works single-origin with no extra config.
+
+> Free-tier notes: the web service sleeps after inactivity (first request cold-starts), and
+> the free Postgres/instance disk are ephemeral — fine for a demo, not for real data.
+
 ## Run the whole stack in Docker
 
 ```bash

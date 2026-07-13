@@ -36,6 +36,22 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ ...base, WEB_ORIGIN: 'not-a-url' })).toThrow(/WEB_ORIGIN/);
   });
 
+  it('falls back to RENDER_EXTERNAL_URL for WEB_ORIGIN', () => {
+    const { WEB_ORIGIN: _omit, ...rest } = base;
+    void _omit;
+    const cfg = loadConfig({
+      ...(rest as NodeJS.ProcessEnv),
+      RENDER_EXTERNAL_URL: 'https://ppg-pulse.onrender.com',
+    });
+    expect(cfg.WEB_ORIGIN).toBe('https://ppg-pulse.onrender.com');
+  });
+
+  it('throws when neither WEB_ORIGIN nor RENDER_EXTERNAL_URL is set', () => {
+    const { WEB_ORIGIN: _omit, ...rest } = base;
+    void _omit;
+    expect(() => loadConfig(rest as NodeJS.ProcessEnv)).toThrow(/WEB_ORIGIN/);
+  });
+
   it('uses TEST_DATABASE_URL when NODE_ENV=test', () => {
     const cfg = loadConfig({
       ...base,

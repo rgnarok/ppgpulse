@@ -24,15 +24,15 @@ COPY server/package.json server/package.json
 COPY web/package.json web/package.json
 RUN npm ci --omit=dev
 
-# Prisma schema + generated client + migrations for `migrate deploy` at boot.
-COPY --from=builder /app/server/prisma ./server/prisma
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+# Schema + migrations (for `migrate deploy` at boot) and built artifacts.
+COPY server/prisma ./server/prisma
 COPY --from=builder /app/server/dist ./server/dist
 COPY --from=builder /app/web/dist ./web/dist
 COPY prototype ./prototype
 COPY docker/entrypoint.sh ./docker/entrypoint.sh
-RUN chmod +x ./docker/entrypoint.sh && mkdir -p server/uploads
+# Generate the Prisma client from the copied schema, then prep uploads dir.
+RUN cd server && npx prisma generate \
+  && cd /app && chmod +x ./docker/entrypoint.sh && mkdir -p server/uploads
 
 EXPOSE 4000
 ENTRYPOINT ["./docker/entrypoint.sh"]

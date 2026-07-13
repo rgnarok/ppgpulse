@@ -24,7 +24,13 @@ export type AppConfig = z.infer<typeof configSchema>;
  * error listing every missing/invalid key. Pure: does not read process.env.
  */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
-  const parsed = configSchema.safeParse(env);
+  // On single-origin PaaS hosts (Render, etc.) the public URL is injected as
+  // RENDER_EXTERNAL_URL; use it as the WEB_ORIGIN default so CORS matches.
+  const merged: NodeJS.ProcessEnv = { ...env };
+  if (!merged.WEB_ORIGIN && merged.RENDER_EXTERNAL_URL) {
+    merged.WEB_ORIGIN = merged.RENDER_EXTERNAL_URL;
+  }
+  const parsed = configSchema.safeParse(merged);
   if (!parsed.success) {
     const issues = parsed.error.issues
       .map((i) => `  - ${i.path.join('.') || '(root)'}: ${i.message}`)
