@@ -17,10 +17,11 @@ services:
     region: oregon
     healthCheckPath: /api/health
     autoDeploy: true
-    # Install everything, build server + web, create schema, load demo data.
-    buildCommand: npm ci && npm run build && npm run db:push -w server && npm run seed
-    # Serve the API (which also serves web/dist single-origin).
-    startCommand: node server/dist/server.js
+    # Build only (no DB access — DATABASE_URL is not injected at build time).
+    buildCommand: npm ci && npm run build
+    # At runtime DATABASE_URL is available: sync the schema, seed (idempotent),
+    # then serve the API (which also serves web/dist single-origin).
+    startCommand: npm run db:push -w server && npm run seed && node server/dist/server.js
     envVars:
       - key: NODE_ENV
         value: production
