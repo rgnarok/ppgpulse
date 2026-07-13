@@ -142,7 +142,7 @@ Legend: **AC** = acceptance criteria, **Tests** = tests to write, **Deps** = dep
 - [x] **T13.2 Security pass.** Deps: T13.1. AC: helmet, CORS, auth rate-limit, refresh
   rotation, upload mime/size, no secrets in logs; `npm audit` no high/critical.
   Tests: rate-limit test; unauthorized endpoint access → 401/403 across a sampled matrix.
-- [ ] **T13.3 CI + README + deploy.** Deps: T13.2. AC: GitHub Actions runs `verify` +
+- [x] **T13.3 CI + README + deploy.** Deps: T13.2. AC: GitHub Actions runs `verify` +
   e2e on PR; `README.md` (setup, env, scripts, RBAC); Dockerfiles for server+web;
   `docker compose up` runs the whole stack. Tests: CI green on a clean checkout.
 

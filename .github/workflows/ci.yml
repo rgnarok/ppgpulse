@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ppg
+          POSTGRES_PASSWORD: ppg
+          POSTGRES_DB: ppgpulse
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ppg -d ppgpulse"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://ppg:ppg@localhost:5432/ppgpulse
+      TEST_DATABASE_URL: postgresql://ppg:ppg@localhost:5432/ppgpulse_test
+      JWT_SECRET: ci-access-secret-0123456789abcdef
+      JWT_REFRESH_SECRET: ci-refresh-secret-0123456789abcdef
+      WEB_ORIGIN: http://localhost:4000
+      UPLOAD_DIR: ./uploads
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Create test database
+        run: PGPASSWORD=ppg psql -h localhost -U ppg -d ppgpulse -c "CREATE DATABASE ppgpulse_test;" || true
+      - name: Apply schema (dev DB)
+        run: npm run db:push -w server
+      - name: Verify (typecheck → lint → test → build)
+        run: npm run verify
+      - name: Audit (no high/critical)
+        run: npm audit --audit-level=high
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: verify
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ppg
+          POSTGRES_PASSWORD: ppg
+          POSTGRES_DB: ppgpulse
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ppg -d ppgpulse"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://ppg:ppg@localhost:5432/ppgpulse
+      TEST_DATABASE_URL: postgresql://ppg:ppg@localhost:5432/ppgpulse_test
+      JWT_SECRET: ci-access-secret-0123456789abcdef
+      JWT_REFRESH_SECRET: ci-refresh-secret-0123456789abcdef
+      WEB_ORIGIN: http://localhost:4000
+      UPLOAD_DIR: ./uploads
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Apply schema
+        run: npm run db:push -w server
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+      - name: Run e2e (6 critical flows)
+        run: npm run e2e
