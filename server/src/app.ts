@@ -5,6 +5,7 @@ import rateLimit from '@fastify/rate-limit';
 import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import path from 'node:path';
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { ZodError } from 'zod';
 import { getConfig } from './config.js';
@@ -74,6 +75,23 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(reportRoutes, { prefix: '/api' });
   await app.register(hdisRoutes, { prefix: '/api' });
   await app.register(interviewsRoutes, { prefix: '/api' });
+
+  // In production (and e2e), serve the built web SPA from the same origin.
+  const webDist = path.resolve(here, '../../web/dist');
+  if (existsSync(path.join(webDist, 'index.html'))) {
+    await app.register(fastifyStatic, {
+      root: webDist,
+      prefix: '/',
+      decorateReply: false,
+    });
+    // SPA fallback: non-API GET routes return index.html.
+    app.setNotFoundHandler((request, reply) => {
+      if (request.method === 'GET' && !request.url.startsWith('/api')) {
+        return reply.sendFile('index.html', webDist);
+      }
+      return reply.status(404).send({ error: 'not_found', message: 'Not found' });
+    });
+  }
 
   return app;
 }

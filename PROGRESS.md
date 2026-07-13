@@ -29,3 +29,4 @@ Log of completed tasks: date · task id · what shipped.
 - 2026-07-13 · T10.1-10.3 · HDIS: month-filtered list (add gated), add form with owners multiselect chips + JD link, detail with pipeline recorder + activity log (read-only shows values only).
 - 2026-07-13 · T11.1-11.2 · My Team member cards → Home report; Profile account + stats + access grid.
 - 2026-07-13 · T12.1-12.3 · Admin: Users table (super_admin rows locked for HR), Roles cards + permission matrix, Team Hierarchy org tree.
+- 2026-07-13 · T13.1 · Playwright e2e (single-origin: server serves web/dist). 6 flows green: login, super overview 145/14, consultant scoped+no admin, HDIS add→pipeline logged, JD upload+download, HR blocked from super_admin. Added attachments upload/download UI.

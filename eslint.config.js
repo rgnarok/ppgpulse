@@ -15,6 +15,8 @@ export default tseslint.config(
       'server/prisma/generated/**',
       'web/playwright-report/**',
       'web/test-results/**',
+      'web/e2e/**',
+      '**/playwright.config.ts',
       'prototype/**',
     ],
   },

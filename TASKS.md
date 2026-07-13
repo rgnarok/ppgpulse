@@ -136,7 +136,7 @@ Legend: **AC** = acceptance criteria, **Tests** = tests to write, **Deps** = dep
 - [x] **T12.3 Hierarchy.** Deps: T7.3,T3.4. AC: org tree view. Tests: renders seed tree.
 
 ## Phase 13 — E2E, hardening, deploy
-- [ ] **T13.1 Playwright e2e (6 flows).** Deps: all web+api. AC: (1) login; (2) super sees
+- [x] **T13.1 Playwright e2e (6 flows).** Deps: all web+api. AC: (1) login; (2) super sees
   overview 145/14; (3) consultant scoped + no admin; (4) HDIS add→edit→pipeline update
   logged; (5) JD upload+download; (6) HR blocked from super_admin edit. All green.
 - [ ] **T13.2 Security pass.** Deps: T13.1. AC: helmet, CORS, auth rate-limit, refresh

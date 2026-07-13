@@ -2,8 +2,9 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "outDir": "dist",
+    "rootDir": "src",
     "noEmit": false
   },
   "include": ["src"],
-  "exclude": ["src/**/*.test.ts", "src/**/__tests__/**", "prisma/seed.ts"]
+  "exclude": ["src/**/*.test.ts", "src/**/__tests__/**", "src/tests/**", "prisma/seed.ts"]
 }

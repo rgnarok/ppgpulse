@@ -286,6 +286,8 @@ function HdisDetail({ jdId }: { jdId: string }) {
         </div>
       </div>
 
+      <Attachments rec={rec} editable={editable} />
+
       <div className="grid g-58">
         {editable ? (
           <PipelineRecorder rec={rec} />
@@ -323,6 +325,60 @@ function HdisDetail({ jdId }: { jdId: string }) {
         </Card>
       </div>
     </AppShell>
+  );
+}
+
+function Attachments({ rec, editable }: { rec: HdisRecord; editable: boolean }) {
+  const qc = useApiMutation(
+    async (file: File) => {
+      const fd = new FormData();
+      fd.append('file', file);
+      return api(`/hdis/${rec.jdId}/attachments`, { method: 'POST', body: fd, isForm: true });
+    },
+    [
+      ['hdis-record', rec.jdId],
+      ['hdis-activity', rec.jdId],
+    ],
+  );
+
+  return (
+    <Card className="">
+      <SectionTitle color="var(--violet)">Attachments</SectionTitle>
+      <div style={{ marginTop: 12 }}>
+        {rec.attachments.length === 0 ? (
+          <p className="muted" style={{ fontSize: 13 }}>
+            No documents attached.
+          </p>
+        ) : (
+          rec.attachments.map((a) => (
+            <div className="log" key={a.id}>
+              <a
+                className="lnk"
+                href={`/api/hdis/${rec.jdId}/attachments/${a.id}`}
+                data-testid="attachment-link"
+              >
+                {a.fileName}
+              </a>
+              <span className="muted">{(a.size / 1024).toFixed(1)} KB</span>
+            </div>
+          ))
+        )}
+        {editable && (
+          <div style={{ marginTop: 12 }}>
+            <input
+              type="file"
+              aria-label="Upload attachment"
+              accept="application/pdf,.pdf,.doc,.docx"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) qc.mutate(f);
+              }}
+            />
+            {qc.isPending && <span className="muted"> Uploading…</span>}
+          </div>
+        )}
+      </div>
+    </Card>
   );
 }
 
