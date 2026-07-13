@@ -30,3 +30,4 @@ Log of completed tasks: date · task id · what shipped.
 - 2026-07-13 · T11.1-11.2 · My Team member cards → Home report; Profile account + stats + access grid.
 - 2026-07-13 · T12.1-12.3 · Admin: Users table (super_admin rows locked for HR), Roles cards + permission matrix, Team Hierarchy org tree.
 - 2026-07-13 · T13.1 · Playwright e2e (single-origin: server serves web/dist). 6 flows green: login, super overview 145/14, consultant scoped+no admin, HDIS add→pipeline logged, JD upload+download, HR blocked from super_admin. Added attachments upload/download UI.
+- 2026-07-13 · T13.2 · Security pass: login rate-limit (20/min → 429), helmet+CORS+refresh-rotation confirmed, log redaction of auth/token/password fields, upload mime/size guards; upgraded @fastify/static → 0 npm audit vulnerabilities; unauthorized 401/403 matrix + rate-limit tests.

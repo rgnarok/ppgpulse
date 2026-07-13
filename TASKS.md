@@ -139,7 +139,7 @@ Legend: **AC** = acceptance criteria, **Tests** = tests to write, **Deps** = dep
 - [x] **T13.1 Playwright e2e (6 flows).** Deps: all web+api. AC: (1) login; (2) super sees
   overview 145/14; (3) consultant scoped + no admin; (4) HDIS add→edit→pipeline update
   logged; (5) JD upload+download; (6) HR blocked from super_admin edit. All green.
-- [ ] **T13.2 Security pass.** Deps: T13.1. AC: helmet, CORS, auth rate-limit, refresh
+- [x] **T13.2 Security pass.** Deps: T13.1. AC: helmet, CORS, auth rate-limit, refresh
   rotation, upload mime/size, no secrets in logs; `npm audit` no high/critical.
   Tests: rate-limit test; unauthorized endpoint access → 401/403 across a sampled matrix.
 - [ ] **T13.3 CI + README + deploy.** Deps: T13.2. AC: GitHub Actions runs `verify` +

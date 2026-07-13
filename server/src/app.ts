@@ -25,7 +25,23 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 export async function buildApp(): Promise<FastifyInstance> {
   const cfg = getConfig();
   const app = Fastify({
-    logger: cfg.NODE_ENV === 'test' ? false : { level: 'info' },
+    logger:
+      cfg.NODE_ENV === 'test'
+        ? false
+        : {
+            level: 'info',
+            // Never log secrets: redact auth headers and token/password fields.
+            redact: {
+              paths: [
+                'req.headers.authorization',
+                'req.headers.cookie',
+                'body.password',
+                'body.refresh',
+                '*.passwordHash',
+              ],
+              censor: '[redacted]',
+            },
+          },
     bodyLimit: cfg.MAX_UPLOAD_BYTES + 1024 * 1024,
   });
 
