@@ -12,6 +12,9 @@ import { HttpError } from './lib/errors.js';
 import prismaPlugin from './plugins/prisma.js';
 import authPlugin from './plugins/auth.js';
 import authRoutes from './modules/auth/routes.js';
+import usersRoutes from './modules/users/routes.js';
+import rolesRoutes from './modules/roles/routes.js';
+import hierarchyRoutes from './modules/hierarchy/routes.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -62,6 +65,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.get('/api/health', async () => ({ status: 'ok' }));
 
   await app.register(authRoutes, { prefix: '/api' });
+  await app.register(usersRoutes, { prefix: '/api' });
+  await app.register(rolesRoutes, { prefix: '/api' });
+  await app.register(hierarchyRoutes, { prefix: '/api' });
 
   return app;
 }

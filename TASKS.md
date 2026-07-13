@@ -42,15 +42,15 @@ Legend: **AC** = acceptance criteria, **Tests** = tests to write, **Deps** = dep
   super_admin target; consultant scope = self+pod only; cycle-safe subtree walk.
 
 ## Phase 3 — Admin API
-- [ ] **T3.1 Users API.** Deps: T2.3. AC: list/create/patch/delete with authz + the
+- [x] **T3.1 Users API.** Deps: T2.3. AC: list/create/patch/delete with authz + the
   super_admin protection; password never returned. Tests: HR edits consultant OK; HR
   edits super_admin → 403; consultant → 403 on all.
-- [ ] **T3.2 Overrides + reporting line.** Deps: T3.1. AC: `POST /users/:id/overrides`,
+- [x] **T3.2 Overrides + reporting line.** Deps: T3.1. AC: `POST /users/:id/overrides`,
   `PATCH /users/:id/manager` with cycle guard. Tests: override changes `can()`; cycle → 400.
-- [ ] **T3.3 Roles API.** Deps: T2.3. AC: CRUD custom roles; system/protected guarded;
+- [x] **T3.3 Roles API.** Deps: T2.3. AC: CRUD custom roles; system/protected guarded;
   deleting a role reassigns its users to `consultant`. Tests: create/edit custom role;
   edit protected role as HR → 403; delete reassigns.
-- [ ] **T3.4 Hierarchy API.** Deps: T3.1. AC: `GET /hierarchy` returns org tree.
+- [x] **T3.4 Hierarchy API.** Deps: T3.1. AC: `GET /hierarchy` returns org tree.
   Tests: tree roots + nesting correct from seed.
 
 ## Phase 4 — Report API

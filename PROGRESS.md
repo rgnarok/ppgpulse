@@ -10,3 +10,7 @@ Log of completed tasks: date · task id · what shipped.
 - 2026-07-13 · T2.1 · argon2 password hash/verify + JWT access/refresh sign/verify with rotation (RefreshToken model); tests incl. expired-token rejection.
 - 2026-07-13 · T2.2 · Fastify app (helmet/cors/rate-limit/multipart/static prototype), auth plugin, POST /auth/login|refresh|logout + GET /me (effective perms+scope); good/bad login, /me shape, rotation, logout-invalidation tests.
 - 2026-07-13 · T2.3 · RBAC engine: can()/effectivePermissions (role ∪ overrides), scopeUserIds/scopeNames (org/team/own, cycle-safe subtree), HR-cannot-touch-super_admin + role-edit guards; full SPEC §2 matrix tests.
+- 2026-07-13 · T3.1 · Users API (list/get/create/patch/delete) with users.view/edit authz, super_admin protection, hashed passwords, no hash leakage.
+- 2026-07-13 · T3.2 · Per-user overrides (grant/revoke) + reporting-line PATCH with self/descendant cycle guard.
+- 2026-07-13 · T3.3 · Roles API CRUD; system/protected guarded; delete reassigns users to consultant.
+- 2026-07-13 · T3.4 · Hierarchy API GET /hierarchy org tree (cycle-safe); consultant forbidden.
