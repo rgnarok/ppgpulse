@@ -46,7 +46,25 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   await app.register(helmet, { contentSecurityPolicy: false });
-  await app.register(cors, { origin: cfg.WEB_ORIGIN, credentials: true });
+  // Allow the configured web origin(s) (comma-separated), any *.vercel.app
+  // deployment, and localhost in dev. Non-browser/same-origin requests (no
+  // Origin header) are always allowed.
+  const allowedOrigins = cfg.WEB_ORIGIN.split(',').map((o) => o.trim());
+  await app.register(cors, {
+    credentials: true,
+    origin(origin, cb) {
+      if (!origin) return cb(null, true);
+      if (allowedOrigins.includes(origin)) return cb(null, true);
+      try {
+        const { hostname } = new URL(origin);
+        if (hostname.endsWith('.vercel.app')) return cb(null, true);
+        if (hostname === 'localhost' || hostname === '127.0.0.1') return cb(null, true);
+      } catch {
+        /* malformed origin */
+      }
+      return cb(null, false);
+    },
+  });
   await app.register(rateLimit, {
     global: false,
     max: 1000,

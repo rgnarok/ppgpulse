@@ -4,7 +4,7 @@ import { AppShell } from '../components/AppShell';
 import { Card, SectionTitle, Pill, Empty, Btn } from '../components/ui';
 import { useAuth } from '../lib/auth';
 import { can } from '../lib/permissions';
-import { api } from '../lib/api';
+import { api, apiUrl } from '../lib/api';
 import { useHdisList, useHdisRecord, useHdisActivity, useApiMutation } from '../lib/hooks';
 import type { HdisRecord } from '../lib/types';
 
@@ -354,7 +354,7 @@ function Attachments({ rec, editable }: { rec: HdisRecord; editable: boolean }) 
             <div className="log" key={a.id}>
               <a
                 className="lnk"
-                href={`/api/hdis/${rec.jdId}/attachments/${a.id}`}
+                href={apiUrl(`/api/hdis/${rec.jdId}/attachments/${a.id}`)}
                 data-testid="attachment-link"
               >
                 {a.fileName}

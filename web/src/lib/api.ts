@@ -24,7 +24,16 @@ export class ApiError extends Error {
   }
 }
 
-const BASE = '/api';
+// API origin. Empty = same-origin (single-origin Render/dev via Vite proxy).
+// On Vercel, set VITE_API_BASE_URL to the API host, e.g. https://ppg-api.onrender.com
+const API_ROOT = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/+$/, '');
+const BASE = `${API_ROOT}/api`;
+
+/** Build an absolute API URL (e.g. for <a href> download links). */
+export function apiUrl(path: string): string {
+  return `${API_ROOT}${path}`;
+}
+
 let refreshInFlight: Promise<boolean> | null = null;
 
 /** Attempt to rotate tokens using the stored refresh token. Deduped. */

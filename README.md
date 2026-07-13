@@ -66,6 +66,31 @@ Render's external URL automatically, so it works single-origin with no extra con
 > Free-tier notes: the web service sleeps after inactivity (first request cold-starts), and
 > the free Postgres/instance disk are ephemeral — fine for a demo, not for real data.
 
+## Deploy the frontend to Vercel (API on Render)
+
+Vercel hosts the **web** app; the **API + Postgres** run on Render (Vercel can't run a
+persistent server or a database). Two steps:
+
+**1. API on Render** — deploy the Blueprint as above. Note its URL, e.g.
+`https://ppg-pulse.onrender.com`. (In this split the API only needs to serve `/api`; it
+still serves its own web copy too, which is harmless.)
+
+**2. Web on Vercel** — the repo has [`vercel.json`](vercel.json) configured for the monorepo:
+
+- Import the repo at [vercel.com](https://vercel.com) → **New Project** → pick this repo/branch.
+- Vercel reads `vercel.json` (install `npm ci`, build `npm run build -w web`, output `web/dist`,
+  SPA rewrites). Leave the framework as detected/none.
+- Add an **Environment Variable**: `VITE_API_BASE_URL = https://<your-render-api>.onrender.com`
+  (the value is baked into the build).
+- Deploy → your app is live at `https://<project>.vercel.app`.
+
+CORS is already handled: the API accepts any `*.vercel.app` origin (plus localhost and the
+configured `WEB_ORIGIN`), so preview and production deployments both work. Auth uses bearer
+tokens (no cookies), so no extra cross-site config is needed.
+
+> Note: HDIS attachment **download** links open the API directly; since downloads require a
+> bearer token, use them from the same session. All other features work fully cross-origin.
+
 ## Run the whole stack in Docker
 
 ```bash
