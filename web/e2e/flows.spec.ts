@@ -41,14 +41,16 @@ test('4. HDIS add then pipeline update is logged', async ({ page }) => {
   await page.getByTestId('sidebar').getByText('HDIS').click();
   await page.getByText('+ Add record').click();
 
-  const jd = 'E2E_QA_20260601';
+  // Unique per run so re-running against a persistent DB never 409s.
+  const jd = `E2E_QA_${Date.now()}`;
+  const title = `E2E QA ${jd}`;
   await page.fill('input[placeholder="VAY_XX_20260601"]', jd);
-  await page.locator('.field.full input').first().fill('E2E QA Engineer');
+  await page.locator('.field.full input').first().fill(title);
   await page.locator('input').nth(3).fill('E2E Client'); // client field
   await page.getByRole('button', { name: 'Save record' }).click();
 
   // Open the new record from the list.
-  await page.getByText('E2E QA Engineer').click();
+  await page.getByText(title).click();
   await expect(page.getByText('Record pipeline activity')).toBeVisible();
 
   // Change R1 and log.
