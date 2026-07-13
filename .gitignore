@@ -1,0 +1,16 @@
+node_modules/
+dist/
+build/
+coverage/
+*.log
+.env
+.env.local
+.pgdata/
+server/uploads/*
+!server/uploads/.gitkeep
+web/dist/
+playwright-report/
+test-results/
+.DS_Store
+*.tsbuildinfo
+prisma/*.db
