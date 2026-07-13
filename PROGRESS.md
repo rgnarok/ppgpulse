@@ -14,3 +14,7 @@ Log of completed tasks: date · task id · what shipped.
 - 2026-07-13 · T3.2 · Per-user overrides (grant/revoke) + reporting-line PATCH with self/descendant cycle guard.
 - 2026-07-13 · T3.3 · Roles API CRUD; system/protected guarded; delete reassigns users to consultant.
 - 2026-07-13 · T3.4 · Hierarchy API GET /hierarchy org tree (cycle-safe); consultant forbidden.
+- 2026-07-13 · T4.1 · GET /consultants scoped (super=10, Pod A consultant=4).
+- 2026-07-13 · T4.2 · resolvePeriod util (from/to > month > default all-Q1) + inPeriod; unit tests.
+- 2026-07-13 · T4.3 · GET /report/overview — 7 tiles (incl. RADC/RADF closure split) + 4 chart series, scoped+period. Super all-Q1 verified 145/14(6·3)/36/11/3/10.
+- 2026-07-13 · T4.4 · GET /report/consultant/:id (confidence+factors, kpi, R0–R5 funnel, requirements) + GET /requirements/:id (detail + co-owners); metric ports unit-tested; out-of-scope → 403.

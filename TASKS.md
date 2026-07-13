@@ -54,16 +54,16 @@ Legend: **AC** = acceptance criteria, **Tests** = tests to write, **Deps** = dep
   Tests: tree roots + nesting correct from seed.
 
 ## Phase 4 — Report API
-- [ ] **T4.1 Consultants (scoped).** Deps: T2.3. AC: `GET /consultants` returns only
+- [x] **T4.1 Consultants (scoped).** Deps: T2.3. AC: `GET /consultants` returns only
   in-scope consultants. Tests: super=10, consultant=own pod (e.g. 4).
-- [ ] **T4.2 Period filter util.** Deps: T1.2. AC: `resolvePeriod({from,to,month,fy})`
+- [x] **T4.2 Period filter util.** Deps: T1.2. AC: `resolvePeriod({from,to,month,fy})`
   → `{lo,hi}` (default all-Q1 2025-12-01..2026-06-30). Tests: month→range; from/to wins;
   default range.
-- [ ] **T4.3 Overview endpoint.** Deps: T4.1,T4.2. AC: `GET /report/overview` returns
+- [x] **T4.3 Overview endpoint.** Deps: T4.1,T4.2. AC: `GET /report/overview` returns
   the 7 tile values (incl. RADC/RADF closure split) + 4 chart series, scoped + period.
   Tests: super all-Q1 → 145 reqs, 14 closures (6 RADC·3 RADF), 36 insights, 11 events,
   3 participated, 10 consultants; consultant scoped smaller; May filter narrows.
-- [ ] **T4.4 Consultant report + requirement detail.** Deps: T4.2. AC:
+- [x] **T4.4 Consultant report + requirement detail.** Deps: T4.2. AC:
   `GET /report/consultant/:id` → confidence(+factors), kpi, funnel R0–R5, requirements;
   `GET /requirements/:id` → detail + co-owners. Tests: confidence/kpi match prototype
   formulas within rounding; out-of-scope consultant → 403.

@@ -15,6 +15,7 @@ import authRoutes from './modules/auth/routes.js';
 import usersRoutes from './modules/users/routes.js';
 import rolesRoutes from './modules/roles/routes.js';
 import hierarchyRoutes from './modules/hierarchy/routes.js';
+import reportRoutes from './modules/report/routes.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -68,6 +69,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(usersRoutes, { prefix: '/api' });
   await app.register(rolesRoutes, { prefix: '/api' });
   await app.register(hierarchyRoutes, { prefix: '/api' });
+  await app.register(reportRoutes, { prefix: '/api' });
 
   return app;
 }
