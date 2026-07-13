@@ -18,3 +18,8 @@ Log of completed tasks: date · task id · what shipped.
 - 2026-07-13 · T4.2 · resolvePeriod util (from/to > month > default all-Q1) + inPeriod; unit tests.
 - 2026-07-13 · T4.3 · GET /report/overview — 7 tiles (incl. RADC/RADF closure split) + 4 chart series, scoped+period. Super all-Q1 verified 145/14(6·3)/36/11/3/10.
 - 2026-07-13 · T4.4 · GET /report/consultant/:id (confidence+factors, kpi, R0–R5 funnel, requirements) + GET /requirements/:id (detail + co-owners); metric ports unit-tested; out-of-scope → 403.
+- 2026-07-13 · T5.1 · HDIS list (month/status/q) + CRUD with hdis.add/edit/delete perms + owners multi (HdisOwner).
+- 2026-07-13 · T5.2 · HdisActivity log on every create/edit/delete with actor+diff; GET /hdis/:jdId/activity.
+- 2026-07-13 · T5.3 · PUT /hdis/:jdId/pipeline (R0–R5+stage) syncs status, logs field diffs.
+- 2026-07-13 · T5.4 · JD link set/clear + multipart attachment upload (mime+size validated via StorageService) + authorized download; rejects .exe/oversize.
+- 2026-07-13 · T6.1 · Interviews API: month counts, day view (mid/end + consultant-wise), add/patch/delete; team-scope visibility respected.

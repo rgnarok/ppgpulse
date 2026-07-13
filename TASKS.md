@@ -69,20 +69,20 @@ Legend: **AC** = acceptance criteria, **Tests** = tests to write, **Deps** = dep
   formulas within rounding; out-of-scope consultant → 403.
 
 ## Phase 5 — HDIS API
-- [ ] **T5.1 HDIS CRUD + list.** Deps: T2.3. AC: monthly list, create/edit/delete with
+- [x] **T5.1 HDIS CRUD + list.** Deps: T2.3. AC: monthly list, create/edit/delete with
   perms; owners multi (HdisOwner rows). Tests: list by month; consultant create → 403;
   admin create → 201.
-- [ ] **T5.2 Activity log.** Deps: T5.1. AC: every create/edit/delete writes HdisActivity
+- [x] **T5.2 Activity log.** Deps: T5.1. AC: every create/edit/delete writes HdisActivity
   with actor+diff; `GET /hdis/:jdId/activity`. Tests: edit produces a diff entry.
-- [ ] **T5.3 Pipeline recorder.** Deps: T5.2. AC: `PUT /hdis/:jdId/pipeline` updates
+- [x] **T5.3 Pipeline recorder.** Deps: T5.2. AC: `PUT /hdis/:jdId/pipeline` updates
   r0–r5 + stage, syncs status (Closed/On Hold/Active), logs a "pipeline update" activity
   with the field diffs. Tests: R1 2→3 logged; stage Closed → status Closed.
-- [ ] **T5.4 JD link + attachment.** Deps: T5.2. AC: `POST /hdis/:jdId/link`;
+- [x] **T5.4 JD link + attachment.** Deps: T5.2. AC: `POST /hdis/:jdId/link`;
   `POST /hdis/:jdId/attachments` (multipart, mime+size validated, StorageService);
   authorized download. Tests: reject .exe/oversize; upload+download roundtrip; link set.
 
 ## Phase 6 — Interviews API
-- [ ] **T6.1 Interviews API.** Deps: T2.3. AC: month counts; day get(mid/end +
+- [x] **T6.1 Interviews API.** Deps: T2.3. AC: month counts; day get(mid/end +
   consultant-wise); add/patch/delete (perm interviews.edit). Tests: add row appears in
   day + month count; consultant can edit; scope of `ppgConsultantId` list respected.
 

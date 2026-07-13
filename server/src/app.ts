@@ -16,6 +16,8 @@ import usersRoutes from './modules/users/routes.js';
 import rolesRoutes from './modules/roles/routes.js';
 import hierarchyRoutes from './modules/hierarchy/routes.js';
 import reportRoutes from './modules/report/routes.js';
+import hdisRoutes from './modules/hdis/routes.js';
+import interviewsRoutes from './modules/interviews/routes.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -70,6 +72,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(rolesRoutes, { prefix: '/api' });
   await app.register(hierarchyRoutes, { prefix: '/api' });
   await app.register(reportRoutes, { prefix: '/api' });
+  await app.register(hdisRoutes, { prefix: '/api' });
+  await app.register(interviewsRoutes, { prefix: '/api' });
 
   return app;
 }
