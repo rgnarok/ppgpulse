@@ -11,7 +11,7 @@ async function main() {
     return;
   }
   const { prisma } = await import('../src/db.js');
-  const { seedDatabase } = await import('./seed-core.js');
+  const { seedDatabase } = await import('../src/lib/seed-core.js');
   const seed = JSON.parse(readFileSync(path.resolve(here, 'seed.json'), 'utf-8'));
   try {
     const counts = await seedDatabase(prisma, seed);

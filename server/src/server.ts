@@ -6,7 +6,7 @@ async function main() {
   const cfg = getConfig();
 
   // Self-contained boot: ensure schema + demo data exist (prod / RUN_DB_SETUP).
-  ensureDatabase({
+  await ensureDatabase({
     info: (m) => console.log(m),
     error: (m, e) => console.error(m, e ?? ''),
   });

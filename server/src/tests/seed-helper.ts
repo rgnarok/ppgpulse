@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { prisma } from '../db.js';
-import { seedDatabase, type SeedData } from '../../prisma/seed-core.js';
+import { seedDatabase, type SeedData } from '../lib/seed-core.js';
 import { resetDb } from './helpers.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));

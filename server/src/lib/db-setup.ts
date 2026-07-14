@@ -1,6 +1,9 @@
 import { execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { prisma } from '../db.js';
+import { seedDatabase, type SeedData } from './seed-core.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url)); // .../server/dist/lib
 
@@ -10,22 +13,23 @@ export interface SetupLogger {
 }
 
 /**
- * Ensure the database schema exists and demo data is seeded, at server boot.
- * Runs in production (or when RUN_DB_SETUP=true) so the app is self-contained
- * regardless of the host's build/start command. Idempotent; failures are logged
- * but do not crash the server.
+ * Ensure the schema exists (prisma db push) and demo data is seeded — in-process,
+ * so it works in the compiled runtime image (no src/ or tsx needed at runtime).
+ * Runs in production / on Render / when RUN_DB_SETUP=true. Idempotent; failures
+ * are logged but never crash the server.
  */
-export function ensureDatabase(log: SetupLogger): void {
+export async function ensureDatabase(log: SetupLogger): Promise<void> {
   if (process.env.RUN_DB_SETUP === 'false') return;
   const enabled =
     process.env.RUN_DB_SETUP === 'true' ||
     process.env.NODE_ENV === 'production' ||
-    !!process.env.RENDER; // Render always sets RENDER=true
+    !!process.env.RENDER;
   if (!enabled) return;
   if (!process.env.DATABASE_URL) {
-    log.error('RUN_DB_SETUP requested but DATABASE_URL is not set — skipping.');
+    log.error('DB setup requested but DATABASE_URL is not set — skipping.');
     return;
   }
+
   const serverDir = path.resolve(here, '../..'); // dist/lib -> dist -> server
   try {
     log.info('Ensuring database schema (prisma db push)…');
@@ -34,10 +38,19 @@ export function ensureDatabase(log: SetupLogger): void {
       stdio: 'inherit',
       env: process.env,
     });
-    log.info('Seeding database (idempotent)…');
-    execSync('npx tsx prisma/seed.ts', { cwd: serverDir, stdio: 'inherit', env: process.env });
-    log.info('Database ready.');
   } catch (err) {
-    log.error('Database setup failed', err);
+    log.error('prisma db push failed', err);
+    return;
+  }
+
+  try {
+    log.info('Seeding database (idempotent)…');
+    const seed = JSON.parse(
+      readFileSync(path.join(serverDir, 'prisma', 'seed.json'), 'utf-8'),
+    ) as SeedData;
+    const counts = await seedDatabase(prisma, seed);
+    log.info(`Database ready: ${JSON.stringify(counts)}`);
+  } catch (err) {
+    log.error('Seeding failed', err);
   }
 }
