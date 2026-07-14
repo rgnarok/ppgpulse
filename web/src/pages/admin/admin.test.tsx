@@ -88,12 +88,57 @@ describe('Users admin (T12.1)', () => {
 
 describe('Roles admin (T12.2)', () => {
   it('renders role cards with the permission matrix', async () => {
-    mockFetch([jsonRoute('/api/me', superAdminMe), jsonRoute('/api/roles', roles)]);
+    mockFetch([
+      jsonRoute('/api/me', superAdminMe),
+      jsonRoute('/api/roles', roles),
+      jsonRoute('/api/users', users),
+    ]);
     renderApp(<RolesPage />);
-    // 'Consultant' is unique to the role card; 'Super Admin' also appears in the sidebar.
-    expect(await screen.findByText('Consultant')).toBeInTheDocument();
+    // 'Consultant' also appears as an option in the Create user role picker now;
+    // 'Super Admin' appears in the sidebar too.
+    expect((await screen.findAllByText('Consultant')).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Super Admin').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('system').length).toBeGreaterThan(0);
+  });
+
+  it('lets the creator pick a role and a line manager for the new user', async () => {
+    mockFetch([
+      jsonRoute('/api/me', superAdminMe),
+      jsonRoute('/api/roles', roles),
+      jsonRoute('/api/users', users),
+    ]);
+    renderApp(<RolesPage />);
+
+    // Wait for the role cards and the manager options (roles + users fetches) to land.
+    await screen.findAllByText('system');
+    await screen.findByText((content) => content.includes('Kushagra Bindra'), {
+      selector: 'option',
+    });
+
+    const comboboxes = screen.getAllByRole('combobox');
+    const optionValues = (el: HTMLElement) =>
+      within(el)
+        .getAllByRole('option')
+        .map((o) => (o as HTMLOptionElement).value);
+    const optionTexts = (el: HTMLElement) =>
+      within(el)
+        .getAllByRole('option')
+        .map((o) => o.textContent);
+
+    const roleSelect = comboboxes.find(
+      (el) => optionValues(el).includes('super_admin') && optionValues(el).includes('consultant'),
+    );
+    expect(roleSelect).toBeDefined();
+
+    const managerSelect = comboboxes.find((el) => optionTexts(el).includes('No manager'));
+    expect(managerSelect).toBeDefined();
+    expect(optionTexts(managerSelect!)).toEqual(
+      expect.arrayContaining([
+        'No manager',
+        expect.stringContaining('Kushagra Bindra'),
+        expect.stringContaining('Suhani Singh'),
+      ]),
+    );
   });
 });
 

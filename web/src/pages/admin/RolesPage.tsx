@@ -5,7 +5,7 @@ import { useAuth } from '../../lib/auth';
 import { api } from '../../lib/api';
 import { can } from '../../lib/permissions';
 import { generatePassword } from '../../lib/password';
-import { useRoles, useApiMutation } from '../../lib/hooks';
+import { useRoles, useUsers, useApiMutation } from '../../lib/hooks';
 import type { UserRow } from '../../lib/types';
 
 const SECTIONS = ['home', 'interviews', 'hdis', 'myteam', 'profile', 'users', 'roles', 'hierarchy'];
@@ -27,13 +27,25 @@ const DEFAULT_SECTIONS = ['home', 'interviews', 'hdis', 'myteam', 'profile'];
 
 function CreateUserForm() {
   const { me } = useAuth();
+  const { data: roles = [] } = useRoles();
+  const { data: users = [] } = useUsers();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [team, setTeam] = useState('PPG');
   const [password, setPassword] = useState(() => generatePassword());
+  const [roleKey, setRoleKey] = useState('user');
+  const [managerId, setManagerId] = useState<string>(() => me?.id ?? '');
   const [sections, setSections] = useState<Set<string>>(new Set(DEFAULT_SECTIONS));
   const [created, setCreated] = useState<{ email: string; password: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // HR Managers may not create Super Admin accounts — the server enforces this too,
+  // but hide the option so the picker doesn't offer something that will be rejected.
+  const isSuperAdmin = me?.role.key === 'super_admin';
+  const assignableRoles = useMemo(
+    () => roles.filter((r) => isSuperAdmin || r.key !== 'super_admin'),
+    [roles, isSuperAdmin],
+  );
 
   const create = useApiMutation<{ body: Record<string, unknown> }, UserRow>(
     ({ body }) => api<UserRow>('/users', { method: 'POST', body }),
@@ -52,6 +64,8 @@ function CreateUserForm() {
     setName('');
     setEmail('');
     setTeam('PPG');
+    setRoleKey('user');
+    setManagerId(me?.id ?? '');
     setSections(new Set(DEFAULT_SECTIONS));
     setPassword(generatePassword());
   };
@@ -65,11 +79,11 @@ function CreateUserForm() {
         body: {
           name: name.trim(),
           email: email.trim(),
-          roleKey: 'user',
+          roleKey,
           team: team.trim() || 'PPG',
           password,
           sections: [...sections],
-          managerId: me?.id ?? null,
+          managerId: managerId || null,
         },
       },
       {
@@ -87,11 +101,11 @@ function CreateUserForm() {
     <Card>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <SectionTitle>Create user</SectionTitle>
-        <Pill tone="p-violet">type: user</Pill>
+        <Pill tone="p-violet">auto-generated password</Pill>
       </div>
       <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>
-        New accounts are created as a <strong>user</strong> with an auto-generated password. Pick
-        the sections they should be able to see — the new account appears in Users immediately.
+        Pick a role and a line manager, then choose which sections they should be able to see — the
+        new account appears in Users immediately and reports up through the manager you pick.
       </p>
 
       <form onSubmit={submit} style={{ marginTop: 14, display: 'grid', gap: 12 }}>
@@ -150,6 +164,38 @@ function CreateUserForm() {
                 ↻
               </button>
             </div>
+          </label>
+        </div>
+
+        <div className="grid g-2" style={{ gap: 12 }}>
+          <label style={{ display: 'grid', gap: 4 }}>
+            <span className="muted" style={{ fontSize: 12 }}>
+              Role
+            </span>
+            <select className="iv-f" value={roleKey} onChange={(e) => setRoleKey(e.target.value)}>
+              {assignableRoles.map((r) => (
+                <option key={r.key} value={r.key}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label style={{ display: 'grid', gap: 4 }}>
+            <span className="muted" style={{ fontSize: 12 }}>
+              Line manager
+            </span>
+            <select
+              className="iv-f"
+              value={managerId}
+              onChange={(e) => setManagerId(e.target.value)}
+            >
+              <option value="">No manager</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name} · {u.role.label}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
 
