@@ -13,7 +13,7 @@
     "test:watch": "cross-env NODE_ENV=test vitest",
     "seed": "tsx prisma/seed.ts",
     "reset": "prisma migrate reset --force --skip-generate && npm run seed",
-    "db:push": "prisma db push",
+    "db:push": "tsx prisma/db-push.ts",
     "migrate": "prisma migrate dev"
   },
   "dependencies": {
