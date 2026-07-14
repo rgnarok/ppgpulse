@@ -24,9 +24,26 @@ export class ApiError extends Error {
   }
 }
 
-// API origin. Empty = same-origin (single-origin Render/dev via Vite proxy).
-// On Vercel, set VITE_API_BASE_URL to the API host, e.g. https://ppg-api.onrender.com
-const API_ROOT = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/+$/, '');
+// Deployed API host (single-origin Render deploy). Used as the default when the
+// web app runs cross-origin (e.g. on Vercel) and VITE_API_BASE_URL isn't set.
+const DEFAULT_REMOTE_API = 'https://ppgpulse.onrender.com';
+
+/**
+ * Resolve the API origin:
+ * - VITE_API_BASE_URL if provided (build-time override), else
+ * - the deployed Render API when running on a *.vercel.app host, else
+ * - same-origin (local dev via Vite proxy, or the single-origin Render deploy).
+ */
+function resolveApiRoot(): string {
+  const env = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/+$/, '');
+  if (env) return env;
+  if (typeof window !== 'undefined' && window.location.hostname.endsWith('.vercel.app')) {
+    return DEFAULT_REMOTE_API;
+  }
+  return '';
+}
+
+const API_ROOT = resolveApiRoot();
 const BASE = `${API_ROOT}/api`;
 
 /** Build an absolute API URL (e.g. for <a href> download links). */
