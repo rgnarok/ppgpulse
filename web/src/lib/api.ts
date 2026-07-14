@@ -112,13 +112,41 @@ export async function api<T = unknown>(path: string, options: RequestOptions = {
 
 /** Login stores tokens and returns the user summary. */
 export async function loginRequest(email: string, password: string) {
-  const res = await fetch(`${BASE}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
-  });
-  if (!res.ok) {
-    throw new ApiError(res.status, 'Invalid email or password', 'bad_credentials');
+  // Free API hosts cold-start slowly; allow up to 60s, then fail with a clear message.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 60_000);
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    const aborted = (err as { name?: string }).name === 'AbortError';
+    throw new ApiError(
+      0,
+      aborted
+        ? `The API did not respond (${API_ROOT || 'same-origin'}). If it is on a free host it may be waking up — try again in a minute.`
+        : `Could not reach the API at ${API_ROOT || '(same origin)'}. Check VITE_API_BASE_URL.`,
+      'network',
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (res.status === 401) {
+    throw new ApiError(401, 'Invalid email or password', 'bad_credentials');
+  }
+  // A misconfigured API base returns the SPA's HTML instead of JSON.
+  const contentType = res.headers.get('content-type') ?? '';
+  if (!res.ok || !contentType.includes('application/json')) {
+    throw new ApiError(
+      res.status,
+      `Unexpected response from the API (${API_ROOT || 'same-origin'}). Set VITE_API_BASE_URL to your API URL and redeploy.`,
+      'bad_api',
+    );
   }
   const data = (await res.json()) as {
     access: string;

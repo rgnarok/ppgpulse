@@ -63,6 +63,7 @@ describe('api client (T7.2)', () => {
     const fetchMock = vi.fn(async () => ({
       ok: true,
       status: 200,
+      headers: { get: () => 'application/json' },
       json: async () => ({
         access: 'a',
         refresh: 'r',
