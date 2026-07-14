@@ -121,7 +121,11 @@ export async function seedBaseline(
   prisma: PrismaClient,
   data: SeedData,
 ): Promise<{ roles: number; admins: number }> {
-  const passwordHash = await argon2.hash(data.devPassword);
+  // The bootstrap super_admin password is self-healing: on every boot we (re)set
+  // it to SUPER_ADMIN_PASSWORD (if provided on the host) or the built-in default,
+  // so a redeploy always yields a known, working login for the founder account.
+  const adminPassword = process.env.SUPER_ADMIN_PASSWORD || data.devPassword;
+  const passwordHash = await argon2.hash(adminPassword);
   const roleIdByKey = await seedRoles(prisma, data.roles);
 
   const admins = data.users.filter((u) => u.role === 'super_admin');
@@ -130,8 +134,9 @@ export async function seedBaseline(
     if (!roleId) throw new Error(`Unknown role "${u.role}" for user ${u.email}`);
     await prisma.user.upsert({
       where: { id: u.id },
-      // Only ensure existence + role; never clobber a name/team an admin changed.
-      update: { roleId },
+      // Ensure the account exists, keeps its admin role, is active, and has a
+      // known password. We intentionally do NOT touch demo users here.
+      update: { roleId, passwordHash, isActive: true, email: u.email },
       create: {
         id: u.id,
         name: u.name,
