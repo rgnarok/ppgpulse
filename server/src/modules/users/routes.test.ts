@@ -138,6 +138,39 @@ describe('POST /api/users', () => {
     });
     expect(res.statusCode).toBe(403);
   });
+
+  it('creates a "user"-type account with only the selected sections granted', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/users',
+      headers: auth(superToken),
+      payload: {
+        name: 'Section User',
+        email: 'sectionuser@vayuz.com',
+        roleKey: 'user',
+        team: 'PPG',
+        password: 'Sctn0Pass!',
+        sections: ['home', 'hdis', 'not_a_real_section'],
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    const body = res.json();
+    expect(body.role.key).toBe('user');
+    // Unknown sections are dropped; valid ones become view overrides.
+    const granted = body.overrides
+      .filter((o: { capability: string }) => o.capability === 'view')
+      .map((o: { section: string }) => o.section)
+      .sort();
+    expect(granted).toEqual(['hdis', 'home']);
+
+    // The generated password lets the new user sign in.
+    const login = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { email: 'sectionuser@vayuz.com', password: 'Sctn0Pass!' },
+    });
+    expect(login.statusCode).toBe(200);
+  });
 });
 
 describe('DELETE /api/users/:id', () => {

@@ -14,6 +14,10 @@ export default function UsersPage() {
       api(`/users/${id}`, { method: 'PATCH', body }),
     [['users']],
   );
+  const remove = useApiMutation(
+    ({ id }: { id: string }) => api(`/users/${id}`, { method: 'DELETE' }),
+    [['users'], ['roles'], ['hierarchy']],
+  );
 
   const isHr = me?.role.key === 'hr_manager';
 
@@ -33,6 +37,7 @@ export default function UsersPage() {
                   <th>Role</th>
                   <th>Manager</th>
                   <th>Status</th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
@@ -83,6 +88,26 @@ export default function UsersPage() {
                           </button>
                         )}
                       </td>
+                      <td>
+                        {!locked && u.id !== me?.id && (
+                          <button
+                            className="lnk"
+                            data-testid={`user-delete-${u.id}`}
+                            style={{ color: 'var(--danger, #c0392b)' }}
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  `Remove ${u.name}? This permanently deletes the account and any linked data.`,
+                                )
+                              ) {
+                                remove.mutate({ id: u.id });
+                              }
+                            }}
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -93,10 +118,12 @@ export default function UsersPage() {
       </Card>
       <div style={{ marginTop: 16 }}>
         <Card>
-          <SectionTitle>Overrides</SectionTitle>
+          <SectionTitle>Managing users</SectionTitle>
           <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>
-            Grant a single extra capability to a user via the API (POST /users/:id/overrides). Each
-            user row above reflects their effective role; overrides layer on top.
+            Create new accounts from <strong>Roles &amp; Access</strong> — pick the sections each
+            user should see and share the generated password. Use <strong>Remove</strong> above to
+            delete an account. Each row reflects the user&apos;s effective role; per-section grants
+            layer on top as overrides.
           </p>
         </Card>
       </div>

@@ -111,6 +111,19 @@
      "edit"
     ]
    }
+  },
+  {
+   "key": "user",
+   "label": "User",
+   "sub": "Member",
+   "scope": "own",
+   "isSystem": true,
+   "isProtected": false,
+   "permissions": {
+    "profile": [
+     "view"
+    ]
+   }
   }
  ],
  "users": [

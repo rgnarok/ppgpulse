@@ -1,5 +1,5 @@
 import { AppShell } from '../../components/AppShell';
-import { Card } from '../../components/ui';
+import { Card, Empty } from '../../components/ui';
 import { useHierarchy } from '../../lib/hooks';
 import type { OrgNode } from '../../lib/types';
 
@@ -40,6 +40,11 @@ export default function HierarchyPage() {
       <Card>
         {isLoading ? (
           'Loading…'
+        ) : tree.length === 0 ? (
+          <Empty icon="⧉" title="No team yet">
+            Create users from Roles &amp; Access to build out your reporting structure — new
+            accounts appear here under whoever creates them.
+          </Empty>
         ) : (
           <div className="tree">
             <ul>

@@ -11,7 +11,7 @@ describe('seed', () => {
   });
 
   it('loads the expected record counts', async () => {
-    expect(await prisma.role.count()).toBe(3);
+    expect(await prisma.role.count()).toBe(4);
     expect(await prisma.user.count()).toBe(13);
     expect(await prisma.consultant.count()).toBe(10);
     expect(await prisma.requirement.count()).toBe(145);

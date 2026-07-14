@@ -75,17 +75,10 @@ function stageForStatus(status: string): string {
   return status === 'Closed' ? 'Closed' : status === 'On Hold' ? 'On Hold' : 'R0 · Sourcing';
 }
 
-/**
- * Idempotent seed. Safe to run repeatedly: everything is upserted on its
- * natural key (role.key, user.id, consultant.userId, requirement.code, hdis.jdId).
- * Requirement owners are resolved by consultant display name.
- */
-export async function seedDatabase(prisma: PrismaClient, data: SeedData): Promise<SeedCounts> {
-  const passwordHash = await argon2.hash(data.devPassword);
-
-  // --- Roles + permissions ---
+/** Upsert all roles + their permissions. Idempotent; returns key -> id map. */
+async function seedRoles(prisma: PrismaClient, roles: SeedRole[]): Promise<Map<string, string>> {
   const roleIdByKey = new Map<string, string>();
-  for (const r of data.roles) {
+  for (const r of roles) {
     const role = await prisma.role.upsert({
       where: { key: r.key },
       update: {
@@ -115,6 +108,54 @@ export async function seedDatabase(prisma: PrismaClient, data: SeedData): Promis
       }
     }
   }
+  return roleIdByKey;
+}
+
+/**
+ * Production baseline: ensure every role and every super_admin account exists,
+ * WITHOUT loading the demo dataset. Safe to run on every boot — it upserts
+ * roles + admins but never re-creates demo users/consultants/requirements, so
+ * accounts an admin deletes in the UI stay deleted across restarts.
+ */
+export async function seedBaseline(
+  prisma: PrismaClient,
+  data: SeedData,
+): Promise<{ roles: number; admins: number }> {
+  const passwordHash = await argon2.hash(data.devPassword);
+  const roleIdByKey = await seedRoles(prisma, data.roles);
+
+  const admins = data.users.filter((u) => u.role === 'super_admin');
+  for (const u of admins) {
+    const roleId = roleIdByKey.get(u.role);
+    if (!roleId) throw new Error(`Unknown role "${u.role}" for user ${u.email}`);
+    await prisma.user.upsert({
+      where: { id: u.id },
+      // Only ensure existence + role; never clobber a name/team an admin changed.
+      update: { roleId },
+      create: {
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        roleId,
+        team: u.team,
+        passwordHash,
+        managerId: null,
+      },
+    });
+  }
+  return { roles: await prisma.role.count(), admins: admins.length };
+}
+
+/**
+ * Idempotent seed. Safe to run repeatedly: everything is upserted on its
+ * natural key (role.key, user.id, consultant.userId, requirement.code, hdis.jdId).
+ * Requirement owners are resolved by consultant display name.
+ */
+export async function seedDatabase(prisma: PrismaClient, data: SeedData): Promise<SeedCounts> {
+  const passwordHash = await argon2.hash(data.devPassword);
+
+  // --- Roles + permissions ---
+  const roleIdByKey = await seedRoles(prisma, data.roles);
 
   // --- Users (two passes so manager FKs resolve) ---
   for (const u of data.users) {

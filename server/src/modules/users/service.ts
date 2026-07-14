@@ -1,7 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 import { hashPassword } from '../../lib/password.js';
 import { BadRequestError, ConflictError, NotFoundError } from '../../lib/errors.js';
-import { assertCanManageUser, descendantIds, type CurrentUser } from '../rbac/index.js';
+import { assertCanManageUser, descendantIds, SECTIONS, type CurrentUser } from '../rbac/index.js';
 import type { CreateUserInput, UpdateUserInput } from './schema.js';
 
 const userInclude = { role: true, overrides: true, manager: true } as const;
@@ -34,6 +34,10 @@ export async function createUser(prisma: PrismaClient, actor: CurrentUser, input
   if (input.managerId) await getUser(prisma, input.managerId);
 
   const passwordHash = await hashPassword(input.password ?? 'Passw0rd!');
+  // Per-user section access is granted as `view` overrides (role ∪ overrides).
+  const sections = (input.sections ?? []).filter((s): s is (typeof SECTIONS)[number] =>
+    (SECTIONS as readonly string[]).includes(s),
+  );
   return prisma.user.create({
     data: {
       name: input.name,
@@ -42,6 +46,9 @@ export async function createUser(prisma: PrismaClient, actor: CurrentUser, input
       team: input.team,
       managerId: input.managerId ?? null,
       passwordHash,
+      overrides: sections.length
+        ? { create: sections.map((section) => ({ section, capability: 'view' })) }
+        : undefined,
     },
     include: userInclude,
   });

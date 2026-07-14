@@ -7,6 +7,8 @@ export const createUserSchema = z.object({
   team: z.string().min(1),
   managerId: z.string().nullable().optional(),
   password: z.string().min(6).optional(),
+  /** Sections this user should be able to view, granted as per-user overrides. */
+  sections: z.array(z.string()).optional(),
 });
 
 export const updateUserSchema = z

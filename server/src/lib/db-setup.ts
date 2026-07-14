@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { prisma } from '../db.js';
-import { seedDatabase, type SeedData } from './seed-core.js';
+import { seedBaseline, type SeedData } from './seed-core.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url)); // .../server/dist/lib
 
@@ -44,13 +44,18 @@ export async function ensureDatabase(log: SetupLogger): Promise<void> {
   }
 
   try {
-    log.info('Seeding database (idempotent)…');
+    // Production baseline only: ensure roles + the super_admin account exist.
+    // We deliberately do NOT load the demo dataset here — the app is now a live
+    // product whose users/teams are managed in-app, so re-seeding demo rows on
+    // every boot would resurrect accounts an admin has deleted. Full demo data
+    // is available for local dev / tests via `npm run seed`.
+    log.info('Ensuring roles + admin account…');
     const seed = JSON.parse(
       readFileSync(path.join(serverDir, 'prisma', 'seed.json'), 'utf-8'),
     ) as SeedData;
-    const counts = await seedDatabase(prisma, seed);
-    log.info(`Database ready: ${JSON.stringify(counts)}`);
+    const counts = await seedBaseline(prisma, seed);
+    log.info(`Baseline ready: ${JSON.stringify(counts)}`);
   } catch (err) {
-    log.error('Seeding failed', err);
+    log.error('Baseline seeding failed', err);
   }
 }
