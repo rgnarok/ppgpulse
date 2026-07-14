@@ -63,6 +63,41 @@ describe('interviews add → day + month count', () => {
     expect(month.json().total).toBe(1);
   });
 
+  it('captures the full interview detail set (ref, round, email, profile, interviewer)', async () => {
+    const create = await app.inject({
+      method: 'POST',
+      url: '/api/interviews',
+      headers: auth(abhaToken),
+      payload: {
+        date: '2026-07-09',
+        time: '12:30 PM',
+        ref: '2026090701',
+        round: 'L1',
+        candidate: 'Ragini Sankhwar',
+        candidateEmail: 'ragini17mar@gmail.com',
+        profile: 'Sr. People Consultant',
+        interviewer: 'Priya Pal',
+        ppgConsultantId: abhaConsultantId,
+        status: 'Rejected',
+      },
+    });
+    expect(create.statusCode).toBe(201);
+
+    const day = await app.inject({
+      method: 'GET',
+      url: '/api/interviews/day/2026-07-09',
+      headers: auth(abhaToken),
+    });
+    const row = day.json().mid[0];
+    expect(row.ref).toBe('2026090701');
+    expect(row.round).toBe('L1');
+    expect(row.candidateEmail).toBe('ragini17mar@gmail.com');
+    expect(row.profile).toBe('Sr. People Consultant');
+    expect(row.interviewer).toBe('Priya Pal');
+    expect(row.ppgConsultantName).toBe('Abha Sharma');
+    expect(row.status).toBe('Rejected');
+  });
+
   it('supports edit and delete', async () => {
     const created = await app.inject({
       method: 'POST',

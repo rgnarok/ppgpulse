@@ -113,6 +113,11 @@ export interface InterviewRow {
   date: string;
   session: 'mid' | 'end';
   candidate: string;
+  candidateEmail: string | null;
+  ref: string | null;
+  round: string | null;
+  profile: string | null;
+  interviewer: string | null;
   ppgConsultantId: string | null;
   ppgConsultantName: string | null;
   stage: string | null;

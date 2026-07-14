@@ -207,8 +207,13 @@ model Interview {
   session        InterviewSession
   time           String?
   candidate      String
+  candidateEmail String?
+  ref            String? // interview update code, e.g. 2026090701
+  round          String? // L0–L5
+  profile        String? // role/position the candidate interviewed for
+  interviewer    String? // "With" — the interviewer's name
   requirementRef String?
-  ppgConsultantId String?
+  ppgConsultantId String? // "Sourcing" — the PPG consultant running it
   stage          String?
   status         String?
   notes          String?

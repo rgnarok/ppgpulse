@@ -34,6 +34,11 @@ function toDto(i: InterviewRow, consultantName?: string | null) {
     session: i.session,
     time: i.time,
     candidate: i.candidate,
+    candidateEmail: i.candidateEmail,
+    ref: i.ref,
+    round: i.round,
+    profile: i.profile,
+    interviewer: i.interviewer,
     requirementRef: i.requirementRef,
     ppgConsultantId: i.ppgConsultantId,
     ppgConsultantName: consultantName ?? null,
@@ -43,6 +48,12 @@ function toDto(i: InterviewRow, consultantName?: string | null) {
     createdBy: i.createdBy,
     createdByName: i.creator.name,
   };
+}
+
+/** Normalise optional string inputs: empty string → null, undefined → keep. */
+function orNull(v: string | null | undefined): string | null | undefined {
+  if (v === undefined) return undefined;
+  return v === '' ? null : v;
 }
 
 /** GET /interviews?month → per-day counts within the caller's visibility. */
@@ -99,6 +110,11 @@ export async function createInterview(
       session: input.session as InterviewSession,
       time: input.time ?? null,
       candidate: input.candidate,
+      candidateEmail: orNull(input.candidateEmail) ?? null,
+      ref: input.ref ?? null,
+      round: input.round ?? null,
+      profile: input.profile ?? null,
+      interviewer: input.interviewer ?? null,
       requirementRef: input.requirementRef ?? null,
       ppgConsultantId: input.ppgConsultantId ?? null,
       stage: input.stage ?? null,
@@ -125,6 +141,11 @@ export async function updateInterview(
       session: (input.session as InterviewSession | undefined) ?? undefined,
       time: input.time === undefined ? undefined : input.time,
       candidate: input.candidate ?? undefined,
+      candidateEmail: orNull(input.candidateEmail),
+      ref: input.ref === undefined ? undefined : input.ref,
+      round: input.round === undefined ? undefined : input.round,
+      profile: input.profile === undefined ? undefined : input.profile,
+      interviewer: input.interviewer === undefined ? undefined : input.interviewer,
       requirementRef: input.requirementRef === undefined ? undefined : input.requirementRef,
       ppgConsultantId: input.ppgConsultantId === undefined ? undefined : input.ppgConsultantId,
       stage: input.stage === undefined ? undefined : input.stage,

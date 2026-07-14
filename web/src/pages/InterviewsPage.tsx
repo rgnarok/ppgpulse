@@ -4,9 +4,17 @@ import { Card, SectionTitle, Empty } from '../components/ui';
 import { useAuth } from '../lib/auth';
 import { can } from '../lib/permissions';
 import { api } from '../lib/api';
-import { useConsultants, useInterviewMonth, useInterviewDay, useApiMutation } from '../lib/hooks';
+import {
+  useConsultants,
+  useInterviewMonth,
+  useInterviewDay,
+  useApiMutation,
+  type InterviewRow,
+} from '../lib/hooks';
 
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const ROUND_OPTIONS = ['L0', 'L1', 'L2', 'L3', 'L4', 'L5'];
+const STATUS_OPTIONS = ['Scheduled', 'Selected', 'Rejected', 'On Hold'];
 
 function monthCells(month: string): (string | null)[] {
   const [y, m] = month.split('-').map(Number);
@@ -80,56 +88,171 @@ export default function InterviewsPage() {
   );
 }
 
+function statusTone(status: string | null): string {
+  switch (status) {
+    case 'Selected':
+      return 'p-green';
+    case 'Rejected':
+      return 'p-amber';
+    case 'On Hold':
+      return 'p-grey';
+    default:
+      return 'p-blue';
+  }
+}
+
 function DayPanel({ date, editable, month }: { date: string; editable: boolean; month: string }) {
+  const { me } = useAuth();
   const { data } = useInterviewDay(date);
   const { data: consultants = [] } = useConsultants();
+  const invalidate = [
+    ['interview-day', date],
+    ['interviews', month],
+  ];
   const create = useApiMutation(
     (body: Record<string, unknown>) => api('/interviews', { method: 'POST', body }),
-    [
-      ['interview-day', date],
-      ['interviews', month],
-    ],
+    invalidate,
   );
+  const patch = useApiMutation(
+    ({ id, body }: { id: string; body: Record<string, unknown> }) =>
+      api(`/interviews/${id}`, { method: 'PATCH', body }),
+    invalidate,
+  );
+  const remove = useApiMutation(
+    ({ id }: { id: string }) => api(`/interviews/${id}`, { method: 'DELETE' }),
+    invalidate,
+  );
+
+  const rows: InterviewRow[] = [...(data?.mid ?? []), ...(data?.end ?? [])];
+
+  // "Sourcing" defaults to the logged-in consultant (who is running the interview).
+  const [ref, setRef] = useState('');
+  const [round, setRound] = useState('L1');
   const [candidate, setCandidate] = useState('');
+  const [email, setEmail] = useState('');
+  const [time, setTime] = useState('');
+  const [profile, setProfile] = useState('');
+  const [interviewer, setInterviewer] = useState('');
   const [session, setSession] = useState<'mid' | 'end'>('mid');
-  const [consultantId, setConsultantId] = useState('');
+  const [status, setStatus] = useState('Scheduled');
+  const [consultantId, setConsultantId] = useState(me?.consultant?.id ?? '');
 
   function add() {
     if (!candidate.trim()) return;
     create.mutate(
-      { date, session, candidate, ppgConsultantId: consultantId || null },
-      { onSuccess: () => setCandidate('') },
+      {
+        date,
+        session,
+        time: time.trim(),
+        candidate: candidate.trim(),
+        candidateEmail: email.trim(),
+        ref: ref.trim(),
+        round,
+        profile: profile.trim(),
+        interviewer: interviewer.trim(),
+        status,
+        ppgConsultantId: consultantId || null,
+      },
+      {
+        onSuccess: () => {
+          setCandidate('');
+          setEmail('');
+          setRef('');
+          setProfile('');
+          setInterviewer('');
+          setTime('');
+        },
+      },
     );
   }
 
   return (
     <div>
       <SectionTitle>{date}</SectionTitle>
-      {(['mid', 'end'] as const).map((s) => {
-        const rows = (data?.[s] ?? []) as {
-          id: string;
-          candidate: string;
-          ppgConsultantName: string | null;
-          status: string | null;
-        }[];
-        return (
-          <div key={s} style={{ marginTop: 14 }}>
-            <div
-              className="muted"
-              style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase' }}
-            >
-              {s === 'mid' ? 'Mid-day' : 'End-day'} ({rows.length})
-            </div>
-            {rows.map((r) => (
-              <div className="log" key={r.id}>
-                <span className="who">{r.candidate}</span>
-                <span className="muted">{r.ppgConsultantName ?? '—'}</span>
-                <span className="muted">{r.status ?? ''}</span>
-              </div>
-            ))}
-          </div>
-        );
-      })}
+      <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+        Mid-day ({data?.mid?.length ?? 0}) · End-day ({data?.end?.length ?? 0})
+      </div>
+
+      {/* Daily interview table — visible to everyone with interviews access. */}
+      <div className="tbl-wrap" style={{ marginTop: 14 }}>
+        <table className="tbl">
+          <thead>
+            <tr>
+              <th>Interview</th>
+              <th>Candidate</th>
+              <th>Time</th>
+              <th>Profile</th>
+              <th>With</th>
+              <th>Sourcing</th>
+              <th>Status</th>
+              {editable && <th />}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={editable ? 8 : 7} className="muted" style={{ padding: 16 }}>
+                  No interviews logged for this day.
+                </td>
+              </tr>
+            ) : (
+              rows.map((r) => (
+                <tr key={r.id}>
+                  <td>
+                    <span style={{ fontWeight: 600 }}>{r.ref ?? '—'}</span>
+                    {r.round ? <span className="muted"> ({r.round})</span> : null}
+                  </td>
+                  <td>
+                    <div style={{ fontWeight: 600 }}>{r.candidate}</div>
+                    {r.candidateEmail ? (
+                      <div className="muted" style={{ fontSize: 12 }}>
+                        {r.candidateEmail}
+                      </div>
+                    ) : null}
+                  </td>
+                  <td className="muted">{r.time ?? '—'}</td>
+                  <td className="muted">{r.profile ?? '—'}</td>
+                  <td className="muted">{r.interviewer ?? '—'}</td>
+                  <td className="muted">{r.ppgConsultantName ?? '—'}</td>
+                  <td>
+                    {editable ? (
+                      <select
+                        className="iv-f"
+                        value={r.status ?? 'Scheduled'}
+                        onChange={(e) =>
+                          patch.mutate({ id: r.id, body: { status: e.target.value } })
+                        }
+                      >
+                        {STATUS_OPTIONS.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className={`pill ${statusTone(r.status)}`}>
+                        {r.status ?? 'Scheduled'}
+                      </span>
+                    )}
+                  </td>
+                  {editable && (
+                    <td>
+                      <button
+                        className="lnk"
+                        style={{ color: 'var(--danger, #c0392b)' }}
+                        onClick={() => remove.mutate({ id: r.id })}
+                      >
+                        Remove
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
       {data?.byConsultant?.length ? (
         <div style={{ marginTop: 16 }}>
           <SectionTitle color="var(--sky)">Consultant-wise</SectionTitle>
@@ -144,9 +267,31 @@ function DayPanel({ date, editable, month }: { date: string; editable: boolean; 
           </div>
         </div>
       ) : null}
+
       {editable && (
         <div style={{ marginTop: 16, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
-          <div className="filterbar">
+          <div className="muted" style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>
+            ADD INTERVIEW
+          </div>
+          <div className="filterbar" style={{ flexWrap: 'wrap' }}>
+            <div className="field">
+              <label>Interview update</label>
+              <input
+                value={ref}
+                onChange={(e) => setRef(e.target.value)}
+                placeholder="2026090701"
+              />
+            </div>
+            <div className="field">
+              <label>Round</label>
+              <select value={round} onChange={(e) => setRound(e.target.value)}>
+                {ROUND_OPTIONS.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="field">
               <label>Candidate</label>
               <input
@@ -156,6 +301,50 @@ function DayPanel({ date, editable, month }: { date: string; editable: boolean; 
               />
             </div>
             <div className="field">
+              <label>Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="candidate@email.com"
+              />
+            </div>
+            <div className="field">
+              <label>Time</label>
+              <input
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+                placeholder="12:30 PM"
+              />
+            </div>
+            <div className="field">
+              <label>Profile</label>
+              <input
+                value={profile}
+                onChange={(e) => setProfile(e.target.value)}
+                placeholder="Sr. People Consultant"
+              />
+            </div>
+            <div className="field">
+              <label>With (interviewer)</label>
+              <input
+                value={interviewer}
+                onChange={(e) => setInterviewer(e.target.value)}
+                placeholder="Interviewer name"
+              />
+            </div>
+            <div className="field">
+              <label>Sourcing (PPG)</label>
+              <select value={consultantId} onChange={(e) => setConsultantId(e.target.value)}>
+                <option value="">—</option>
+                {consultants.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
               <label>Session</label>
               <select value={session} onChange={(e) => setSession(e.target.value as 'mid' | 'end')}>
                 <option value="mid">Mid-day</option>
@@ -163,12 +352,11 @@ function DayPanel({ date, editable, month }: { date: string; editable: boolean; 
               </select>
             </div>
             <div className="field">
-              <label>Consultant</label>
-              <select value={consultantId} onChange={(e) => setConsultantId(e.target.value)}>
-                <option value="">—</option>
-                {consultants.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
+              <label>Status</label>
+              <select value={status} onChange={(e) => setStatus(e.target.value)}>
+                {STATUS_OPTIONS.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
                   </option>
                 ))}
               </select>
