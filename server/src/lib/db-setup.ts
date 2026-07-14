@@ -16,8 +16,12 @@ export interface SetupLogger {
  * but do not crash the server.
  */
 export function ensureDatabase(log: SetupLogger): void {
-  const enabled = process.env.RUN_DB_SETUP === 'true' || process.env.NODE_ENV === 'production';
-  if (!enabled || process.env.RUN_DB_SETUP === 'false') return;
+  if (process.env.RUN_DB_SETUP === 'false') return;
+  const enabled =
+    process.env.RUN_DB_SETUP === 'true' ||
+    process.env.NODE_ENV === 'production' ||
+    !!process.env.RENDER; // Render always sets RENDER=true
+  if (!enabled) return;
   if (!process.env.DATABASE_URL) {
     log.error('RUN_DB_SETUP requested but DATABASE_URL is not set — skipping.');
     return;
