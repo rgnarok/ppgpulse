@@ -1,21 +1,49 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AppShell } from '../components/AppShell';
-import { Card, SectionTitle, Empty } from '../components/ui';
+import { Card, SectionTitle, Empty, Btn } from '../components/ui';
 import { useAuth } from '../lib/auth';
 import { can } from '../lib/permissions';
 import { api } from '../lib/api';
 import {
   useConsultants,
   useInterviewMonth,
+  useInterviewMonths,
   useInterviewDay,
   useApiMutation,
   type InterviewRow,
+  type InterviewScopeFilter,
 } from '../lib/hooks';
 
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const ROUND_OPTIONS = ['L0', 'L1', 'L2', 'L3', 'L4', 'L5'];
 const STATUS_OPTIONS = ['Scheduled', 'Selected', 'Rejected', 'On Hold'];
 
+// ---- calendar-day arithmetic (plain YYYY-MM-DD strings, no real timezone conversion) ----
+function pad(n: number): string {
+  return String(n).padStart(2, '0');
+}
+function todayISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+function toUTCDate(dateISO: string): Date {
+  const [y, m, d] = dateISO.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
+}
+function fromUTCDate(d: Date): string {
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+}
+function addDays(dateISO: string, n: number): string {
+  const d = toUTCDate(dateISO);
+  d.setUTCDate(d.getUTCDate() + n);
+  return fromUTCDate(d);
+}
+/** The Sun–Sat week (7 ISO dates) containing `anchorISO`. */
+function weekDates(anchorISO: string): string[] {
+  const dow = toUTCDate(anchorISO).getUTCDay();
+  const sunday = addDays(anchorISO, -dow);
+  return Array.from({ length: 7 }, (_, i) => addDays(sunday, i));
+}
 function monthCells(month: string): (string | null)[] {
   const [y, m] = month.split('-').map(Number);
   const first = new Date(Date.UTC(y, m - 1, 1));
@@ -26,66 +54,15 @@ function monthCells(month: string): (string | null)[] {
   return cells;
 }
 
-export default function InterviewsPage() {
-  const { me } = useAuth();
-  const editable = can(me, 'interviews', 'edit');
-  const [month, setMonth] = useState('2026-06');
-  const [selected, setSelected] = useState<string | null>(null);
-  const { data: monthData } = useInterviewMonth(month);
-  const counts = monthData?.counts ?? {};
-
-  return (
-    <AppShell title="Interviews" subtitle="Monthly calendar with per-day logs">
-      <div className="card pad" style={{ marginBottom: 16 }}>
-        <div className="filterbar">
-          <div className="field">
-            <label htmlFor="iv-month">Month</label>
-            <input
-              id="iv-month"
-              type="month"
-              value={month}
-              onChange={(e) => setMonth(e.target.value)}
-            />
-          </div>
-        </div>
-      </div>
-      <div className="grid g-58">
-        <Card>
-          <SectionTitle>{month}</SectionTitle>
-          <div className="cal-grid" style={{ marginTop: 12 }}>
-            {DOW.map((d) => (
-              <div className="cal-dow" key={d}>
-                {d}
-              </div>
-            ))}
-            {monthCells(month).map((date, i) =>
-              date === null ? (
-                <div className="cal-c empty" key={`e${i}`} />
-              ) : (
-                <div
-                  key={date}
-                  className={`cal-c ${counts[date] ? 'has' : ''} ${selected === date ? 'sel' : ''}`}
-                  onClick={() => setSelected(date)}
-                >
-                  <div className="cn">{Number(date.slice(-2))}</div>
-                  {counts[date] ? <div className="cal-b">{counts[date]}</div> : null}
-                </div>
-              ),
-            )}
-          </div>
-        </Card>
-        <Card>
-          {selected ? (
-            <DayPanel date={selected} editable={editable} month={month} />
-          ) : (
-            <Empty title="Select a day" icon="▦">
-              Pick a date on the calendar to see mid-day and end-day logs.
-            </Empty>
-          )}
-        </Card>
-      </div>
-    </AppShell>
-  );
+function cellClass(date: string, count: number | undefined, selected: string, today: string) {
+  return [
+    'cal-c',
+    count ? 'has' : '',
+    date === today ? 'today' : '',
+    date === selected ? 'sel' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 }
 
 function statusTone(status: string | null): string {
@@ -101,18 +78,202 @@ function statusTone(status: string | null): string {
   }
 }
 
-function DayPanel({ date, editable, month }: { date: string; editable: boolean; month: string }) {
+export default function InterviewsPage() {
   const { me } = useAuth();
-  const { data } = useInterviewDay(date);
+  const editable = can(me, 'interviews', 'edit');
+  const today = useMemo(() => todayISO(), []);
+  const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
+  const [anchor, setAnchor] = useState(today);
+  const [selected, setSelected] = useState(today);
+  const [addOpen, setAddOpen] = useState(false);
+
+  // Super admins/HR (org scope) filter by team; team-scope roles filter down to one of
+  // their own team members; own-scope users see only their own rows — no filter shown.
+  const [teamFilter, setTeamFilter] = useState('');
+  const [memberFilter, setMemberFilter] = useState('');
   const { data: consultants = [] } = useConsultants();
-  const invalidate = [
-    ['interview-day', date],
-    ['interviews', month],
-  ];
-  const create = useApiMutation(
-    (body: Record<string, unknown>) => api('/interviews', { method: 'POST', body }),
-    invalidate,
+  const teams = useMemo(
+    () => [...new Set(consultants.map((c) => c.team))].sort((a, b) => a.localeCompare(b)),
+    [consultants],
   );
+  const filter: InterviewScopeFilter = useMemo(() => {
+    if (me?.scope === 'org') return teamFilter ? { team: teamFilter } : {};
+    if (me?.scope === 'team') return memberFilter ? { consultantId: memberFilter } : {};
+    return {};
+  }, [me?.scope, teamFilter, memberFilter]);
+
+  const wDates = useMemo(() => weekDates(anchor), [anchor]);
+  const wMonths = useMemo(() => [...new Set(wDates.map((d) => d.slice(0, 7)))], [wDates]);
+  const { counts: weekCounts } = useInterviewMonths(wMonths, filter);
+
+  const month = anchor.slice(0, 7);
+  const { data: monthData } = useInterviewMonth(month, filter);
+  const mCounts = monthData?.counts ?? {};
+
+  function goToday() {
+    setAnchor(today);
+    setSelected(today);
+  }
+
+  return (
+    <AppShell title="Interviews" subtitle="Weekly &amp; monthly calendar with per-day logs">
+      <div className="card pad" style={{ marginBottom: 16 }}>
+        <div className="filterbar" style={{ justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              className={`btn btn-sm ${viewMode === 'week' ? 'btn-pri' : 'btn-gho'}`}
+              onClick={() => setViewMode('week')}
+            >
+              Week
+            </button>
+            <button
+              type="button"
+              className={`btn btn-sm ${viewMode === 'month' ? 'btn-pri' : 'btn-gho'}`}
+              onClick={() => setViewMode('month')}
+            >
+              Calendar view
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            {me?.scope === 'org' && (
+              <div className="field">
+                <label htmlFor="iv-team">Team</label>
+                <select
+                  id="iv-team"
+                  value={teamFilter}
+                  onChange={(e) => setTeamFilter(e.target.value)}
+                >
+                  <option value="">All teams</option>
+                  {teams.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {me?.scope === 'team' && (
+              <div className="field">
+                <label htmlFor="iv-member">Team member</label>
+                <select
+                  id="iv-member"
+                  value={memberFilter}
+                  onChange={(e) => setMemberFilter(e.target.value)}
+                >
+                  <option value="">My team</option>
+                  {consultants.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {viewMode === 'week' ? (
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button
+                  type="button"
+                  className="btn btn-gho btn-sm"
+                  onClick={() => setAnchor(addDays(anchor, -7))}
+                >
+                  ‹ Prev
+                </button>
+                <button type="button" className="btn btn-gho btn-sm" onClick={goToday}>
+                  Today
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-gho btn-sm"
+                  onClick={() => setAnchor(addDays(anchor, 7))}
+                >
+                  Next ›
+                </button>
+              </div>
+            ) : (
+              <div className="field">
+                <label htmlFor="iv-month">Month</label>
+                <input
+                  id="iv-month"
+                  type="month"
+                  value={month}
+                  onChange={(e) => setAnchor(`${e.target.value}-01`)}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <Card>
+        <SectionTitle>{viewMode === 'week' ? `Week of ${wDates[0]}` : month}</SectionTitle>
+        <div className="cal-grid" style={{ marginTop: 12 }}>
+          {DOW.map((d) => (
+            <div className="cal-dow" key={d}>
+              {d}
+            </div>
+          ))}
+          {viewMode === 'week'
+            ? wDates.map((date) => (
+                <div
+                  key={date}
+                  className={cellClass(date, weekCounts[date], selected, today)}
+                  onClick={() => setSelected(date)}
+                >
+                  <div className="cn">{Number(date.slice(-2))}</div>
+                  {weekCounts[date] ? <div className="cal-b">{weekCounts[date]}</div> : null}
+                </div>
+              ))
+            : monthCells(month).map((date, i) =>
+                date === null ? (
+                  <div className="cal-c empty" key={`e${i}`} />
+                ) : (
+                  <div
+                    key={date}
+                    className={cellClass(date, mCounts[date], selected, today)}
+                    onClick={() => setSelected(date)}
+                  >
+                    <div className="cn">{Number(date.slice(-2))}</div>
+                    {mCounts[date] ? <div className="cal-b">{mCounts[date]}</div> : null}
+                  </div>
+                ),
+              )}
+        </div>
+      </Card>
+
+      <div style={{ marginTop: 16 }}>
+        <Card>
+          <DayTable
+            date={selected}
+            editable={editable}
+            filter={filter}
+            onAdd={() => setAddOpen(true)}
+          />
+        </Card>
+      </div>
+
+      {addOpen && editable && (
+        <AddInterviewModal date={selected} onClose={() => setAddOpen(false)} />
+      )}
+    </AppShell>
+  );
+}
+
+function DayTable({
+  date,
+  editable,
+  filter,
+  onAdd,
+}: {
+  date: string;
+  editable: boolean;
+  filter: InterviewScopeFilter;
+  onAdd: () => void;
+}) {
+  const { data } = useInterviewDay(date, filter);
+  const invalidate = [['interview-day', date], ['interviews']];
   const patch = useApiMutation(
     ({ id, body }: { id: string; body: Record<string, unknown> }) =>
       api(`/interviews/${id}`, { method: 'PATCH', body }),
@@ -125,56 +286,32 @@ function DayPanel({ date, editable, month }: { date: string; editable: boolean; 
 
   const rows: InterviewRow[] = [...(data?.mid ?? []), ...(data?.end ?? [])];
 
-  // "Sourcing" defaults to the logged-in consultant (who is running the interview).
-  const [ref, setRef] = useState('');
-  const [round, setRound] = useState('L1');
-  const [candidate, setCandidate] = useState('');
-  const [email, setEmail] = useState('');
-  const [time, setTime] = useState('');
-  const [profile, setProfile] = useState('');
-  const [interviewer, setInterviewer] = useState('');
-  const [session, setSession] = useState<'mid' | 'end'>('mid');
-  const [status, setStatus] = useState('Scheduled');
-  const [consultantId, setConsultantId] = useState(me?.consultant?.id ?? '');
-
-  function add() {
-    if (!candidate.trim()) return;
-    create.mutate(
-      {
-        date,
-        session,
-        time: time.trim(),
-        candidate: candidate.trim(),
-        candidateEmail: email.trim(),
-        ref: ref.trim(),
-        round,
-        profile: profile.trim(),
-        interviewer: interviewer.trim(),
-        status,
-        ppgConsultantId: consultantId || null,
-      },
-      {
-        onSuccess: () => {
-          setCandidate('');
-          setEmail('');
-          setRef('');
-          setProfile('');
-          setInterviewer('');
-          setTime('');
-        },
-      },
-    );
-  }
-
   return (
     <div>
-      <SectionTitle>{date}</SectionTitle>
-      <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-        Mid-day ({data?.mid?.length ?? 0}) · End-day ({data?.end?.length ?? 0})
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 10,
+        }}
+      >
+        <div>
+          <SectionTitle>{date}</SectionTitle>
+          <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+            Mid-day ({data?.mid?.length ?? 0}) · End-day ({data?.end?.length ?? 0})
+          </div>
+        </div>
+        {editable && (
+          <Btn small onClick={onAdd}>
+            + Add interview
+          </Btn>
+        )}
       </div>
 
-      {/* Daily interview table — visible to everyone with interviews access. */}
-      <div className="tbl-wrap" style={{ marginTop: 14 }}>
+      {/* Interview list for the selected date — visible to everyone with interviews access. */}
+      <div className="tbl-wrap" style={{ marginTop: 14, maxHeight: 420, overflowY: 'auto' }}>
         <table className="tbl">
           <thead>
             <tr>
@@ -268,12 +405,93 @@ function DayPanel({ date, editable, month }: { date: string; editable: boolean; 
         </div>
       ) : null}
 
-      {editable && (
-        <div style={{ marginTop: 16, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
-          <div className="muted" style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>
-            ADD INTERVIEW
-          </div>
-          <div className="filterbar" style={{ flexWrap: 'wrap' }}>
+      {rows.length === 0 && !data && (
+        <Empty title="Loading…" icon="▦">
+          Fetching interviews for this day.
+        </Empty>
+      )}
+    </div>
+  );
+}
+
+function AddInterviewModal({ date, onClose }: { date: string; onClose: () => void }) {
+  const { me } = useAuth();
+  const { data: consultants = [] } = useConsultants();
+  const create = useApiMutation(
+    (body: Record<string, unknown>) => api('/interviews', { method: 'POST', body }),
+    [['interview-day', date], ['interviews']],
+  );
+
+  const [ref, setRef] = useState('');
+  const [round, setRound] = useState('L1');
+  const [candidate, setCandidate] = useState('');
+  const [email, setEmail] = useState('');
+  const [time, setTime] = useState('');
+  const [profile, setProfile] = useState('');
+  const [interviewer, setInterviewer] = useState('');
+  const [session, setSession] = useState<'mid' | 'end'>('mid');
+  const [status, setStatus] = useState('Scheduled');
+  const [consultantId, setConsultantId] = useState(me?.consultant?.id ?? '');
+  const [error, setError] = useState<string | null>(null);
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!candidate.trim()) {
+      setError('Candidate name is required');
+      return;
+    }
+    setError(null);
+    create.mutate(
+      {
+        date,
+        session,
+        time: time.trim(),
+        candidate: candidate.trim(),
+        candidateEmail: email.trim(),
+        ref: ref.trim(),
+        round,
+        profile: profile.trim(),
+        interviewer: interviewer.trim(),
+        status,
+        ppgConsultantId: consultantId || null,
+      },
+      {
+        onSuccess: onClose,
+        onError: (err) =>
+          setError(err instanceof Error ? err.message : 'Could not add the interview'),
+      },
+    );
+  }
+
+  return (
+    <div
+      role="dialog"
+      aria-label="Add interview"
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(15,23,42,.5)',
+        display: 'grid',
+        placeItems: 'center',
+        zIndex: 60,
+        padding: 20,
+      }}
+    >
+      <div
+        className="card pad"
+        style={{ width: 640, maxWidth: '100%', maxHeight: '88vh', overflowY: 'auto' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <SectionTitle>Add interview — {date}</SectionTitle>
+          <button type="button" className="lnk" onClick={onClose} aria-label="Close">
+            ✕
+          </button>
+        </div>
+
+        <form onSubmit={submit} style={{ marginTop: 14 }}>
+          <div className="form-grid">
             <div className="field">
               <label>Interview update</label>
               <input
@@ -362,11 +580,26 @@ function DayPanel({ date, editable, month }: { date: string; editable: boolean; 
               </select>
             </div>
           </div>
-          <button className="iv-add" onClick={add} disabled={create.isPending}>
-            + Add interview
-          </button>
-        </div>
-      )}
+
+          {error && (
+            <div
+              role="alert"
+              style={{ color: 'var(--danger, #c0392b)', fontSize: 13, marginTop: 12 }}
+            >
+              {error}
+            </div>
+          )}
+
+          <div style={{ marginTop: 16, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <button type="button" className="btn btn-gho" onClick={onClose}>
+              Cancel
+            </button>
+            <Btn type="submit" disabled={create.isPending}>
+              {create.isPending ? 'Saving…' : 'Save interview'}
+            </Btn>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

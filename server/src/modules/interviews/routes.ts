@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { assertCan } from '../rbac/index.js';
 import {
   monthQuerySchema,
+  dayQuerySchema,
   dateParamSchema,
   createInterviewSchema,
   updateInterviewSchema,
@@ -17,8 +18,8 @@ import {
 export default async function interviewsRoutes(app: FastifyInstance) {
   app.get('/interviews', { preHandler: app.authenticate }, async (request) => {
     assertCan(request.currentUser, 'interviews', 'view');
-    const { month } = monthQuerySchema.parse(request.query);
-    return monthCounts(app.prisma, request.currentUser, month);
+    const { month, team, consultantId } = monthQuerySchema.parse(request.query);
+    return monthCounts(app.prisma, request.currentUser, month, { team, consultantId });
   });
 
   app.get<{ Params: { date: string } }>(
@@ -27,7 +28,8 @@ export default async function interviewsRoutes(app: FastifyInstance) {
     async (request) => {
       assertCan(request.currentUser, 'interviews', 'view');
       const { date } = dateParamSchema.parse(request.params);
-      return dayView(app.prisma, request.currentUser, date);
+      const { team, consultantId } = dayQuerySchema.parse(request.query);
+      return dayView(app.prisma, request.currentUser, date, { team, consultantId });
     },
   );
 

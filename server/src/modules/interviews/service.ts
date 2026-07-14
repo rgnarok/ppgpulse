@@ -3,6 +3,13 @@ import { NotFoundError } from '../../lib/errors.js';
 import { loadDirectory, scopeNames, type CurrentUser } from '../rbac/index.js';
 import type { CreateInterviewInput, UpdateInterviewInput } from './schema.js';
 
+export interface ScopeFilter {
+  /** Org-scope callers only: restrict to a specific team name. */
+  team?: string;
+  /** Team/own-scope callers: restrict to a specific consultant within their own visibility. */
+  consultantId?: string;
+}
+
 /** Consultant ids the caller may see (team scope) or all (org scope). */
 async function scopedConsultantIds(prisma: PrismaClient, user: CurrentUser): Promise<string[]> {
   const directory = await loadDirectory(prisma);
@@ -21,6 +28,29 @@ async function visibilityWhere(
   return {
     OR: [{ ppgConsultantId: { in: ids } }, { createdBy: user.id }],
   };
+}
+
+/**
+ * Narrow an already-scoped query further: org-scope callers may filter by team name,
+ * team/own-scope callers may filter down to one consultant. Combined with an AND against
+ * `visibilityWhere`, so a filter outside the caller's own visibility simply yields no rows
+ * rather than leaking data.
+ */
+async function scopeFilterWhere(
+  prisma: PrismaClient,
+  user: CurrentUser,
+  filter: ScopeFilter | undefined,
+): Promise<Prisma.InterviewWhereInput> {
+  if (!filter) return {};
+  if (user.role.scope === 'org' && filter.team) {
+    const consultants = await prisma.consultant.findMany({ include: { user: true } });
+    const ids = consultants.filter((c) => c.user.team === filter.team).map((c) => c.id);
+    return { ppgConsultantId: { in: ids } };
+  }
+  if (filter.consultantId) {
+    return { ppgConsultantId: filter.consultantId };
+  }
+  return {};
 }
 
 type InterviewRow = Prisma.InterviewGetPayload<{
@@ -57,10 +87,16 @@ function orNull(v: string | null | undefined): string | null | undefined {
 }
 
 /** GET /interviews?month → per-day counts within the caller's visibility. */
-export async function monthCounts(prisma: PrismaClient, user: CurrentUser, month: string) {
+export async function monthCounts(
+  prisma: PrismaClient,
+  user: CurrentUser,
+  month: string,
+  filter?: ScopeFilter,
+) {
   const base = await visibilityWhere(prisma, user);
+  const narrowed = await scopeFilterWhere(prisma, user, filter);
   const rows = await prisma.interview.findMany({
-    where: { AND: [base, { date: { gte: `${month}-01`, lte: `${month}-31` } }] },
+    where: { AND: [base, narrowed, { date: { gte: `${month}-01`, lte: `${month}-31` } }] },
     select: { date: true },
   });
   const counts: Record<string, number> = {};
@@ -69,10 +105,16 @@ export async function monthCounts(prisma: PrismaClient, user: CurrentUser, month
 }
 
 /** GET /interviews/day/:date → {mid, end, byConsultant}. */
-export async function dayView(prisma: PrismaClient, user: CurrentUser, date: string) {
+export async function dayView(
+  prisma: PrismaClient,
+  user: CurrentUser,
+  date: string,
+  filter?: ScopeFilter,
+) {
   const base = await visibilityWhere(prisma, user);
+  const narrowed = await scopeFilterWhere(prisma, user, filter);
   const rows = await prisma.interview.findMany({
-    where: { AND: [base, { date }] },
+    where: { AND: [base, narrowed, { date }] },
     include: { creator: { select: { name: true } } },
     orderBy: { createdAt: 'asc' },
   });

@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from './api';
 import type {
   ConsultantReport,
@@ -92,14 +92,40 @@ export function useHierarchy() {
   return useQuery({ queryKey: ['hierarchy'], queryFn: () => api<OrgNode[]>('/hierarchy') });
 }
 
-export function useInterviewMonth(month: string) {
+export interface InterviewScopeFilter {
+  /** Org-scope callers only: restrict to a specific team name. */
+  team?: string;
+  /** Team/own-scope callers: restrict to a specific consultant within their own visibility. */
+  consultantId?: string;
+}
+
+export interface MonthCounts {
+  month: string;
+  counts: Record<string, number>;
+  total: number;
+}
+
+export function useInterviewMonth(month: string, filter: InterviewScopeFilter = {}) {
   return useQuery({
-    queryKey: ['interviews', month],
-    queryFn: () =>
-      api<{ month: string; counts: Record<string, number>; total: number }>(
-        `/interviews?month=${month}`,
-      ),
+    queryKey: ['interviews', month, filter],
+    queryFn: () => api<MonthCounts>(`/interviews${qs({ month, ...filter })}`),
   });
+}
+
+/**
+ * Per-day counts across several months at once (e.g. the 1-2 months a visible week spans),
+ * merged into a single date → count map.
+ */
+export function useInterviewMonths(months: string[], filter: InterviewScopeFilter = {}) {
+  const results = useQueries({
+    queries: months.map((month) => ({
+      queryKey: ['interviews', month, filter],
+      queryFn: () => api<MonthCounts>(`/interviews${qs({ month, ...filter })}`),
+    })),
+  });
+  const counts: Record<string, number> = {};
+  for (const r of results) Object.assign(counts, r.data?.counts ?? {});
+  return { counts, isLoading: results.some((r) => r.isLoading) };
 }
 
 export interface DayView {
@@ -126,10 +152,10 @@ export interface InterviewRow {
   createdByName: string;
 }
 
-export function useInterviewDay(date: string | null) {
+export function useInterviewDay(date: string | null, filter: InterviewScopeFilter = {}) {
   return useQuery({
-    queryKey: ['interview-day', date],
-    queryFn: () => api<DayView>(`/interviews/day/${date}`),
+    queryKey: ['interview-day', date, filter],
+    queryFn: () => api<DayView>(`/interviews/day/${date}${qs(filter)}`),
     enabled: !!date,
   });
 }

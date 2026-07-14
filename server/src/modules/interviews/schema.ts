@@ -1,8 +1,20 @@
 import { z } from 'zod';
 
-export const monthQuerySchema = z.object({
-  month: z.string().regex(/^\d{4}-\d{2}$/),
+/** Optional narrowing filters, layered on top of the caller's role-scope visibility. */
+export const scopeFilterSchema = z.object({
+  /** Org-scope callers only: restrict to a specific team name. */
+  team: z.string().min(1).optional(),
+  /** Team/own-scope callers: restrict to a specific consultant within their own visibility. */
+  consultantId: z.string().min(1).optional(),
 });
+
+export const monthQuerySchema = z
+  .object({
+    month: z.string().regex(/^\d{4}-\d{2}$/),
+  })
+  .merge(scopeFilterSchema);
+
+export const dayQuerySchema = scopeFilterSchema;
 
 export const dateParamSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
