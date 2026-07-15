@@ -12,6 +12,8 @@ export const createUserSchema = z.object({
   /** Grants hdis:view_all + hdis:edit overrides — full HDIS access across every
    * client, not just the ones this user owns. Set by whoever creates the account. */
   hdisFullAccess: z.boolean().optional(),
+  /** When true, emails the plaintext password to the new user's own address. */
+  emailCredentials: z.boolean().optional(),
 });
 
 export const updateUserSchema = z

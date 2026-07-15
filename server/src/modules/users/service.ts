@@ -1,5 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 import { hashPassword } from '../../lib/password.js';
+import { sendWelcomeEmail } from '../../lib/mailer.js';
+import { getConfig } from '../../config.js';
 import { BadRequestError, ConflictError, NotFoundError } from '../../lib/errors.js';
 import { assertCanManageUser, descendantIds, SECTIONS, type CurrentUser } from '../rbac/index.js';
 import type { CreateUserInput, UpdateUserInput } from './schema.js';
@@ -33,7 +35,8 @@ export async function createUser(prisma: PrismaClient, actor: CurrentUser, input
 
   if (input.managerId) await getUser(prisma, input.managerId);
 
-  const passwordHash = await hashPassword(input.password ?? 'Passw0rd!');
+  const plainPassword = input.password ?? 'Passw0rd!';
+  const passwordHash = await hashPassword(plainPassword);
   // Per-user section access is granted as `view` overrides (role ∪ overrides).
   const sections = (input.sections ?? []).filter((s): s is (typeof SECTIONS)[number] =>
     (SECTIONS as readonly string[]).includes(s),
@@ -45,7 +48,7 @@ export async function createUser(prisma: PrismaClient, actor: CurrentUser, input
     overrideRows.push({ section: 'hdis', capability: 'view_all' });
     overrideRows.push({ section: 'hdis', capability: 'edit' });
   }
-  return prisma.user.create({
+  const user = await prisma.user.create({
     data: {
       name: input.name,
       email,
@@ -61,6 +64,25 @@ export async function createUser(prisma: PrismaClient, actor: CurrentUser, input
     },
     include: userInclude,
   });
+
+  // Optionally email the new user their own credentials. Best-effort: a failed
+  // or unconfigured mail send must never fail account creation itself.
+  let emailSent = false;
+  if (input.emailCredentials) {
+    try {
+      emailSent = await sendWelcomeEmail({
+        to: user.email,
+        name: user.name,
+        password: plainPassword,
+        webOrigin: getConfig().WEB_ORIGIN,
+      });
+    } catch (err) {
+      console.error('[users] failed to send welcome email', err);
+      emailSent = false;
+    }
+  }
+
+  return { user, emailSent };
 }
 
 export async function updateUser(

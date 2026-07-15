@@ -31,8 +31,8 @@ export default async function usersRoutes(app: FastifyInstance) {
   app.post('/users', { preHandler: app.authenticate }, async (request, reply) => {
     assertCan(request.currentUser, 'users', 'edit');
     const input = createUserSchema.parse(request.body);
-    const user = await createUser(app.prisma, request.currentUser, input);
-    return reply.status(201).send(toUserDto(user));
+    const { user, emailSent } = await createUser(app.prisma, request.currentUser, input);
+    return reply.status(201).send({ ...toUserDto(user), emailSent });
   });
 
   app.patch<{ Params: { id: string } }>(

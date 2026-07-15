@@ -195,6 +195,46 @@ describe('Roles admin (T12.2)', () => {
     expect(posted).toBeTruthy();
     expect((posted!.body as { hdisFullAccess: boolean }).hdisFullAccess).toBe(true);
   });
+
+  it('includes emailCredentials in the payload and reports the send result', async () => {
+    const { calls } = mockFetch([
+      jsonRoute('/api/me', superAdminMe),
+      jsonRoute('/api/roles', roles),
+      jsonRoute('/api/users', users),
+      jsonRoute('/api/users', { ...users[1], emailSent: true }, { method: 'POST' }),
+    ]);
+    renderApp(<RolesPage />);
+    await screen.findAllByText('system');
+
+    await userEvent.type(screen.getByPlaceholderText('Full name'), 'New Person');
+    await userEvent.type(screen.getByPlaceholderText('name@vayuz.com'), 'new@vayuz.com');
+    await userEvent.click(screen.getByText('Email login credentials to this user'));
+    await userEvent.click(screen.getByRole('button', { name: 'Create user' }));
+
+    const posted = calls.find((c) => c.url.endsWith('/api/users') && c.method === 'POST');
+    expect(posted).toBeTruthy();
+    expect((posted!.body as { emailCredentials: boolean }).emailCredentials).toBe(true);
+
+    expect(await screen.findByText(/Credentials emailed to new@vayuz.com/)).toBeInTheDocument();
+  });
+
+  it('flags when a requested credentials email could not be sent', async () => {
+    mockFetch([
+      jsonRoute('/api/me', superAdminMe),
+      jsonRoute('/api/roles', roles),
+      jsonRoute('/api/users', users),
+      jsonRoute('/api/users', { ...users[1], emailSent: false }, { method: 'POST' }),
+    ]);
+    renderApp(<RolesPage />);
+    await screen.findAllByText('system');
+
+    await userEvent.type(screen.getByPlaceholderText('Full name'), 'New Person');
+    await userEvent.type(screen.getByPlaceholderText('name@vayuz.com'), 'new@vayuz.com');
+    await userEvent.click(screen.getByText('Email login credentials to this user'));
+    await userEvent.click(screen.getByRole('button', { name: 'Create user' }));
+
+    expect(await screen.findByText(/Couldn't email the credentials/)).toBeInTheDocument();
+  });
 });
 
 describe('Hierarchy admin (T12.3)', () => {

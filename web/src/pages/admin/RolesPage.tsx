@@ -37,7 +37,13 @@ function CreateUserForm() {
   const [managerId, setManagerId] = useState<string>(() => me?.id ?? '');
   const [sections, setSections] = useState<Set<string>>(new Set(DEFAULT_SECTIONS));
   const [hdisFullAccess, setHdisFullAccess] = useState(false);
-  const [created, setCreated] = useState<{ email: string; password: string } | null>(null);
+  const [emailCredentials, setEmailCredentials] = useState(false);
+  const [created, setCreated] = useState<{
+    email: string;
+    password: string;
+    emailSent: boolean;
+    emailRequested: boolean;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // HR Managers may not create Super Admin accounts — the server enforces this too,
@@ -48,8 +54,11 @@ function CreateUserForm() {
     [roles, isSuperAdmin],
   );
 
-  const create = useApiMutation<{ body: Record<string, unknown> }, UserRow>(
-    ({ body }) => api<UserRow>('/users', { method: 'POST', body }),
+  const create = useApiMutation<
+    { body: Record<string, unknown> },
+    UserRow & { emailSent: boolean }
+  >(
+    ({ body }) => api<UserRow & { emailSent: boolean }>('/users', { method: 'POST', body }),
     [['users'], ['roles'], ['hierarchy']],
   );
 
@@ -69,6 +78,7 @@ function CreateUserForm() {
     setManagerId(me?.id ?? '');
     setSections(new Set(DEFAULT_SECTIONS));
     setHdisFullAccess(false);
+    setEmailCredentials(false);
     setPassword(generatePassword());
   };
 
@@ -76,6 +86,7 @@ function CreateUserForm() {
     e.preventDefault();
     setError(null);
     setCreated(null);
+    const emailRequested = emailCredentials;
     create.mutate(
       {
         body: {
@@ -87,11 +98,17 @@ function CreateUserForm() {
           sections: [...sections],
           managerId: managerId || null,
           hdisFullAccess,
+          emailCredentials,
         },
       },
       {
-        onSuccess: () => {
-          setCreated({ email: email.trim(), password });
+        onSuccess: (data) => {
+          setCreated({
+            email: email.trim(),
+            password,
+            emailRequested,
+            emailSent: data.emailSent,
+          });
           reset();
         },
         onError: (err) =>
@@ -249,6 +266,23 @@ function CreateUserForm() {
           Full HDIS access (all clients, not just the ones they own)
         </label>
 
+        <label
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            fontSize: 13,
+            cursor: 'pointer',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={emailCredentials}
+            onChange={(e) => setEmailCredentials(e.target.checked)}
+          />
+          Email login credentials to this user
+        </label>
+
         {error && (
           <div
             className="muted"
@@ -284,6 +318,18 @@ function CreateUserForm() {
           >
             Copy credentials
           </button>
+          {created.emailRequested && (
+            <div style={{ fontSize: 12.5 }}>
+              {created.emailSent ? (
+                <span>✓ Credentials emailed to {created.email}.</span>
+              ) : (
+                <span style={{ color: 'var(--danger, #c0392b)' }}>
+                  Couldn&apos;t email the credentials — SMTP may not be configured. Share them
+                  manually instead.
+                </span>
+              )}
+            </div>
+          )}
         </div>
       )}
     </Card>

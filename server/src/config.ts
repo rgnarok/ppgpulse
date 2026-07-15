@@ -15,6 +15,19 @@ const configSchema = z.object({
   WEB_ORIGIN: z.string().url('WEB_ORIGIN must be a valid URL'),
   UPLOAD_DIR: z.string().default('./uploads'),
   MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(10_485_760),
+  // SMTP is optional — when unset, credential emails are silently skipped
+  // (see server/src/lib/mailer.ts) rather than failing user creation.
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  // z.coerce.boolean() treats any non-empty string (incl. "false") as true, so
+  // compare against the literal string instead.
+  SMTP_SECURE: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true'),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_FROM: z.string().optional(),
 });
 
 export type AppConfig = z.infer<typeof configSchema>;
