@@ -139,6 +139,8 @@ select.iv-f{cursor:pointer}
 .log .w{font-family:'JetBrains Mono';color:var(--faint);font-size:11px;flex:0 0 130px}
 .log .who{font-weight:700;flex:0 0 120px}
 .log.attach{padding:11px 4px;justify-content:space-between}
+.pagination{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:14px 20px;border-top:1px solid var(--border)}
+.pagination .btn-sm{min-width:32px;padding:6px 10px}
 .banner-note{background:#FEF9E7;border:1px solid #F7E7A8;color:#8a6d1a;padding:11px 15px;border-radius:11px;font-size:12.5px;margin-bottom:16px}
 .scope-note{background:var(--primary-l);border:1px solid #D6D9FB;color:var(--primary-d);padding:10px 14px;border-radius:11px;font-size:12.5px;margin-bottom:16px;display:flex;gap:9px;align-items:center}
 .dbanner{background:linear-gradient(120deg,#1E293B,#334155);border-radius:16px;padding:24px 28px;color:#fff;position:relative;overflow:hidden;box-shadow:var(--shadow-lg)}

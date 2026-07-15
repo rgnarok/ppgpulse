@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import { AppShell } from '../../components/AppShell';
 import { Card, Empty, Btn } from '../../components/ui';
+import { Pagination } from '../../components/Pagination';
 import { useClients, useCreateClient, useUpdateClient, useDeleteClient } from '../../lib/hooks';
+import { usePagination } from '../../lib/pagination';
 import { formatDate } from '../../lib/format';
 
 export default function ClientsPage() {
@@ -22,6 +24,12 @@ export default function ClientsPage() {
     if (!needle) return clients;
     return clients.filter((c) => c.name.toLowerCase().includes(needle));
   }, [clients, q]);
+  const { page, setPage, pageCount, pageItems, pageSize, totalItems } = usePagination(filtered);
+
+  function updateSearch(value: string) {
+    setQ(value);
+    setPage(1);
+  }
 
   function submitAdd() {
     const name = newName.trim();
@@ -67,7 +75,7 @@ export default function ClientsPage() {
             <input
               id="client-search"
               value={q}
-              onChange={(e) => setQ(e.target.value)}
+              onChange={(e) => updateSearch(e.target.value)}
               placeholder="Find a client…"
             />
           </div>
@@ -113,7 +121,7 @@ export default function ClientsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((c) => (
+                {pageItems.map((c) => (
                   <tr key={c.id}>
                     <td>
                       {editingId === c.id ? (
@@ -186,6 +194,13 @@ export default function ClientsPage() {
             </table>
           </div>
         )}
+        <Pagination
+          page={page}
+          pageCount={pageCount}
+          pageSize={pageSize}
+          totalItems={totalItems}
+          onChange={setPage}
+        />
       </Card>
     </AppShell>
   );

@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams, useSearchParams } from 'react-rout
 import { AppShell } from '../components/AppShell';
 import { Card, SectionTitle, Pill, Empty, Btn } from '../components/ui';
 import { SearchableSelect } from '../components/SearchableSelect';
+import { Pagination } from '../components/Pagination';
 import { useAuth } from '../lib/auth';
 import { can } from '../lib/permissions';
 import { api, apiUrl } from '../lib/api';
@@ -16,6 +17,7 @@ import {
 } from '../lib/hooks';
 import { formatDate, formatMonth, formatDateTime } from '../lib/format';
 import { fyOfMonth, fyLabel, fyMonths, fiscalYearsFor } from '../lib/fy';
+import { DEFAULT_PAGE_SIZE } from '../lib/pagination';
 import type { HdisRecord } from '../lib/types';
 
 const TYPE_OPTIONS = ['RADC', 'RADF', 'Internal'];
@@ -69,6 +71,7 @@ function HdisList() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const [filters, setFiltersState] = useState<HdisFilters>(() => filtersFromParams(params));
+  const [page, setPageState] = useState(() => Number(params.get('page')) || 1);
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<HdisRecord | null>(null);
   // Filtering happens client-side across the full set — the dataset is small enough
@@ -95,14 +98,21 @@ function HdisList() {
   const clients = useMemo(() => distinctSorted(rows.map((r) => r.client)), [rows]);
   const owners = useMemo(() => distinctSorted(rows.flatMap((r) => r.owners)), [rows]);
 
-  function setFilters(next: HdisFilters) {
-    setFiltersState(next);
+  /** Writes filters + page to both state and the URL in one go — every filter change
+   * resets to page 1 (a stale page number past the new, smaller result set would
+   * otherwise look like an empty list). */
+  function persist(nextFilters: HdisFilters, nextPage: number) {
+    setFiltersState(nextFilters);
+    setPageState(nextPage);
     const p = new URLSearchParams();
-    for (const [k, v] of Object.entries(next)) if (v) p.set(k, v);
+    for (const [k, v] of Object.entries(nextFilters)) if (v) p.set(k, v);
+    if (nextPage > 1) p.set('page', String(nextPage));
     setParams(p, { replace: true });
   }
 
+  const setFilters = (next: HdisFilters) => persist(next, 1);
   const set = (patch: Partial<HdisFilters>) => setFilters({ ...filters, ...patch });
+  const setPage = (next: number) => persist(filters, next);
 
   function setFy(fy: string) {
     // Changing (or clearing) the fiscal year invalidates any month picked from a
@@ -128,7 +138,16 @@ function HdisList() {
     });
   }, [rows, filters]);
 
+  const pageCount = Math.max(1, Math.ceil(filtered.length / DEFAULT_PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const paged = useMemo(
+    () => filtered.slice((currentPage - 1) * DEFAULT_PAGE_SIZE, currentPage * DEFAULT_PAGE_SIZE),
+    [filtered, currentPage],
+  );
+
   const hasFilters = Object.values(filters).some(Boolean);
+  // Based on the full filtered set (not just the current page) so the column doesn't
+  // appear/disappear as you page through results.
   const showEditColumn = canEditAll || filtered.some(isOwnerOf);
 
   return (
@@ -275,7 +294,7 @@ function HdisList() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((r) => (
+                {paged.map((r) => (
                   <tr
                     key={r.jdId}
                     onClick={() =>
@@ -319,6 +338,13 @@ function HdisList() {
             </table>
           </div>
         )}
+        <Pagination
+          page={currentPage}
+          pageCount={pageCount}
+          pageSize={DEFAULT_PAGE_SIZE}
+          totalItems={filtered.length}
+          onChange={setPage}
+        />
       </Card>
 
       {showAdd && <HdisFormModal mode="create" onClose={() => setShowAdd(false)} />}

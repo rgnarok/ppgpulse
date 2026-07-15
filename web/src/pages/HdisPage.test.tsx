@@ -374,6 +374,53 @@ describe('HDIS fiscal year + month filter', () => {
   });
 });
 
+describe('HDIS list pagination', () => {
+  const manyRows: HdisRecord[] = Array.from({ length: 25 }, (_, i) => ({
+    ...record,
+    jdId: `TST_ROW_${String(i).padStart(2, '0')}`,
+    title: `Row ${i}`,
+    owners: [],
+  }));
+
+  it('shows 20 records per page and pages through the rest', async () => {
+    mockFetch(routesFor(superAdminMe, manyRows));
+    renderApp(
+      <Routes>
+        <Route path="/hdis" element={<HdisPage />} />
+      </Routes>,
+      { route: '/hdis' },
+    );
+    expect(await screen.findByText('Row 0')).toBeInTheDocument();
+    expect(screen.getByText('Row 19')).toBeInTheDocument();
+    expect(screen.queryByText('Row 20')).not.toBeInTheDocument();
+    expect(screen.getByText('Showing 1–20 of 25')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByText('Next ›'));
+    expect(await screen.findByText('Row 20')).toBeInTheDocument();
+    expect(screen.getByText('Row 24')).toBeInTheDocument();
+    expect(screen.queryByText('Row 0')).not.toBeInTheDocument();
+    expect(screen.getByText('Showing 21–25 of 25')).toBeInTheDocument();
+  });
+
+  it('resets to page 1 when a filter narrows the results', async () => {
+    mockFetch(routesFor(superAdminMe, manyRows));
+    renderApp(
+      <Routes>
+        <Route path="/hdis" element={<HdisPage />} />
+      </Routes>,
+      { route: '/hdis' },
+    );
+    await screen.findByText('Row 0');
+    await userEvent.click(screen.getByText('Next ›'));
+    await screen.findByText('Row 20');
+
+    await userEvent.type(screen.getByLabelText('Search'), 'Row 1');
+    // Narrowed to Row 1, 10-19 (11 matches) — back on page 1 of the new result set.
+    expect(await screen.findByText('Row 1')).toBeInTheDocument();
+    expect(screen.getByText('Row 10')).toBeInTheDocument();
+  });
+});
+
 describe('HDIS client master searchable select', () => {
   it('lists known clients and picks one on the add form', async () => {
     mockFetch(routesFor(superAdminMe));

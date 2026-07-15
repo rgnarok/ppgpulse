@@ -4,6 +4,7 @@ import { AppShell } from '../components/AppShell';
 import { KpiCard, Card, SectionTitle, Pill, Empty, ScopeNote } from '../components/ui';
 import { HBarChart, DonutChart } from '../components/charts';
 import { FilterBar, type FilterState } from '../components/FilterBar';
+import { Pagination } from '../components/Pagination';
 import { useAuth } from '../lib/auth';
 import {
   useConsultants,
@@ -12,6 +13,7 @@ import {
   useRequirement,
   useInterviewMonth,
 } from '../lib/hooks';
+import { usePagination } from '../lib/pagination';
 import type { ConsultantReport } from '../lib/types';
 import { formatMonth } from '../lib/format';
 
@@ -277,6 +279,9 @@ function ConsultantView({
   onOpenReq: (id: string) => void;
 }) {
   const { data: report, isLoading } = useConsultantReport(consultantId, period(state));
+  const { page, setPage, pageCount, pageItems, pageSize, totalItems } = usePagination(
+    report?.requirements ?? [],
+  );
   if (isLoading || !report) return <Card>Loading report…</Card>;
   return (
     <>
@@ -316,7 +321,7 @@ function ConsultantView({
                 </tr>
               </thead>
               <tbody>
-                {report.requirements.map((r) => (
+                {pageItems.map((r) => (
                   <tr key={r.id} onClick={() => onOpenReq(r.id)}>
                     <td className="mono">{r.code}</td>
                     <td>{r.title}</td>
@@ -332,6 +337,13 @@ function ConsultantView({
             </table>
           </div>
         )}
+        <Pagination
+          page={page}
+          pageCount={pageCount}
+          pageSize={pageSize}
+          totalItems={totalItems}
+          onChange={setPage}
+        />
       </Card>
     </>
   );

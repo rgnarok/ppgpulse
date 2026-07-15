@@ -1,14 +1,17 @@
 import { AppShell } from '../../components/AppShell';
 import { Card, SectionTitle, Pill } from '../../components/ui';
+import { Pagination } from '../../components/Pagination';
 import { useAuth } from '../../lib/auth';
 import { api } from '../../lib/api';
 import { useUsers, useRoles, useApiMutation } from '../../lib/hooks';
+import { usePagination } from '../../lib/pagination';
 import type { UserRow } from '../../lib/types';
 
 export default function UsersPage() {
   const { me } = useAuth();
   const { data: users = [], isLoading } = useUsers();
   const { data: roles = [] } = useRoles();
+  const { page, setPage, pageCount, pageItems, pageSize, totalItems } = usePagination(users);
   const patch = useApiMutation(
     ({ id, body }: { id: string; body: Record<string, unknown> }) =>
       api(`/users/${id}`, { method: 'PATCH', body }),
@@ -56,7 +59,7 @@ export default function UsersPage() {
                 </tr>
               </thead>
               <tbody>
-                {users.map((u) => {
+                {pageItems.map((u) => {
                   const locked = isHr && u.role.key === 'super_admin';
                   return (
                     <tr
@@ -153,6 +156,13 @@ export default function UsersPage() {
             </table>
           </div>
         )}
+        <Pagination
+          page={page}
+          pageCount={pageCount}
+          pageSize={pageSize}
+          totalItems={totalItems}
+          onChange={setPage}
+        />
       </Card>
       <div style={{ marginTop: 16 }}>
         <Card>
