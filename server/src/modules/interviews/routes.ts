@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { assertCan } from '../rbac/index.js';
+import { logActivity } from '../audit/service.js';
 import {
   monthQuerySchema,
   dayQuerySchema,
@@ -37,6 +38,14 @@ export default async function interviewsRoutes(app: FastifyInstance) {
     assertCan(request.currentUser, 'interviews', 'edit');
     const input = createInterviewSchema.parse(request.body);
     const created = await createInterview(app.prisma, request.currentUser, input);
+    await logActivity(
+      app.prisma,
+      request.currentUser,
+      'interviews',
+      'create',
+      `Scheduled interview for ${created.candidate} on ${created.date}`,
+      created.id,
+    );
     return reply.status(201).send(created);
   });
 
@@ -46,7 +55,16 @@ export default async function interviewsRoutes(app: FastifyInstance) {
     async (request) => {
       assertCan(request.currentUser, 'interviews', 'edit');
       const input = updateInterviewSchema.parse(request.body);
-      return updateInterview(app.prisma, request.params.id, input);
+      const updated = await updateInterview(app.prisma, request.params.id, input);
+      await logActivity(
+        app.prisma,
+        request.currentUser,
+        'interviews',
+        'update',
+        `Updated interview ${request.params.id} (${Object.keys(input).join(', ')})`,
+        request.params.id,
+      );
+      return updated;
     },
   );
 
@@ -56,6 +74,14 @@ export default async function interviewsRoutes(app: FastifyInstance) {
     async (request, reply) => {
       assertCan(request.currentUser, 'interviews', 'edit');
       await deleteInterview(app.prisma, request.params.id);
+      await logActivity(
+        app.prisma,
+        request.currentUser,
+        'interviews',
+        'delete',
+        `Deleted interview ${request.params.id}`,
+        request.params.id,
+      );
       return reply.status(204).send();
     },
   );

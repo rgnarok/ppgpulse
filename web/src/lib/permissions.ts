@@ -85,6 +85,14 @@ export const NAV_ITEMS: NavItem[] = [
     icon: '🏢',
     group: 'Admin',
   },
+  {
+    key: 'auditlog',
+    label: 'Activity Log',
+    path: '/admin/audit-log',
+    section: 'auditlog',
+    icon: '☰',
+    group: 'Admin',
+  },
 ];
 
 /** Nav items the user may view. */

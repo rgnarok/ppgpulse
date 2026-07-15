@@ -143,6 +143,17 @@ export interface UserRow {
   createdAt: string;
 }
 
+export interface AuditLogEntry {
+  id: string;
+  actorId: string;
+  actorName: string;
+  section: string;
+  action: string;
+  detail: string;
+  entityId: string | null;
+  at: string;
+}
+
 export interface RoleRow {
   id: string;
   key: string;

@@ -139,7 +139,7 @@ function OverviewView({ state }: { state: FilterState }) {
           value={t.eventsParticipated}
           sub="team total"
         />
-        <KpiCard tone="teal" icon="◎" label="Consultants" value={t.consultants} sub="in scope" />
+        <KpiCard tone="teal" icon="◎" label="PPG" value={t.consultants} sub="in scope" />
       </div>
       <div className="grid g-58" style={{ marginBottom: 16 }}>
         <div className="chart-card tint-blue">

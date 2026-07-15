@@ -29,8 +29,23 @@ export default function UsersPage() {
       }),
     [['users']],
   );
+  const setManager = useApiMutation(
+    ({ id, managerId }: { id: string; managerId: string | null }) =>
+      api(`/users/${id}/manager`, { method: 'PATCH', body: { managerId } }),
+    [['users'], ['hierarchy']],
+  );
 
   const isHr = me?.role.key === 'hr_manager';
+
+  function changeManager(u: UserRow, managerId: string) {
+    setManager.mutate(
+      { id: u.id, managerId: managerId || null },
+      {
+        onError: (err) =>
+          window.alert(err instanceof Error ? err.message : 'Could not update the manager'),
+      },
+    );
+  }
 
   function toggleHdisFullAccess(u: UserRow) {
     const grant = !u.overrides.some((o) => o.section === 'hdis' && o.capability === 'view_all');
@@ -89,7 +104,27 @@ export default function UsersPage() {
                           </select>
                         )}
                       </td>
-                      <td className="muted">{u.managerName ?? '—'}</td>
+                      <td>
+                        {locked ? (
+                          <span className="muted">{u.managerName ?? '—'}</span>
+                        ) : (
+                          <select
+                            className="iv-f"
+                            value={u.managerId ?? ''}
+                            onChange={(e) => changeManager(u, e.target.value)}
+                            disabled={setManager.isPending}
+                          >
+                            <option value="">No manager</option>
+                            {users
+                              .filter((m) => m.id !== u.id)
+                              .map((m) => (
+                                <option key={m.id} value={m.id}>
+                                  {m.name} · {m.role.label}
+                                </option>
+                              ))}
+                          </select>
+                        )}
+                      </td>
                       <td>
                         {locked ? (
                           <span className="muted" title="Locked for HR Managers">

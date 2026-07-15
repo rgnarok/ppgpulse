@@ -8,6 +8,15 @@ import type { CreateUserInput, UpdateUserInput } from './schema.js';
 
 const userInclude = { role: true, overrides: true, manager: true } as const;
 
+/** Role keys treated as "PPG people" — get a Consultant profile so they show up in
+ * the team roster, per-person reports, and the org-wide PPG headcount tile. Deliberately
+ * excludes `super_admin` (founder-level, not a delivery/HR headcount) and `user` (generic
+ * members with no PPG-specific standing). */
+const PPG_ROLE_KEYS = ['consultant', 'hr_manager'];
+function isPpgRole(roleKey: string): boolean {
+  return PPG_ROLE_KEYS.includes(roleKey);
+}
+
 async function roleByKey(prisma: PrismaClient, key: string) {
   const role = await prisma.role.findUnique({ where: { key } });
   if (!role) throw new BadRequestError(`Unknown role "${key}"`, 'unknown_role');
@@ -57,10 +66,10 @@ export async function createUser(prisma: PrismaClient, actor: CurrentUser, input
       managerId: input.managerId ?? null,
       passwordHash,
       overrides: overrideRows.length ? { create: overrideRows } : undefined,
-      // Team-scope roles (e.g. Consultant) are PPG delivery staff tracked via a Consultant
-      // profile — without this, new hires never show up in the consultant/team filters,
-      // report charts, or the interview "Sourcing" picker.
-      consultant: role.scope === 'team' ? { create: { pod: input.team } } : undefined,
+      // PPG people (Consultants + HR Managers) are tracked via a Consultant profile —
+      // without this, new hires never show up in the team roster, report charts, the PPG
+      // headcount tile, or the interview "Sourcing" picker.
+      consultant: isPpgRole(role.key) ? { create: { pod: input.team } } : undefined,
     },
     include: userInclude,
   });
@@ -109,13 +118,13 @@ export async function updateUser(
     data.email = email;
   }
 
-  let promotedToTeamScope = false;
+  let promotedToPpgRole = false;
   if (input.roleKey !== undefined) {
     const role = await roleByKey(prisma, input.roleKey);
     // Guard against the NEW role too (e.g. HR promoting someone to super_admin).
     assertCanManageUser(actor, { role: { key: role.key } });
     data.roleId = role.id;
-    promotedToTeamScope = role.scope === 'team';
+    promotedToPpgRole = isPpgRole(role.key);
   }
 
   if (input.managerId !== undefined) {
@@ -135,9 +144,9 @@ export async function updateUser(
     if (input.team !== undefined && input.team !== existingConsultant.pod) {
       await prisma.consultant.update({ where: { userId: id }, data: { pod: input.team } });
     }
-  } else if (promotedToTeamScope) {
-    // Promoted into a team-scope role (e.g. made a Consultant) — give them a profile so
-    // they show up in the consultant/team filters and reports, same as at creation time.
+  } else if (promotedToPpgRole) {
+    // Promoted into a PPG role (Consultant/HR Manager) — give them a profile so they show
+    // up in the team roster, reports, and PPG headcount tile, same as at creation time.
     await prisma.consultant.create({ data: { userId: id, pod } });
   }
 

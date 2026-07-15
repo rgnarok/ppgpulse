@@ -83,7 +83,27 @@ describe('Users admin (T12.1)', () => {
 
     const suhaniRow = screen.getByTestId('user-row-u_suhani');
     expect(suhaniRow.getAttribute('data-locked')).toBe('false');
-    expect(within(suhaniRow).getByRole('combobox')).toBeInTheDocument();
+    // Role select + manager select — both editable for an unlocked row.
+    expect(within(suhaniRow).getAllByRole('combobox')).toHaveLength(2);
+  });
+
+  it("updates a user's manager via the manager select", async () => {
+    const { calls } = mockFetch([
+      jsonRoute('/api/me', superAdminMe),
+      jsonRoute('/api/users', users),
+      jsonRoute('/api/roles', roles),
+      jsonRoute('/api/users/u_suhani/manager', users[1], { method: 'PATCH' }),
+    ]);
+    renderApp(<UsersPage />);
+    const suhaniRow = await screen.findByTestId('user-row-u_suhani');
+    const [, managerSelect] = within(suhaniRow).getAllByRole('combobox');
+    await userEvent.selectOptions(managerSelect, 'u_kb');
+
+    const patched = calls.find(
+      (c) => c.url.endsWith('/api/users/u_suhani/manager') && c.method === 'PATCH',
+    );
+    expect(patched).toBeTruthy();
+    expect((patched!.body as { managerId: string }).managerId).toBe('u_kb');
   });
 
   it('marks org-scope users as already having all-client HDIS access', async () => {

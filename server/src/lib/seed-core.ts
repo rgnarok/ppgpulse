@@ -75,6 +75,10 @@ function stageForStatus(status: string): string {
   return status === 'Closed' ? 'Closed' : status === 'On Hold' ? 'On Hold' : 'R0 · Sourcing';
 }
 
+/** Role keys treated as "PPG people" — see matching constant in
+ * server/src/modules/users/service.ts (kept in sync manually; small, fixed list). */
+const PPG_ROLE_KEYS = ['consultant', 'hr_manager'];
+
 /** Upsert all roles + their permissions. Idempotent; returns key -> id map. */
 async function seedRoles(prisma: PrismaClient, roles: SeedRole[]): Promise<Map<string, string>> {
   const roleIdByKey = new Map<string, string>();
@@ -154,13 +158,14 @@ export async function seedBaseline(
     });
   }
 
-  // Backfill: users in a team-scope role (e.g. Consultant) who are missing their
-  // Consultant profile — this happened for anyone created via the app before the
-  // Create User form started provisioning one automatically. Without it they never
-  // show up in the consultant/team filters, report charts, or the interview
-  // "Sourcing" picker. Idempotent — only touches users with no existing profile.
+  // Backfill: PPG people (Consultants + HR Managers) who are missing their Consultant
+  // profile — this happened for anyone created via the app before the Create User form
+  // started provisioning one automatically, or for HR Managers created before they were
+  // included in the PPG headcount. Without it they never show up in the team roster,
+  // report charts, the PPG headcount tile, or the interview "Sourcing" picker.
+  // Idempotent — only touches users with no existing profile.
   const missingConsultants = await prisma.user.findMany({
-    where: { consultant: null, role: { scope: 'team' } },
+    where: { consultant: null, role: { key: { in: PPG_ROLE_KEYS } } },
     select: { id: true, team: true },
   });
   for (const u of missingConsultants) {
@@ -251,6 +256,23 @@ export async function seedDatabase(prisma: PrismaClient, data: SeedData): Promis
     });
     const name = userById.get(c.userId)?.name;
     if (name) consultantIdByName.set(name, consultant.id);
+  }
+  // Any other PPG person (e.g. an HR Manager) not explicitly listed in `consultants`
+  // still gets a zeroed profile, so they show up in the team roster and headcount tile.
+  const roleByUserId = new Map(
+    (await prisma.user.findMany({ select: { id: true, role: { select: { key: true } } } })).map(
+      (u) => [u.id, u.role.key],
+    ),
+  );
+  for (const u of data.users) {
+    if (consultantIdByName.has(u.name)) continue;
+    if (!PPG_ROLE_KEYS.includes(roleByUserId.get(u.id) ?? '')) continue;
+    const consultant = await prisma.consultant.upsert({
+      where: { userId: u.id },
+      update: {},
+      create: { userId: u.id, pod: u.team },
+    });
+    consultantIdByName.set(u.name, consultant.id);
   }
 
   // --- HDIS (before requirements: requirement.jdId -> hdis.jdId FK) ---

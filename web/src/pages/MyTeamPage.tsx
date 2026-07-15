@@ -29,7 +29,7 @@ export default function MyTeamPage() {
   const orgScope = me?.scope === 'org';
   const title = orgScope ? 'PPG Team' : 'My Team';
   const subtitle = orgScope
-    ? 'All PPG consultants — click a member to open their work'
+    ? 'All PPG people, HR Managers to Consultants — click a member to open their work'
     : 'Your pod — click a member to open their report';
 
   return (

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { assertCan } from '../rbac/index.js';
+import { logActivity } from '../audit/service.js';
 import { createRoleSchema, updateRoleSchema } from './schema.js';
 import { listRoles, createRole, updateRole, deleteRole } from './service.js';
 
@@ -13,6 +14,14 @@ export default async function rolesRoutes(app: FastifyInstance) {
     assertCan(request.currentUser, 'roles', 'edit');
     const input = createRoleSchema.parse(request.body);
     const role = await createRole(app.prisma, request.currentUser, input);
+    await logActivity(
+      app.prisma,
+      request.currentUser,
+      'roles',
+      'create',
+      `Created role ${role.label} (${role.key})`,
+      role.id,
+    );
     return reply.status(201).send(role);
   });
 
@@ -22,7 +31,16 @@ export default async function rolesRoutes(app: FastifyInstance) {
     async (request) => {
       assertCan(request.currentUser, 'roles', 'edit');
       const input = updateRoleSchema.parse(request.body);
-      return updateRole(app.prisma, request.currentUser, request.params.id, input);
+      const role = await updateRole(app.prisma, request.currentUser, request.params.id, input);
+      await logActivity(
+        app.prisma,
+        request.currentUser,
+        'roles',
+        'update',
+        `Updated role ${role.label} (${role.key})`,
+        role.id,
+      );
+      return role;
     },
   );
 
@@ -32,6 +50,14 @@ export default async function rolesRoutes(app: FastifyInstance) {
     async (request, reply) => {
       assertCan(request.currentUser, 'roles', 'edit');
       await deleteRole(app.prisma, request.currentUser, request.params.id);
+      await logActivity(
+        app.prisma,
+        request.currentUser,
+        'roles',
+        'delete',
+        `Deleted role ${request.params.id}`,
+        request.params.id,
+      );
       return reply.status(204).send();
     },
   );

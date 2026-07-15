@@ -40,6 +40,9 @@
     "hierarchy": [
      "view",
      "edit"
+    ],
+    "auditlog": [
+     "view"
     ]
    }
   },

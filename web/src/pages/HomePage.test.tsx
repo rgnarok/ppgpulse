@@ -70,7 +70,7 @@ describe('Home overview (T8.2)', () => {
     // 145 appears in both "Requirements Received" and "Total Requirements" tiles.
     expect(screen.getAllByText('145').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('6 RADC · 3 RADF')).toBeInTheDocument();
-    expect(screen.getByText('Consultants')).toBeInTheDocument();
+    expect(screen.getByText('PPG')).toBeInTheDocument();
   });
 
   it('shows an "Interviews this month" count that links into the Interviews page', async () => {

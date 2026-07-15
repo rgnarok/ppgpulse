@@ -8,7 +8,17 @@ import { generatePassword } from '../../lib/password';
 import { useRoles, useUsers, useApiMutation } from '../../lib/hooks';
 import type { UserRow } from '../../lib/types';
 
-const SECTIONS = ['home', 'interviews', 'hdis', 'myteam', 'profile', 'users', 'roles', 'hierarchy'];
+const SECTIONS = [
+  'home',
+  'interviews',
+  'hdis',
+  'myteam',
+  'profile',
+  'users',
+  'roles',
+  'hierarchy',
+  'auditlog',
+];
 const CAPS = ['view', 'add', 'edit', 'delete'];
 
 const SECTION_LABELS: Record<string, string> = {
@@ -20,6 +30,7 @@ const SECTION_LABELS: Record<string, string> = {
   users: 'Users',
   roles: 'Roles & Access',
   hierarchy: 'Team Hierarchy',
+  auditlog: 'Activity Log',
 };
 
 // Sections a new "user" gets by default — the admin can toggle any of them.

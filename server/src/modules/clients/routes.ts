@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { assertCan } from '../rbac/index.js';
+import { logActivity } from '../audit/service.js';
 import { listQuerySchema, createClientSchema, updateClientSchema } from './schema.js';
 import { listClients, createClient, updateClient, deleteClient } from './service.js';
 
@@ -17,6 +18,14 @@ export default async function clientsRoutes(app: FastifyInstance) {
     assertCan(request.currentUser, 'hdis', 'add');
     const { name } = createClientSchema.parse(request.body);
     const created = await createClient(app.prisma, name);
+    await logActivity(
+      app.prisma,
+      request.currentUser,
+      'hdis',
+      'create_client',
+      `Added client "${created.name}"`,
+      created.id,
+    );
     return reply.status(201).send(created);
   });
 
@@ -26,7 +35,16 @@ export default async function clientsRoutes(app: FastifyInstance) {
     async (request) => {
       assertCan(request.currentUser, 'hdis', 'edit');
       const { name } = updateClientSchema.parse(request.body);
-      return updateClient(app.prisma, request.params.id, name);
+      const updated = await updateClient(app.prisma, request.params.id, name);
+      await logActivity(
+        app.prisma,
+        request.currentUser,
+        'hdis',
+        'update_client',
+        `Renamed client to "${updated.name}"`,
+        updated.id,
+      );
+      return updated;
     },
   );
 
@@ -36,6 +54,14 @@ export default async function clientsRoutes(app: FastifyInstance) {
     async (request, reply) => {
       assertCan(request.currentUser, 'hdis', 'delete');
       await deleteClient(app.prisma, request.params.id);
+      await logActivity(
+        app.prisma,
+        request.currentUser,
+        'hdis',
+        'delete_client',
+        `Removed client ${request.params.id}`,
+        request.params.id,
+      );
       return reply.status(204).send();
     },
   );

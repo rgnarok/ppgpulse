@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { assertCan } from '../rbac/index.js';
+import { logActivity } from '../audit/service.js';
 import { BadRequestError } from '../../lib/errors.js';
 import {
   listQuerySchema,
@@ -43,6 +44,14 @@ export default async function hdisRoutes(app: FastifyInstance) {
     assertCan(request.currentUser, 'hdis', 'add');
     const input = createHdisSchema.parse(request.body);
     const created = await createHdis(app.prisma, request.currentUser.id, input);
+    await logActivity(
+      app.prisma,
+      request.currentUser,
+      'hdis',
+      'create',
+      `Created HDIS record "${created.title}" for ${created.client}`,
+      created.jdId,
+    );
     return reply.status(201).send(created);
   });
 
@@ -52,7 +61,21 @@ export default async function hdisRoutes(app: FastifyInstance) {
     async (request) => {
       await assertCanEditHdisRecord(app.prisma, request.currentUser, request.params.jdId);
       const input = updateHdisSchema.parse(request.body);
-      return updateHdis(app.prisma, request.currentUser.id, request.params.jdId, input);
+      const updated = await updateHdis(
+        app.prisma,
+        request.currentUser.id,
+        request.params.jdId,
+        input,
+      );
+      await logActivity(
+        app.prisma,
+        request.currentUser,
+        'hdis',
+        'update',
+        `Updated HDIS record "${updated.title}" (${Object.keys(input).join(', ')})`,
+        request.params.jdId,
+      );
+      return updated;
     },
   );
 
@@ -62,6 +85,14 @@ export default async function hdisRoutes(app: FastifyInstance) {
     async (request, reply) => {
       assertCan(request.currentUser, 'hdis', 'delete');
       await deleteHdis(app.prisma, request.currentUser.id, request.params.jdId);
+      await logActivity(
+        app.prisma,
+        request.currentUser,
+        'hdis',
+        'delete',
+        `Deleted HDIS record ${request.params.jdId}`,
+        request.params.jdId,
+      );
       return reply.status(204).send();
     },
   );
@@ -72,7 +103,21 @@ export default async function hdisRoutes(app: FastifyInstance) {
     async (request) => {
       await assertCanEditHdisRecord(app.prisma, request.currentUser, request.params.jdId);
       const input = pipelineSchema.parse(request.body);
-      return setPipeline(app.prisma, request.currentUser.id, request.params.jdId, input);
+      const updated = await setPipeline(
+        app.prisma,
+        request.currentUser.id,
+        request.params.jdId,
+        input,
+      );
+      await logActivity(
+        app.prisma,
+        request.currentUser,
+        'hdis',
+        'update_pipeline',
+        `Updated pipeline for ${request.params.jdId}`,
+        request.params.jdId,
+      );
+      return updated;
     },
   );
 
@@ -82,7 +127,21 @@ export default async function hdisRoutes(app: FastifyInstance) {
     async (request) => {
       await assertCanEditHdisRecord(app.prisma, request.currentUser, request.params.jdId);
       const { jdLink } = linkSchema.parse(request.body);
-      return setLink(app.prisma, request.currentUser.id, request.params.jdId, jdLink);
+      const updated = await setLink(
+        app.prisma,
+        request.currentUser.id,
+        request.params.jdId,
+        jdLink,
+      );
+      await logActivity(
+        app.prisma,
+        request.currentUser,
+        'hdis',
+        'update_link',
+        `${jdLink ? 'Set' : 'Cleared'} JD link for ${request.params.jdId}`,
+        request.params.jdId,
+      );
+      return updated;
     },
   );
 
@@ -112,6 +171,14 @@ export default async function hdisRoutes(app: FastifyInstance) {
         fileName: file.filename,
         contentType: file.mimetype,
       });
+      await logActivity(
+        app.prisma,
+        request.currentUser,
+        'hdis',
+        'add_attachment',
+        `Uploaded "${file.filename}" to ${request.params.jdId}`,
+        request.params.jdId,
+      );
       return reply.status(201).send(saved);
     },
   );

@@ -10,6 +10,7 @@ export const SECTIONS = [
   'users',
   'roles',
   'hierarchy',
+  'auditlog',
 ] as const;
 export type Section = (typeof SECTIONS)[number];
 export type Capability = 'view' | 'add' | 'edit' | 'delete' | 'export';

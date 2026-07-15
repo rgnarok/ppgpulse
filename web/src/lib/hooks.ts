@@ -1,6 +1,7 @@
 import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from './api';
 import type {
+  AuditLogEntry,
   ConsultantReport,
   HdisActivityEntry,
   HdisRecord,
@@ -137,6 +138,19 @@ export function useRoles() {
 
 export function useHierarchy() {
   return useQuery({ queryKey: ['hierarchy'], queryFn: () => api<OrgNode[]>('/hierarchy') });
+}
+
+export interface AuditLogFilter {
+  section?: string;
+  actorId?: string;
+  q?: string;
+}
+
+export function useAuditLog(filter: AuditLogFilter = {}) {
+  return useQuery({
+    queryKey: ['audit-log', filter],
+    queryFn: () => api<AuditLogEntry[]>(`/audit-log${qs(filter)}`),
+  });
 }
 
 export interface InterviewScopeFilter {

@@ -45,7 +45,7 @@ describe('My Team (T11.1)', () => {
       { route: '/team' },
     );
     expect(await screen.findByRole('heading', { name: 'PPG Team' })).toBeInTheDocument();
-    expect(screen.getByText(/All PPG consultants/)).toBeInTheDocument();
+    expect(screen.getByText(/All PPG people, HR Managers to Consultants/)).toBeInTheDocument();
   });
 
   it('keeps "your pod" wording for team-scope users', async () => {

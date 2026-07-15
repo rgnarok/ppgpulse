@@ -67,6 +67,7 @@ model User {
   hdisActivity HdisActivity[]
   interviews   Interview[]
   refreshTokens RefreshToken[]
+  auditLogs    AuditLog[]
 
   @@index([email])
   @@index([managerId])
@@ -209,6 +210,25 @@ model HdisActivity {
   actor   User     @relation(fields: [actorId], references: [id])
 
   @@index([jdId, at])
+}
+
+/// Platform-wide activity log — who did what, where. Written best-effort from route
+/// handlers across modules (users, roles, clients, hdis, interviews); never blocks the
+/// action it's logging. Distinct from HdisActivity, which is a per-record thread shown
+/// on the HDIS detail page.
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String
+  actorName String
+  section   String
+  action    String
+  detail    String
+  entityId  String?
+  at        DateTime @default(now())
+  actor     User     @relation(fields: [actorId], references: [id])
+
+  @@index([at])
+  @@index([section, at])
 }
 
 model Interview {
