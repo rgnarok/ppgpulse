@@ -1,15 +1,80 @@
 import { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { AppShell } from '../components/AppShell';
 import { KpiCard, Card, SectionTitle, Pill, Empty, ScopeNote } from '../components/ui';
 import { HBarChart, DonutChart } from '../components/charts';
 import { FilterBar, type FilterState } from '../components/FilterBar';
 import { useAuth } from '../lib/auth';
-import { useConsultants, useOverview, useConsultantReport, useRequirement } from '../lib/hooks';
+import {
+  useConsultants,
+  useOverview,
+  useConsultantReport,
+  useRequirement,
+  useInterviewMonth,
+} from '../lib/hooks';
 import type { ConsultantReport } from '../lib/types';
 
 function period(state: FilterState) {
   return { from: state.from, to: state.to, month: state.month, fy: state.fy };
+}
+
+/** Current calendar month as YYYY-MM. */
+function currentMonth(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function InterviewsThisMonth({ state }: { state: FilterState }) {
+  const navigate = useNavigate();
+  const month = state.month ?? currentMonth();
+  const { data } = useInterviewMonth(
+    month,
+    state.consultantId ? { consultantId: state.consultantId } : {},
+  );
+
+  function open() {
+    navigate(`/interviews?view=month&month=${month}`);
+  }
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <Card className="chart-card tint-blue">
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={open}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') open();
+          }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 16,
+            cursor: 'pointer',
+          }}
+        >
+          <div>
+            <SectionTitle>Interviews this month</SectionTitle>
+            <div className="muted" style={{ fontSize: 12.5, marginTop: 4 }}>
+              {month} · click to open the month&apos;s interview calendar
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div
+              className="mono"
+              style={{ fontSize: 34, fontWeight: 800, color: 'var(--primary)', lineHeight: 1 }}
+            >
+              {data?.total ?? 0}
+            </div>
+            <span className="muted" style={{ fontSize: 20 }}>
+              ›
+            </span>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
 }
 
 function OverviewView({ state }: { state: FilterState }) {
@@ -25,6 +90,7 @@ function OverviewView({ state }: { state: FilterState }) {
           You are viewing your pod ({t.consultants} member{t.consultants === 1 ? '' : 's'}).
         </ScopeNote>
       )}
+      <InterviewsThisMonth state={state} />
       <div className="grid g-4" style={{ marginBottom: 16 }}>
         <KpiCard
           tone="blue"

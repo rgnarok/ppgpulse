@@ -1,4 +1,5 @@
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { renderApp, mockFetch, jsonRoute, superAdminMe } from '../tests/utils';
 import HomePage from './HomePage';
@@ -62,6 +63,7 @@ describe('Home overview (T8.2)', () => {
       jsonRoute('/api/me', superAdminMe),
       jsonRoute('/api/consultants', []),
       jsonRoute('/api/report/overview', overview),
+      jsonRoute('/api/interviews', { month: '2026-06', counts: {}, total: 0 }),
     ]);
     renderApp(<HomePage />);
     expect(await screen.findByText('Requirements Received')).toBeInTheDocument();
@@ -69,6 +71,21 @@ describe('Home overview (T8.2)', () => {
     expect(screen.getAllByText('145').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('6 RADC · 3 RADF')).toBeInTheDocument();
     expect(screen.getByText('Consultants')).toBeInTheDocument();
+  });
+
+  it('shows an "Interviews this month" count that links into the Interviews page', async () => {
+    const user = userEvent.setup();
+    mockFetch([
+      jsonRoute('/api/me', superAdminMe),
+      jsonRoute('/api/consultants', []),
+      jsonRoute('/api/report/overview', overview),
+      jsonRoute('/api/interviews', { month: '2026-06', counts: {}, total: 7 }),
+    ]);
+    renderApp(<HomePage />);
+    expect(await screen.findByText('Interviews this month')).toBeInTheDocument();
+    expect(await screen.findByText('7')).toBeInTheDocument();
+    // Clicking it should not throw — it navigates into the Interviews page's month view.
+    await user.click(screen.getByRole('button', { name: /Interviews this month/ }));
   });
 });
 

@@ -74,10 +74,11 @@ export function FilterBar({
           />
         </div>
         <button
+          type="button"
           className="btn btn-gho"
-          onClick={() => onChange({ consultantId: state.consultantId })}
+          onClick={() => onChange({ consultantId: '' })}
         >
-          All Q1
+          Reset
         </button>
       </div>
     </div>

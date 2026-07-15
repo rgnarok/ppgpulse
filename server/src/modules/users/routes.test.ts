@@ -76,6 +76,45 @@ describe('PATCH /api/users/:id — HR vs super_admin', () => {
     expect(res.statusCode).toBe(403);
   });
 
+  it('promoting an own-scope user into a team-scope role backfills their Consultant profile', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/users',
+      headers: auth(superToken),
+      payload: {
+        name: 'Future Consultant',
+        email: 'futureconsultant@vayuz.com',
+        roleKey: 'user',
+        team: 'Pod B',
+      },
+    });
+    const id = created.json().id;
+
+    let consultants = await app.inject({
+      method: 'GET',
+      url: '/api/consultants',
+      headers: auth(superToken),
+    });
+    expect(consultants.json().map((c: { name: string }) => c.name)).not.toContain(
+      'Future Consultant',
+    );
+
+    const promoted = await app.inject({
+      method: 'PATCH',
+      url: `/api/users/${id}`,
+      headers: auth(superToken),
+      payload: { roleKey: 'consultant' },
+    });
+    expect(promoted.statusCode).toBe(200);
+
+    consultants = await app.inject({
+      method: 'GET',
+      url: '/api/consultants',
+      headers: auth(superToken),
+    });
+    expect(consultants.json().map((c: { name: string }) => c.name)).toContain('Future Consultant');
+  });
+
   it('super_admin can edit a super_admin', async () => {
     const res = await app.inject({
       method: 'PATCH',
@@ -112,6 +151,53 @@ describe('POST /api/users', () => {
       payload: { email: 'newbie@vayuz.com', password: 'Passw0rd!' },
     });
     expect(login.statusCode).toBe(200);
+  });
+
+  it('a new team-scope (consultant) user gets a Consultant profile automatically', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/users',
+      headers: auth(superToken),
+      payload: {
+        name: 'Auto Consultant',
+        email: 'autoconsultant@vayuz.com',
+        roleKey: 'consultant',
+        team: 'Pod A',
+      },
+    });
+    expect(created.statusCode).toBe(201);
+
+    // Should now be visible in the consultant list used by the Home filter, report
+    // charts, and the interview "Sourcing" picker — not just the users list.
+    const consultants = await app.inject({
+      method: 'GET',
+      url: '/api/consultants',
+      headers: auth(superToken),
+    });
+    const names = consultants.json().map((c: { name: string }) => c.name);
+    expect(names).toContain('Auto Consultant');
+  });
+
+  it('does not create a Consultant profile for an org/own-scope role', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/users',
+      headers: auth(superToken),
+      payload: {
+        name: 'Plain User',
+        email: 'plainuser@vayuz.com',
+        roleKey: 'user',
+        team: 'PPG',
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const consultants = await app.inject({
+      method: 'GET',
+      url: '/api/consultants',
+      headers: auth(superToken),
+    });
+    const names = consultants.json().map((c: { name: string }) => c.name);
+    expect(names).not.toContain('Plain User');
   });
 
   it('HR cannot create a super_admin (403)', async () => {

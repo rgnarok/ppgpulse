@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AppShell } from '../components/AppShell';
 import { Card, SectionTitle, Empty, Btn } from '../components/ui';
 import { useAuth } from '../lib/auth';
@@ -82,9 +83,17 @@ export default function InterviewsPage() {
   const { me } = useAuth();
   const editable = can(me, 'interviews', 'edit');
   const today = useMemo(() => todayISO(), []);
-  const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
-  const [anchor, setAnchor] = useState(today);
-  const [selected, setSelected] = useState(today);
+
+  // Deep link from elsewhere (e.g. the Home dashboard's "Interviews this month" card):
+  // ?view=month&month=YYYY-MM opens straight into that month's calendar.
+  const [params] = useSearchParams();
+  const deepLinkMonth = params.get('view') === 'month' ? params.get('month') : null;
+  const initialDate =
+    deepLinkMonth && /^\d{4}-\d{2}$/.test(deepLinkMonth) ? `${deepLinkMonth}-01` : today;
+
+  const [viewMode, setViewMode] = useState<'week' | 'month'>(deepLinkMonth ? 'month' : 'week');
+  const [anchor, setAnchor] = useState(initialDate);
+  const [selected, setSelected] = useState(initialDate);
   const [addOpen, setAddOpen] = useState(false);
 
   // Super admins/HR (org scope) filter by team; team-scope roles filter down to one of

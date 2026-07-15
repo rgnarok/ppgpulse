@@ -49,6 +49,10 @@ export async function createUser(prisma: PrismaClient, actor: CurrentUser, input
       overrides: sections.length
         ? { create: sections.map((section) => ({ section, capability: 'view' })) }
         : undefined,
+      // Team-scope roles (e.g. Consultant) are PPG delivery staff tracked via a Consultant
+      // profile — without this, new hires never show up in the consultant/team filters,
+      // report charts, or the interview "Sourcing" picker.
+      consultant: role.scope === 'team' ? { create: { pod: input.team } } : undefined,
     },
     include: userInclude,
   });
@@ -78,11 +82,13 @@ export async function updateUser(
     data.email = email;
   }
 
+  let promotedToTeamScope = false;
   if (input.roleKey !== undefined) {
     const role = await roleByKey(prisma, input.roleKey);
     // Guard against the NEW role too (e.g. HR promoting someone to super_admin).
     assertCanManageUser(actor, { role: { key: role.key } });
     data.roleId = role.id;
+    promotedToTeamScope = role.scope === 'team';
   }
 
   if (input.managerId !== undefined) {
@@ -93,6 +99,19 @@ export async function updateUser(
 
   if (input.password !== undefined) {
     data.passwordHash = await hashPassword(input.password);
+  }
+
+  const existingConsultant = await prisma.consultant.findUnique({ where: { userId: id } });
+  const pod = input.team ?? target.team;
+  if (existingConsultant) {
+    // Keep the consultant's pod in sync with the user's team.
+    if (input.team !== undefined && input.team !== existingConsultant.pod) {
+      await prisma.consultant.update({ where: { userId: id }, data: { pod: input.team } });
+    }
+  } else if (promotedToTeamScope) {
+    // Promoted into a team-scope role (e.g. made a Consultant) — give them a profile so
+    // they show up in the consultant/team filters and reports, same as at creation time.
+    await prisma.consultant.create({ data: { userId: id, pod } });
   }
 
   return prisma.user.update({ where: { id }, data, include: userInclude });

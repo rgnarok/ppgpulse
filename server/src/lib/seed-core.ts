@@ -120,7 +120,7 @@ async function seedRoles(prisma: PrismaClient, roles: SeedRole[]): Promise<Map<s
 export async function seedBaseline(
   prisma: PrismaClient,
   data: SeedData,
-): Promise<{ roles: number; admins: number }> {
+): Promise<{ roles: number; admins: number; consultantsBackfilled: number }> {
   // The bootstrap super_admin password is self-healing: on every boot we (re)set
   // it to SUPER_ADMIN_PASSWORD (if provided on the host) or the built-in default,
   // so a redeploy always yields a known, working login for the founder account.
@@ -148,7 +148,25 @@ export async function seedBaseline(
       },
     });
   }
-  return { roles: await prisma.role.count(), admins: admins.length };
+
+  // Backfill: users in a team-scope role (e.g. Consultant) who are missing their
+  // Consultant profile — this happened for anyone created via the app before the
+  // Create User form started provisioning one automatically. Without it they never
+  // show up in the consultant/team filters, report charts, or the interview
+  // "Sourcing" picker. Idempotent — only touches users with no existing profile.
+  const missingConsultants = await prisma.user.findMany({
+    where: { consultant: null, role: { scope: 'team' } },
+    select: { id: true, team: true },
+  });
+  for (const u of missingConsultants) {
+    await prisma.consultant.create({ data: { userId: u.id, pod: u.team } });
+  }
+
+  return {
+    roles: await prisma.role.count(),
+    admins: admins.length,
+    consultantsBackfilled: missingConsultants.length,
+  };
 }
 
 /**
