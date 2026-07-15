@@ -2,6 +2,7 @@ import type { Prisma, PrismaClient, HdisType } from '@prisma/client';
 import { BadRequestError, ConflictError, NotFoundError } from '../../lib/errors.js';
 import { getStorage, ALLOWED_UPLOAD_MIME } from '../../lib/storage.js';
 import { getConfig } from '../../config.js';
+import { ensureClient } from '../clients/service.js';
 import type { CreateHdisInput, UpdateHdisInput, PipelineInput } from './schema.js';
 
 const detailInclude = {
@@ -103,6 +104,7 @@ export async function createHdis(prisma: PrismaClient, actorId: string, input: C
   if (existing) throw new ConflictError('A HDIS record with that JD id already exists', 'jd_taken');
 
   const created = await prisma.$transaction(async (tx) => {
+    await ensureClient(tx, input.client);
     await tx.hdis.create({
       data: {
         jdId: input.jdId,
@@ -159,6 +161,7 @@ export async function updateHdis(
   }
 
   const updated = await prisma.$transaction(async (tx) => {
+    if (typeof data.client === 'string') await ensureClient(tx, data.client);
     if (Object.keys(data).length) await tx.hdis.update({ where: { jdId }, data });
     if (input.owners) {
       const before = current.owners.map((o) => o.consultantOrName).sort();

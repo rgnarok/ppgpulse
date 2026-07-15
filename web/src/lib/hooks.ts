@@ -80,6 +80,17 @@ export function useHdisActivity(jdId: string | null) {
   });
 }
 
+export interface ClientRow {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
+/** The client master list — powers the searchable client picker on the HDIS form. */
+export function useClients() {
+  return useQuery({ queryKey: ['clients'], queryFn: () => api<ClientRow[]>('/clients') });
+}
+
 export function useUsers() {
   return useQuery({ queryKey: ['users'], queryFn: () => api<UserRow[]>('/users') });
 }

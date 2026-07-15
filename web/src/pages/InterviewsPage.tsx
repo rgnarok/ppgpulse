@@ -14,6 +14,7 @@ import {
   type InterviewRow,
   type InterviewScopeFilter,
 } from '../lib/hooks';
+import { formatDate, formatMonth } from '../lib/format';
 
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const ROUND_OPTIONS = ['L0', 'L1', 'L2', 'L3', 'L4', 'L5'];
@@ -217,7 +218,9 @@ export default function InterviewsPage() {
       </div>
 
       <Card>
-        <SectionTitle>{viewMode === 'week' ? `Week of ${wDates[0]}` : month}</SectionTitle>
+        <SectionTitle>
+          {viewMode === 'week' ? `Week of ${formatDate(wDates[0])}` : formatMonth(month)}
+        </SectionTitle>
         <div className="cal-grid" style={{ marginTop: 12 }}>
           {DOW.map((d) => (
             <div className="cal-dow" key={d}>
@@ -307,7 +310,7 @@ function DayTable({
         }}
       >
         <div>
-          <SectionTitle>{date}</SectionTitle>
+          <SectionTitle>{formatDate(date)}</SectionTitle>
           <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
             Mid-day ({data?.mid?.length ?? 0}) · End-day ({data?.end?.length ?? 0})
           </div>
@@ -493,7 +496,7 @@ function AddInterviewModal({ date, onClose }: { date: string; onClose: () => voi
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <SectionTitle>Add interview — {date}</SectionTitle>
+          <SectionTitle>Add interview — {formatDate(date)}</SectionTitle>
           <button type="button" className="lnk" onClick={onClose} aria-label="Close">
             ✕
           </button>

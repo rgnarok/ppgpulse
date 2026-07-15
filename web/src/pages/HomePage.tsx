@@ -13,6 +13,7 @@ import {
   useInterviewMonth,
 } from '../lib/hooks';
 import type { ConsultantReport } from '../lib/types';
+import { formatMonth } from '../lib/format';
 
 function period(state: FilterState) {
   return { from: state.from, to: state.to, month: state.month, fy: state.fy };
@@ -57,7 +58,7 @@ function InterviewsThisMonth({ state }: { state: FilterState }) {
           <div>
             <SectionTitle>Interviews this month</SectionTitle>
             <div className="muted" style={{ fontSize: 12.5, marginTop: 4 }}>
-              {month} · click to open the month&apos;s interview calendar
+              {formatMonth(month)} · click to open the month&apos;s interview calendar
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

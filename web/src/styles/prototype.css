@@ -188,3 +188,8 @@ select.iv-f{cursor:pointer}
 .pl-cell input{width:100%;border:1px solid var(--border2);border-radius:9px;padding:9px;font-family:'JetBrains Mono';font-weight:700;font-size:15px;text-align:center}
 .pl-cell input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-l)}
 @media(max-width:860px){.app{grid-template-columns:1fr}.side{position:fixed;left:0;top:0;width:262px;transform:translateX(-100%);transition:.25s}.side.open{transform:translateX(0)}.hamburger{display:grid;place-items:center}.search{display:none}}
+.combo-wrap{position:relative}
+.combo-menu{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid var(--border2);border-radius:10px;box-shadow:var(--shadow-lg);max-height:220px;overflow-y:auto;z-index:80;padding:4px}
+.combo-opt{padding:8px 10px;font-size:13px;cursor:pointer;border-radius:7px}
+.combo-opt:hover,.combo-opt.active{background:var(--primary-l);color:var(--primary-d)}
+.combo-empty{padding:8px 10px;font-size:12.5px;color:var(--muted)}

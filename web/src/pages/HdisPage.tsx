@@ -1,14 +1,27 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { AppShell } from '../components/AppShell';
 import { Card, SectionTitle, Pill, Empty, Btn } from '../components/ui';
+import { SearchableSelect } from '../components/SearchableSelect';
 import { useAuth } from '../lib/auth';
 import { can } from '../lib/permissions';
 import { api, apiUrl } from '../lib/api';
-import { useHdisList, useHdisRecord, useHdisActivity, useApiMutation } from '../lib/hooks';
+import {
+  useHdisList,
+  useHdisRecord,
+  useHdisActivity,
+  useClients,
+  useApiMutation,
+} from '../lib/hooks';
+import { formatDate, formatMonth, formatDateTime } from '../lib/format';
 import type { HdisRecord } from '../lib/types';
 
-const MONTHS = ['2026-02', '2026-03', '2026-04', '2026-05', '2026-06'];
+const TYPE_OPTIONS = ['RADC', 'RADF', 'Internal'];
+const STATUS_OPTIONS = ['Active', 'On Hold', 'Closed'];
+
+function distinctSorted(values: (string | null | undefined)[]): string[] {
+  return [...new Set(values.filter((v): v is string => !!v))].sort((a, b) => a.localeCompare(b));
+}
 
 export default function HdisPage() {
   const { jdId } = useParams();
@@ -16,44 +29,168 @@ export default function HdisPage() {
   return <HdisList />;
 }
 
+interface HdisFilters {
+  month: string;
+  client: string;
+  owner: string;
+  type: string;
+  status: string;
+  q: string;
+}
+const EMPTY_FILTERS: HdisFilters = {
+  month: '',
+  client: '',
+  owner: '',
+  type: '',
+  status: '',
+  q: '',
+};
+
 function HdisList() {
   const { me } = useAuth();
   const navigate = useNavigate();
-  const [month, setMonth] = useState<string | undefined>(undefined);
+  const [filters, setFilters] = useState<HdisFilters>(EMPTY_FILTERS);
   const [showAdd, setShowAdd] = useState(false);
-  const { data: rows = [], isLoading } = useHdisList({ month });
+  const [editing, setEditing] = useState<HdisRecord | null>(null);
+  // Filtering happens client-side across the full set — the dataset is small enough
+  // (dozens to low hundreds of records) that this is instant and keeps every filter
+  // (month/client/owner/type/status/search) trivially composable without round-trips.
+  const { data: rows = [], isLoading } = useHdisList({});
   const canAdd = can(me, 'hdis', 'add');
+  const canEdit = can(me, 'hdis', 'edit');
+
+  const months = useMemo(
+    () => distinctSorted(rows.map((r) => r.reqDate.slice(0, 7))).sort((a, b) => b.localeCompare(a)),
+    [rows],
+  );
+  const clients = useMemo(() => distinctSorted(rows.map((r) => r.client)), [rows]);
+  const owners = useMemo(() => distinctSorted(rows.flatMap((r) => r.owners)), [rows]);
+
+  const set = (patch: Partial<HdisFilters>) => setFilters((f) => ({ ...f, ...patch }));
+
+  const filtered = useMemo(() => {
+    const needle = filters.q.trim().toLowerCase();
+    return rows.filter((r) => {
+      if (filters.month && r.reqDate.slice(0, 7) !== filters.month) return false;
+      if (filters.client && r.client !== filters.client) return false;
+      if (filters.owner && !r.owners.includes(filters.owner)) return false;
+      if (filters.type && r.type !== filters.type) return false;
+      if (filters.status && r.status !== filters.status) return false;
+      if (needle) {
+        const hay = `${r.title} ${r.client} ${r.jdId}`.toLowerCase();
+        if (!hay.includes(needle)) return false;
+      }
+      return true;
+    });
+  }, [rows, filters]);
+
+  const hasFilters = Object.values(filters).some(Boolean);
 
   return (
     <AppShell title="HDIS" subtitle="Hiring Display Information System — requirement master">
-      <div
-        className="card pad"
-        style={{
-          marginBottom: 16,
-          display: 'flex',
-          gap: 10,
-          flexWrap: 'wrap',
-          alignItems: 'center',
-        }}
-      >
-        <button
-          className={`btn btn-sm ${!month ? 'btn-pri' : 'btn-gho'}`}
-          onClick={() => setMonth(undefined)}
-        >
-          All
-        </button>
-        {MONTHS.map((m) => (
+      <div className="card pad" style={{ marginBottom: 16 }}>
+        <div className="filterbar" style={{ flexWrap: 'wrap' }}>
+          <div className="field">
+            <label htmlFor="hdis-month">Month</label>
+            <select
+              id="hdis-month"
+              value={filters.month}
+              onChange={(e) => set({ month: e.target.value })}
+            >
+              <option value="">All months</option>
+              {months.map((m) => (
+                <option key={m} value={m}>
+                  {formatMonth(m)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="hdis-client">Client</label>
+            <select
+              id="hdis-client"
+              value={filters.client}
+              onChange={(e) => set({ client: e.target.value })}
+            >
+              <option value="">All clients</option>
+              {clients.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="hdis-owner">Team member</label>
+            <select
+              id="hdis-owner"
+              value={filters.owner}
+              onChange={(e) => set({ owner: e.target.value })}
+            >
+              <option value="">All owners</option>
+              {owners.map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="hdis-type">Type</label>
+            <select
+              id="hdis-type"
+              value={filters.type}
+              onChange={(e) => set({ type: e.target.value })}
+            >
+              <option value="">All types</option>
+              {TYPE_OPTIONS.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="hdis-status">Status</label>
+            <select
+              id="hdis-status"
+              value={filters.status}
+              onChange={(e) => set({ status: e.target.value })}
+            >
+              <option value="">All statuses</option>
+              {STATUS_OPTIONS.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field" style={{ minWidth: 200 }}>
+            <label htmlFor="hdis-search">Search</label>
+            <input
+              id="hdis-search"
+              value={filters.q}
+              onChange={(e) => set({ q: e.target.value })}
+              placeholder="Title, client, or JD ID"
+            />
+          </div>
           <button
-            key={m}
-            className={`btn btn-sm ${month === m ? 'btn-pri' : 'btn-gho'}`}
-            onClick={() => setMonth(m)}
+            type="button"
+            className="btn btn-gho"
+            disabled={!hasFilters}
+            onClick={() => setFilters(EMPTY_FILTERS)}
           >
-            {m}
+            Reset
           </button>
-        ))}
-        {canAdd && (
-          <div style={{ marginLeft: 'auto' }}>
-            <Btn onClick={() => setShowAdd(true)}>+ Add record</Btn>
+          {canAdd && (
+            <div style={{ marginLeft: 'auto' }}>
+              <Btn onClick={() => setShowAdd(true)}>+ Add record</Btn>
+            </div>
+          )}
+        </div>
+        {!isLoading && (
+          <div className="showing" style={{ marginTop: 10 }}>
+            Showing {filtered.length} of {rows.length} record{rows.length === 1 ? '' : 's'}
           </div>
         )}
       </div>
@@ -61,25 +198,28 @@ function HdisList() {
       <Card pad={false}>
         {isLoading ? (
           <div className="empty">Loading…</div>
-        ) : rows.length === 0 ? (
-          <Empty title="No HDIS records" icon="▤" />
+        ) : filtered.length === 0 ? (
+          <Empty title="No HDIS records match these filters" icon="▤" />
         ) : (
           <div className="tbl-wrap">
             <table className="tbl hover">
               <thead>
                 <tr>
                   <th>JD ID</th>
+                  <th>Req. date</th>
                   <th>Title</th>
                   <th>Client</th>
                   <th>Type</th>
                   <th>Status</th>
                   <th>Owners</th>
+                  {canEdit && <th />}
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
+                {filtered.map((r) => (
                   <tr key={r.jdId} onClick={() => navigate(`/hdis/${r.jdId}`)}>
                     <td className="mono">{r.jdId}</td>
+                    <td className="muted">{formatDate(r.reqDate)}</td>
                     <td>{r.title}</td>
                     <td>{r.client}</td>
                     <td>
@@ -89,6 +229,20 @@ function HdisList() {
                       <Pill>{r.status}</Pill>
                     </td>
                     <td className="muted">{r.owners.join(', ')}</td>
+                    {canEdit && (
+                      <td>
+                        <button
+                          type="button"
+                          className="lnk"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditing(r);
+                          }}
+                        >
+                          Edit
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -97,26 +251,45 @@ function HdisList() {
         )}
       </Card>
 
-      {showAdd && <AddHdisModal onClose={() => setShowAdd(false)} />}
+      {showAdd && <HdisFormModal mode="create" onClose={() => setShowAdd(false)} />}
+      {editing && <HdisFormModal mode="edit" initial={editing} onClose={() => setEditing(null)} />}
     </AppShell>
   );
 }
 
-function AddHdisModal({ onClose }: { onClose: () => void }) {
+function HdisFormModal({
+  mode,
+  initial,
+  onClose,
+}: {
+  mode: 'create' | 'edit';
+  initial?: HdisRecord;
+  onClose: () => void;
+}) {
+  const { data: clientRows = [] } = useClients();
+  const clientNames = useMemo(() => clientRows.map((c) => c.name), [clientRows]);
+
   const create = useApiMutation(
     (body: Record<string, unknown>) => api<HdisRecord>('/hdis', { method: 'POST', body }),
-    [['hdis', {}]],
+    [['hdis', {}], ['clients']],
   );
-  const [form, setForm] = useState({
-    jdId: '',
-    title: '',
-    client: '',
-    type: 'RADC',
-    status: 'Active',
-    reqDate: '2026-06-01',
-    jdLink: '',
-  });
-  const [owners, setOwners] = useState<string[]>([]);
+  const update = useApiMutation(
+    (body: Record<string, unknown>) =>
+      api<HdisRecord>(`/hdis/${initial?.jdId}`, { method: 'PATCH', body }),
+    [['hdis', {}], ['hdis-record', initial?.jdId], ['hdis-activity', initial?.jdId], ['clients']],
+  );
+  const mutation = mode === 'edit' ? update : create;
+
+  const [form, setForm] = useState(() => ({
+    jdId: initial?.jdId ?? '',
+    title: initial?.title ?? '',
+    client: initial?.client ?? '',
+    type: initial?.type ?? 'RADC',
+    status: initial?.status ?? 'Active',
+    reqDate: initial?.reqDate ?? '2026-06-01',
+    jdLink: initial?.jdLink ?? '',
+  }));
+  const [owners, setOwners] = useState<string[]>(initial?.owners ?? []);
   const [ownerInput, setOwnerInput] = useState('');
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -127,13 +300,23 @@ function AddHdisModal({ onClose }: { onClose: () => void }) {
   }
 
   function submit() {
+    if (mode === 'edit') {
+      update.mutate(
+        {
+          title: form.title,
+          client: form.client,
+          type: form.type,
+          status: form.status,
+          reqDate: form.reqDate,
+          jdLink: form.jdLink || null,
+          owners,
+        },
+        { onSuccess: onClose },
+      );
+      return;
+    }
     create.mutate(
-      {
-        ...form,
-        jdLink: form.jdLink || null,
-        openings: 1,
-        owners,
-      },
+      { ...form, jdLink: form.jdLink || null, openings: 1, owners },
       { onSuccess: onClose },
     );
   }
@@ -145,7 +328,7 @@ function AddHdisModal({ onClose }: { onClose: () => void }) {
         style={{ width: 620, maxWidth: '100%' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <SectionTitle>New HDIS record</SectionTitle>
+        <SectionTitle>{mode === 'edit' ? `Edit ${initial?.jdId}` : 'New HDIS record'}</SectionTitle>
         <div className="form-grid" style={{ marginTop: 14 }}>
           <div className="field">
             <label>JD ID</label>
@@ -153,6 +336,8 @@ function AddHdisModal({ onClose }: { onClose: () => void }) {
               value={form.jdId}
               onChange={(e) => set('jdId', e.target.value)}
               placeholder="VAY_XX_20260601"
+              readOnly={mode === 'edit'}
+              disabled={mode === 'edit'}
             />
           </div>
           <div className="field">
@@ -168,23 +353,29 @@ function AddHdisModal({ onClose }: { onClose: () => void }) {
             <input value={form.title} onChange={(e) => set('title', e.target.value)} />
           </div>
           <div className="field">
-            <label>Client</label>
-            <input value={form.client} onChange={(e) => set('client', e.target.value)} />
+            <label htmlFor="hdis-form-client">Client</label>
+            <SearchableSelect
+              id="hdis-form-client"
+              value={form.client}
+              onChange={(v) => set('client', v)}
+              options={clientNames}
+              placeholder="Start typing a client name…"
+            />
           </div>
           <div className="field">
             <label>Type</label>
             <select value={form.type} onChange={(e) => set('type', e.target.value)}>
-              <option>RADC</option>
-              <option>RADF</option>
-              <option>Internal</option>
+              {TYPE_OPTIONS.map((t) => (
+                <option key={t}>{t}</option>
+              ))}
             </select>
           </div>
           <div className="field">
             <label>Status</label>
             <select value={form.status} onChange={(e) => set('status', e.target.value)}>
-              <option>Active</option>
-              <option>On Hold</option>
-              <option>Closed</option>
+              {STATUS_OPTIONS.map((s) => (
+                <option key={s}>{s}</option>
+              ))}
             </select>
           </div>
           <div className="field">
@@ -214,17 +405,19 @@ function AddHdisModal({ onClose }: { onClose: () => void }) {
             </div>
           </div>
         </div>
-        {create.isError && (
+        {mutation.isError && (
           <div className="pill p-red" style={{ marginTop: 12, display: 'block' }}>
-            Could not save — check the JD ID is unique.
+            {mode === 'edit'
+              ? 'Could not save the changes.'
+              : 'Could not save — check the JD ID is unique.'}
           </div>
         )}
         <div style={{ marginTop: 16, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
           <Btn variant="gho" onClick={onClose}>
             Cancel
           </Btn>
-          <Btn onClick={submit} disabled={create.isPending}>
-            Save record
+          <Btn onClick={submit} disabled={mutation.isPending}>
+            {mode === 'edit' ? 'Save changes' : 'Save record'}
           </Btn>
         </div>
       </div>
@@ -238,6 +431,7 @@ function HdisDetail({ jdId }: { jdId: string }) {
   const editable = can(me, 'hdis', 'edit');
   const { data: rec, isLoading } = useHdisRecord(jdId);
   const { data: activity = [] } = useHdisActivity(jdId);
+  const [editing, setEditing] = useState(false);
 
   if (isLoading || !rec) {
     return (
@@ -249,9 +443,19 @@ function HdisDetail({ jdId }: { jdId: string }) {
 
   return (
     <AppShell title={rec.title} subtitle={`${rec.jdId} · ${rec.client}`}>
-      <button className="lnk" onClick={() => navigate('/hdis')} style={{ marginBottom: 12 }}>
-        ← Back to list
-      </button>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: 12,
+        }}
+      >
+        <button className="lnk" onClick={() => navigate('/hdis')}>
+          ← Back to list
+        </button>
+        {editable && <Btn onClick={() => setEditing(true)}>Edit record</Btn>}
+      </div>
       <div className="dbanner" style={{ marginBottom: 16 }}>
         <div className="db-eyebrow">{rec.type}</div>
         <div className="db-title">{rec.title}</div>
@@ -262,6 +466,10 @@ function HdisDetail({ jdId }: { jdId: string }) {
           <div className="db-item">
             <div className="dl">Status</div>
             <div className="dv">{rec.status}</div>
+          </div>
+          <div className="db-item">
+            <div className="dl">Requirement date</div>
+            <div className="dv">{formatDate(rec.reqDate)}</div>
           </div>
           <div className="db-item">
             <div className="dl">Openings</div>
@@ -313,7 +521,7 @@ function HdisDetail({ jdId }: { jdId: string }) {
             ) : (
               activity.map((a) => (
                 <div className="log" key={a.id}>
-                  <span className="w">{a.at.slice(0, 16).replace('T', ' ')}</span>
+                  <span className="w">{formatDateTime(a.at)}</span>
                   <span className="who">{a.actor}</span>
                   <span>
                     <b>{a.action}</b> — {a.detail}
@@ -324,6 +532,8 @@ function HdisDetail({ jdId }: { jdId: string }) {
           </div>
         </Card>
       </div>
+
+      {editing && <HdisFormModal mode="edit" initial={rec} onClose={() => setEditing(false)} />}
     </AppShell>
   );
 }

@@ -152,6 +152,16 @@ model Hdis {
   @@index([status])
 }
 
+/// Client master list — grown organically as HDIS records are created/edited with a new
+/// client name, and used to power the searchable client picker on the HDIS form.
+model Client {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  @@index([name])
+}
+
 model HdisOwner {
   id               String @id @default(cuid())
   jdId             String

@@ -4,10 +4,12 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderApp, mockFetch, jsonRoute, consultantMe, superAdminMe } from '../tests/utils';
 import InterviewsPage from './InterviewsPage';
 import type { Me } from '../lib/types';
+import { formatDate, formatMonth } from '../lib/format';
 
 // "Today" is pinned to a Wednesday so the default week strip (Sun 06-07 → Sat 06-13)
 // stays within a single month, keeping the mocked routes simple.
 const TODAY = '2026-06-10';
+const TODAY_LABEL = formatDate(TODAY);
 
 beforeEach(() => {
   // `shouldAdvanceTime` keeps real timers running (so RTL's async `findBy*`/`waitFor`
@@ -60,7 +62,7 @@ describe('Interviews — default week view (T9.1)', () => {
     renderApp(<InterviewsPage />);
 
     // Today's date heading renders below the calendar without needing a click.
-    expect(await screen.findByText(TODAY)).toBeInTheDocument();
+    expect(await screen.findByText(TODAY_LABEL)).toBeInTheDocument();
 
     await user.click(screen.getByText('+ Add interview'));
     const dialog = await screen.findByRole('dialog', { name: 'Add interview' });
@@ -86,7 +88,7 @@ describe('Interviews — default week view (T9.1)', () => {
       jsonRoute('/api/consultants', consultants),
     ]);
     renderApp(<InterviewsPage />);
-    expect(await screen.findByText(TODAY)).toBeInTheDocument();
+    expect(await screen.findByText(TODAY_LABEL)).toBeInTheDocument();
     expect(screen.queryByText('+ Add interview')).not.toBeInTheDocument();
   });
 });
@@ -102,13 +104,13 @@ describe('Interviews — calendar (month) view', () => {
       jsonRoute('/api/consultants', consultants),
     ]);
     renderApp(<InterviewsPage />);
-    await screen.findByText(TODAY);
+    await screen.findByText(TODAY_LABEL);
 
     await user.click(screen.getByText('Calendar view'));
-    expect(await screen.findByText('2026-06')).toBeInTheDocument();
+    expect(await screen.findByText(formatMonth('2026-06'))).toBeInTheDocument();
 
     await user.click(screen.getByText('15'));
-    expect(await screen.findByText('2026-06-15')).toBeInTheDocument();
+    expect(await screen.findByText(formatDate('2026-06-15'))).toBeInTheDocument();
   });
 });
 
@@ -156,7 +158,7 @@ describe('Interviews — role-scoped filters', () => {
       jsonRoute('/api/consultants', consultants),
     ]);
     renderApp(<InterviewsPage />);
-    await screen.findByText(TODAY);
+    await screen.findByText(TODAY_LABEL);
     expect(screen.queryByLabelText('Team')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Team member')).not.toBeInTheDocument();
   });

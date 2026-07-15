@@ -120,7 +120,12 @@ async function seedRoles(prisma: PrismaClient, roles: SeedRole[]): Promise<Map<s
 export async function seedBaseline(
   prisma: PrismaClient,
   data: SeedData,
-): Promise<{ roles: number; admins: number; consultantsBackfilled: number }> {
+): Promise<{
+  roles: number;
+  admins: number;
+  consultantsBackfilled: number;
+  clientsBackfilled: number;
+}> {
   // The bootstrap super_admin password is self-healing: on every boot we (re)set
   // it to SUPER_ADMIN_PASSWORD (if provided on the host) or the built-in default,
   // so a redeploy always yields a known, working login for the founder account.
@@ -162,10 +167,32 @@ export async function seedBaseline(
     await prisma.consultant.create({ data: { userId: u.id, pod: u.team } });
   }
 
+  // Backfill: the Client master list is grown organically as HDIS records are
+  // created/edited, so any client names already on existing Hdis rows (seeded, or
+  // created before the master existed) need to be copied in once. Idempotent —
+  // `client.name` is unique, so already-known names are simply skipped.
+  const existingClients = new Set(
+    (await prisma.client.findMany({ select: { name: true } })).map((c) => c.name),
+  );
+  const hdisClients = await prisma.hdis.findMany({
+    select: { client: true },
+    distinct: ['client'],
+  });
+  const newClientNames = hdisClients
+    .map((h) => h.client.trim())
+    .filter((name) => name && !existingClients.has(name));
+  if (newClientNames.length) {
+    await prisma.client.createMany({
+      data: [...new Set(newClientNames)].map((name) => ({ name })),
+      skipDuplicates: true,
+    });
+  }
+
   return {
     roles: await prisma.role.count(),
     admins: admins.length,
     consultantsBackfilled: missingConsultants.length,
+    clientsBackfilled: newClientNames.length,
   };
 }
 
