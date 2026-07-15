@@ -35,6 +35,15 @@ const record2: HdisRecord = {
   owners: ['Priya Pal'],
 };
 
+const record3: HdisRecord = {
+  ...record,
+  jdId: 'TST_UX_20260215',
+  title: 'UX Designer',
+  client: 'Testify',
+  reqDate: '2026-02-15', // Jan–Mar -> falls in FY 2025-26, not FY 2026-27.
+  owners: ['Abha Sharma'],
+};
+
 const clients = [
   { id: 'c1', name: 'Testify', createdAt: '2026-06-01T00:00:00.000Z' },
   { id: 'c2', name: 'Acme Corp', createdAt: '2026-06-01T00:00:00.000Z' },
@@ -125,6 +134,45 @@ describe('HDIS detail + pipeline recorder (T10.3)', () => {
     await screen.findByText('Activity log');
     expect(screen.queryByText('Record pipeline activity')).not.toBeInTheDocument();
     expect(screen.queryByText('Log update')).not.toBeInTheDocument();
+  });
+});
+
+describe('HDIS attachments — JD link', () => {
+  it('admin can save a JD link inline without opening the edit modal', async () => {
+    const { calls } = mockFetch([
+      ...routesFor(superAdminMe),
+      jsonRoute(
+        '/api/hdis/TST_QA_20260601/link',
+        { ...record, jdLink: 'https://jd.example.com/qa' },
+        { method: 'POST' },
+      ),
+    ]);
+    renderApp(
+      <Routes>
+        <Route path="/hdis/:jdId" element={<HdisPage />} />
+      </Routes>,
+      { route: '/hdis/TST_QA_20260601' },
+    );
+    await screen.findByText('Attachments');
+    await userEvent.type(screen.getByLabelText('JD link'), 'https://jd.example.com/qa');
+    await userEvent.click(screen.getByText('Save'));
+    const posted = calls.find(
+      (c) => c.url.includes('/api/hdis/TST_QA_20260601/link') && c.method === 'POST',
+    );
+    expect(posted).toBeTruthy();
+    expect((posted!.body as { jdLink: string }).jdLink).toBe('https://jd.example.com/qa');
+  });
+
+  it('read-only user sees the JD link (if any) but no editor', async () => {
+    mockFetch(routesFor(consultantMe));
+    renderApp(
+      <Routes>
+        <Route path="/hdis/:jdId" element={<HdisPage />} />
+      </Routes>,
+      { route: '/hdis/TST_QA_20260601' },
+    );
+    await screen.findByText('Attachments');
+    expect(screen.queryByLabelText('JD link')).not.toBeInTheDocument();
   });
 });
 
@@ -223,6 +271,36 @@ describe('HDIS filters', () => {
     await screen.findByText('QA Engineer');
     await userEvent.type(screen.getByLabelText('Search'), 'analyst');
     expect(screen.queryByText('QA Engineer')).not.toBeInTheDocument();
+    expect(screen.getByText('Business Analyst')).toBeInTheDocument();
+  });
+});
+
+describe('HDIS fiscal year + month filter', () => {
+  it('narrows by fiscal year (Apr–Mar), and the month picker is scoped to that FY', async () => {
+    mockFetch(routesFor(superAdminMe, [record, record2, record3]));
+    renderApp(
+      <Routes>
+        <Route path="/hdis" element={<HdisPage />} />
+      </Routes>,
+      { route: '/hdis' },
+    );
+    await screen.findByText('QA Engineer');
+    expect(screen.getByText('UX Designer')).toBeInTheDocument();
+
+    // Month picker starts disabled until a fiscal year is chosen.
+    expect(screen.getByLabelText('Month')).toBeDisabled();
+
+    await userEvent.selectOptions(screen.getByLabelText('Fiscal year'), 'FY 2026-27');
+    // Feb 2026 belongs to FY 2025-26, not FY 2026-27, so it drops out.
+    expect(screen.queryByText('UX Designer')).not.toBeInTheDocument();
+    expect(screen.getByText('QA Engineer')).toBeInTheDocument();
+    expect(screen.getByText('Business Analyst')).toBeInTheDocument();
+
+    const monthSelect = screen.getByLabelText('Month');
+    expect(monthSelect).toBeEnabled();
+    await userEvent.selectOptions(monthSelect, 'Jun 2026');
+    // Both June records remain since the month select only has one "Jun 2026" bucket.
+    expect(screen.getByText('QA Engineer')).toBeInTheDocument();
     expect(screen.getByText('Business Analyst')).toBeInTheDocument();
   });
 });

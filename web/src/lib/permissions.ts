@@ -11,8 +11,12 @@ export interface NavItem {
   label: string;
   path: string;
   section: string;
+  /** Capability required to see this item; defaults to 'view'. */
+  capability?: string;
   icon: string;
   group: 'Workspace' | 'Admin';
+  /** Optional extra gate beyond the section/capability check (e.g. scope-based). */
+  extraVisible?: (me: Me) => boolean;
 }
 
 export const NAV_ITEMS: NavItem[] = [
@@ -33,6 +37,10 @@ export const NAV_ITEMS: NavItem[] = [
     section: 'myteam',
     icon: '◎',
     group: 'Workspace',
+    // Org scope (Super Admin/HR) always sees the full PPG roster here — that's not a
+    // "team" of theirs, so this stays visible for them regardless of reportees. For
+    // everyone else, the page is only useful if they actually manage someone.
+    extraVisible: (me) => me.scope === 'org' || !!me.hasReports,
   },
   {
     key: 'profile',
@@ -66,9 +74,23 @@ export const NAV_ITEMS: NavItem[] = [
     icon: '⧉',
     group: 'Admin',
   },
+  {
+    key: 'clients',
+    label: 'Clients',
+    path: '/admin/clients',
+    section: 'hdis',
+    // Reuses the 'hdis' permission section: only those who can add HDIS records
+    // (org-scope roles) can manage the client master.
+    capability: 'add',
+    icon: '🏢',
+    group: 'Admin',
+  },
 ];
 
 /** Nav items the user may view. */
 export function visibleNav(me: Me | null): NavItem[] {
-  return NAV_ITEMS.filter((n) => can(me, n.section, 'view'));
+  return NAV_ITEMS.filter(
+    (n) =>
+      can(me, n.section, n.capability ?? 'view') && (!me || !n.extraVisible || n.extraVisible(me)),
+  );
 }

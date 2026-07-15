@@ -6,6 +6,8 @@ export interface CurrentUser extends RbacUser {
   isActive: boolean;
   roleLabel: string;
   roleSub: string;
+  /** True if any other user reports up to this one — drives "My Team" visibility. */
+  hasReports: boolean;
   consultant: {
     id: string;
     pod: string;
@@ -30,6 +32,11 @@ export async function loadCurrentUser(
   });
   if (!u) return null;
 
+  const directReport = await prisma.user.findFirst({
+    where: { managerId: u.id },
+    select: { id: true },
+  });
+
   const permissions: Record<string, string[]> = {};
   for (const p of u.role.permissions) {
     (permissions[p.section] ??= []).push(p.capability);
@@ -44,6 +51,7 @@ export async function loadCurrentUser(
     isActive: u.isActive,
     roleLabel: u.role.label,
     roleSub: u.role.sub,
+    hasReports: !!directReport,
     role: {
       key: u.role.key,
       scope: u.role.scope as Scope,

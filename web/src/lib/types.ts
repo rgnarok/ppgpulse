@@ -9,6 +9,8 @@ export interface Me {
   isActive: boolean;
   role: { key: string; label: string; sub: string; scope: Scope };
   scope: Scope;
+  /** True if any other user reports up to this one — drives "My Team" visibility. */
+  hasReports?: boolean;
   permissions: Record<string, string[]>;
   consultant: {
     id: string;

@@ -17,6 +17,7 @@ export function meDto(user: CurrentUser) {
       scope: user.role.scope,
     },
     scope: user.role.scope,
+    hasReports: user.hasReports,
     permissions: effectivePermissions(user),
     consultant: user.consultant,
   };

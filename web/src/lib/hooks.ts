@@ -72,6 +72,20 @@ export function useHdisRecord(jdId: string | null) {
   });
 }
 
+/** Set/clear the JD link directly (used by the inline editor in the Attachments card,
+ * distinct from full-record edits). */
+export function useSetHdisLink(jdId: string) {
+  return useApiMutation(
+    (jdLink: string | null) =>
+      api<HdisRecord>(`/hdis/${jdId}/link`, { method: 'POST', body: { jdLink } }),
+    [
+      ['hdis', {}],
+      ['hdis-record', jdId],
+      ['hdis-activity', jdId],
+    ],
+  );
+}
+
 export function useHdisActivity(jdId: string | null) {
   return useQuery({
     queryKey: ['hdis-activity', jdId],
@@ -89,6 +103,28 @@ export interface ClientRow {
 /** The client master list — powers the searchable client picker on the HDIS form. */
 export function useClients() {
   return useQuery({ queryKey: ['clients'], queryFn: () => api<ClientRow[]>('/clients') });
+}
+
+export function useCreateClient() {
+  return useApiMutation(
+    (name: string) => api<ClientRow>('/clients', { method: 'POST', body: { name } }),
+    [['clients']],
+  );
+}
+
+export function useUpdateClient() {
+  return useApiMutation(
+    ({ id, name }: { id: string; name: string }) =>
+      api<ClientRow>(`/clients/${id}`, { method: 'PATCH', body: { name } }),
+    [['clients']],
+  );
+}
+
+export function useDeleteClient() {
+  return useApiMutation(
+    (id: string) => api<void>(`/clients/${id}`, { method: 'DELETE' }),
+    [['clients']],
+  );
 }
 
 export function useUsers() {

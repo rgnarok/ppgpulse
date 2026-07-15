@@ -11,6 +11,7 @@ import ProfilePage from './pages/ProfilePage';
 import UsersPage from './pages/admin/UsersPage';
 import RolesPage from './pages/admin/RolesPage';
 import HierarchyPage from './pages/admin/HierarchyPage';
+import ClientsPage from './pages/admin/ClientsPage';
 
 function FullPageMessage({ children }: { children: ReactNode }) {
   return (
@@ -18,12 +19,20 @@ function FullPageMessage({ children }: { children: ReactNode }) {
   );
 }
 
-function Protected({ section, children }: { section?: string; children: ReactNode }) {
+function Protected({
+  section,
+  capability = 'view',
+  children,
+}: {
+  section?: string;
+  capability?: string;
+  children: ReactNode;
+}) {
   const { me, isLoading, isAuthenticated } = useAuth();
   const location = useLocation();
   if (isLoading) return <FullPageMessage>Loading…</FullPageMessage>;
   if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />;
-  if (section && !can(me, section, 'view')) {
+  if (section && !can(me, section, capability)) {
     const fallback = visibleNav(me ?? null)[0];
     return <Navigate to={fallback ? fallback.path : '/profile'} replace />;
   }
@@ -107,6 +116,14 @@ export default function App() {
         element={
           <Protected section="hierarchy">
             <HierarchyPage />
+          </Protected>
+        }
+      />
+      <Route
+        path="/admin/clients"
+        element={
+          <Protected section="hdis" capability="add">
+            <ClientsPage />
           </Protected>
         }
       />

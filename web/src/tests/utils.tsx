@@ -16,6 +16,7 @@ export const superAdminMe: Me = {
   isActive: true,
   role: { key: 'super_admin', label: 'Super Admin', sub: 'Co-Founder', scope: 'org' },
   scope: 'org',
+  hasReports: false,
   permissions: {
     home: ['view'],
     interviews: ['view', 'edit'],
@@ -38,6 +39,7 @@ export const consultantMe: Me = {
   isActive: true,
   role: { key: 'consultant', label: 'Consultant', sub: 'PPG', scope: 'team' },
   scope: 'team',
+  hasReports: false,
   permissions: {
     home: ['view'],
     interviews: ['view', 'edit'],

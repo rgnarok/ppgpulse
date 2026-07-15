@@ -12,8 +12,10 @@ import {
   useHdisActivity,
   useClients,
   useApiMutation,
+  useSetHdisLink,
 } from '../lib/hooks';
 import { formatDate, formatMonth, formatDateTime } from '../lib/format';
+import { fyOfMonth, fyLabel, fyMonths, fiscalYearsFor } from '../lib/fy';
 import type { HdisRecord } from '../lib/types';
 
 const TYPE_OPTIONS = ['RADC', 'RADF', 'Internal'];
@@ -30,6 +32,7 @@ export default function HdisPage() {
 }
 
 interface HdisFilters {
+  fy: string;
   month: string;
   client: string;
   owner: string;
@@ -38,6 +41,7 @@ interface HdisFilters {
   q: string;
 }
 const EMPTY_FILTERS: HdisFilters = {
+  fy: '',
   month: '',
   client: '',
   owner: '',
@@ -59,19 +63,32 @@ function HdisList() {
   const canAdd = can(me, 'hdis', 'add');
   const canEdit = can(me, 'hdis', 'edit');
 
-  const months = useMemo(
-    () => distinctSorted(rows.map((r) => r.reqDate.slice(0, 7))).sort((a, b) => b.localeCompare(a)),
-    [rows],
-  );
+  const dataMonths = useMemo(() => distinctSorted(rows.map((r) => r.reqDate.slice(0, 7))), [rows]);
+  const fys = useMemo(() => fiscalYearsFor(dataMonths), [dataMonths]);
+  // Month options are the fiscal year's Apr–Mar span, narrowed to months that actually
+  // have records — matches the "Jun 2026" style used everywhere else on the platform.
+  const monthsInFy = useMemo(() => {
+    if (!filters.fy) return [];
+    const dataSet = new Set(dataMonths);
+    return fyMonths(filters.fy).filter((m) => dataSet.has(m));
+  }, [filters.fy, dataMonths]);
   const clients = useMemo(() => distinctSorted(rows.map((r) => r.client)), [rows]);
   const owners = useMemo(() => distinctSorted(rows.flatMap((r) => r.owners)), [rows]);
 
   const set = (patch: Partial<HdisFilters>) => setFilters((f) => ({ ...f, ...patch }));
 
+  function setFy(fy: string) {
+    // Changing (or clearing) the fiscal year invalidates any month picked from a
+    // different FY, so reset it rather than leaving a stale, hidden selection applied.
+    setFilters((f) => ({ ...f, fy, month: '' }));
+  }
+
   const filtered = useMemo(() => {
     const needle = filters.q.trim().toLowerCase();
     return rows.filter((r) => {
-      if (filters.month && r.reqDate.slice(0, 7) !== filters.month) return false;
+      const month = r.reqDate.slice(0, 7);
+      if (filters.fy && fyOfMonth(month) !== filters.fy) return false;
+      if (filters.month && month !== filters.month) return false;
       if (filters.client && r.client !== filters.client) return false;
       if (filters.owner && !r.owners.includes(filters.owner)) return false;
       if (filters.type && r.type !== filters.type) return false;
@@ -91,14 +108,28 @@ function HdisList() {
       <div className="card pad" style={{ marginBottom: 16 }}>
         <div className="filterbar" style={{ flexWrap: 'wrap' }}>
           <div className="field">
+            <label htmlFor="hdis-fy">Fiscal year</label>
+            <select id="hdis-fy" value={filters.fy} onChange={(e) => setFy(e.target.value)}>
+              <option value="">All years</option>
+              {fys.map((fy) => (
+                <option key={fy} value={fy}>
+                  {fyLabel(fy)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
             <label htmlFor="hdis-month">Month</label>
             <select
               id="hdis-month"
               value={filters.month}
               onChange={(e) => set({ month: e.target.value })}
+              disabled={!filters.fy}
             >
-              <option value="">All months</option>
-              {months.map((m) => (
+              <option value="">
+                {filters.fy ? `All of ${fyLabel(filters.fy)}` : 'Pick a fiscal year first'}
+              </option>
+              {monthsInFy.map((m) => (
                 <option key={m} value={m}>
                   {formatMonth(m)}
                 </option>
@@ -550,18 +581,34 @@ function Attachments({ rec, editable }: { rec: HdisRecord; editable: boolean }) 
       ['hdis-activity', rec.jdId],
     ],
   );
+  const setLink = useSetHdisLink(rec.jdId);
+  const [linkDraft, setLinkDraft] = useState(rec.jdLink ?? '');
+  const [linkError, setLinkError] = useState<string | null>(null);
+
+  function saveLink() {
+    const value = linkDraft.trim();
+    setLinkError(null);
+    setLink.mutate(value || null, {
+      onError: (err) =>
+        setLinkError(err instanceof Error ? err.message : 'Could not save that link'),
+    });
+  }
 
   return (
     <Card className="">
       <SectionTitle color="var(--violet)">Attachments</SectionTitle>
-      <div style={{ marginTop: 12 }}>
+      <p className="muted" style={{ fontSize: 12, margin: '2px 0 12px' }}>
+        For the Job Description (JD) document — upload a file, or add a link instead if it's hosted
+        elsewhere.
+      </p>
+      <div>
         {rec.attachments.length === 0 ? (
           <p className="muted" style={{ fontSize: 13 }}>
             No documents attached.
           </p>
         ) : (
           rec.attachments.map((a) => (
-            <div className="log" key={a.id}>
+            <div className="log attach" key={a.id}>
               <a
                 className="lnk"
                 href={apiUrl(`/api/hdis/${rec.jdId}/attachments/${a.id}`)}
@@ -574,7 +621,7 @@ function Attachments({ rec, editable }: { rec: HdisRecord; editable: boolean }) 
           ))
         )}
         {editable && (
-          <div style={{ marginTop: 12 }}>
+          <div style={{ marginTop: 14 }}>
             <input
               type="file"
               aria-label="Upload attachment"
@@ -587,6 +634,38 @@ function Attachments({ rec, editable }: { rec: HdisRecord; editable: boolean }) 
             {qc.isPending && <span className="muted"> Uploading…</span>}
           </div>
         )}
+        {editable ? (
+          <div className="field" style={{ marginTop: 14 }}>
+            <label htmlFor="jd-link">JD link</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                id="jd-link"
+                value={linkDraft}
+                onChange={(e) => setLinkDraft(e.target.value)}
+                placeholder="https://…"
+              />
+              <button
+                type="button"
+                className="btn btn-gho btn-sm"
+                onClick={saveLink}
+                disabled={setLink.isPending || linkDraft.trim() === (rec.jdLink ?? '')}
+              >
+                Save
+              </button>
+            </div>
+            {linkError && (
+              <div className="pill p-red" style={{ marginTop: 6, display: 'inline-block' }}>
+                {linkError}
+              </div>
+            )}
+          </div>
+        ) : rec.jdLink ? (
+          <div style={{ marginTop: 14 }}>
+            <a className="lnk" href={rec.jdLink}>
+              Open JD link
+            </a>
+          </div>
+        ) : null}
       </div>
     </Card>
   );

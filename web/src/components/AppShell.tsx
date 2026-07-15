@@ -39,7 +39,7 @@ function Sidebar({ me, onLogout }: { me: Me; onLogout: () => void }) {
                   className={({ isActive }) => `nav-i ${isActive ? 'on' : ''}`}
                 >
                   <span className="ic">{item.icon}</span>
-                  {item.label}
+                  {item.key === 'myteam' && me.scope === 'org' ? 'PPG Team' : item.label}
                 </NavLink>
               ))}
             </div>
