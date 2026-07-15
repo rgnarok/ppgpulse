@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AppShell } from '../components/AppShell';
 import { Card, SectionTitle, Pill, Empty, Btn } from '../components/ui';
 import { SearchableSelect } from '../components/SearchableSelect';
@@ -50,10 +50,25 @@ const EMPTY_FILTERS: HdisFilters = {
   q: '',
 };
 
+/** Read the initial filter state from the URL so a round trip into a record and
+ * back (or a shared link) restores whatever was applied. */
+function filtersFromParams(params: URLSearchParams): HdisFilters {
+  return {
+    fy: params.get('fy') ?? '',
+    month: params.get('month') ?? '',
+    client: params.get('client') ?? '',
+    owner: params.get('owner') ?? '',
+    type: params.get('type') ?? '',
+    status: params.get('status') ?? '',
+    q: params.get('q') ?? '',
+  };
+}
+
 function HdisList() {
   const { me } = useAuth();
   const navigate = useNavigate();
-  const [filters, setFilters] = useState<HdisFilters>(EMPTY_FILTERS);
+  const [params, setParams] = useSearchParams();
+  const [filters, setFiltersState] = useState<HdisFilters>(() => filtersFromParams(params));
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<HdisRecord | null>(null);
   // Filtering happens client-side across the full set — the dataset is small enough
@@ -61,7 +76,12 @@ function HdisList() {
   // (month/client/owner/type/status/search) trivially composable without round-trips.
   const { data: rows = [], isLoading } = useHdisList({});
   const canAdd = can(me, 'hdis', 'add');
-  const canEdit = can(me, 'hdis', 'edit');
+  // Blanket edit (org-scope roles, or anyone granted "Full HDIS access") can edit any
+  // record; everyone else can only edit the records they're personally listed as an
+  // owner of — mirrors the server-side check in assertCanEditHdisRecord.
+  const canEditAll = can(me, 'hdis', 'edit');
+  const isOwnerOf = (r: HdisRecord) => !!me?.name && r.owners.includes(me.name);
+  const rowEditable = (r: HdisRecord) => canEditAll || isOwnerOf(r);
 
   const dataMonths = useMemo(() => distinctSorted(rows.map((r) => r.reqDate.slice(0, 7))), [rows]);
   const fys = useMemo(() => fiscalYearsFor(dataMonths), [dataMonths]);
@@ -75,12 +95,19 @@ function HdisList() {
   const clients = useMemo(() => distinctSorted(rows.map((r) => r.client)), [rows]);
   const owners = useMemo(() => distinctSorted(rows.flatMap((r) => r.owners)), [rows]);
 
-  const set = (patch: Partial<HdisFilters>) => setFilters((f) => ({ ...f, ...patch }));
+  function setFilters(next: HdisFilters) {
+    setFiltersState(next);
+    const p = new URLSearchParams();
+    for (const [k, v] of Object.entries(next)) if (v) p.set(k, v);
+    setParams(p, { replace: true });
+  }
+
+  const set = (patch: Partial<HdisFilters>) => setFilters({ ...filters, ...patch });
 
   function setFy(fy: string) {
     // Changing (or clearing) the fiscal year invalidates any month picked from a
     // different FY, so reset it rather than leaving a stale, hidden selection applied.
-    setFilters((f) => ({ ...f, fy, month: '' }));
+    setFilters({ ...filters, fy, month: '' });
   }
 
   const filtered = useMemo(() => {
@@ -102,6 +129,7 @@ function HdisList() {
   }, [rows, filters]);
 
   const hasFilters = Object.values(filters).some(Boolean);
+  const showEditColumn = canEditAll || filtered.some(isOwnerOf);
 
   return (
     <AppShell title="HDIS" subtitle="Hiring Display Information System — requirement master">
@@ -243,12 +271,21 @@ function HdisList() {
                   <th>Type</th>
                   <th>Status</th>
                   <th>Owners</th>
-                  {canEdit && <th />}
+                  {showEditColumn && <th />}
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((r) => (
-                  <tr key={r.jdId} onClick={() => navigate(`/hdis/${r.jdId}`)}>
+                  <tr
+                    key={r.jdId}
+                    onClick={() =>
+                      navigate(`/hdis/${r.jdId}`, {
+                        state: {
+                          backTo: `/hdis${params.toString() ? `?${params.toString()}` : ''}`,
+                        },
+                      })
+                    }
+                  >
                     <td className="mono">{r.jdId}</td>
                     <td className="muted">{formatDate(r.reqDate)}</td>
                     <td>{r.title}</td>
@@ -260,18 +297,20 @@ function HdisList() {
                       <Pill>{r.status}</Pill>
                     </td>
                     <td className="muted">{r.owners.join(', ')}</td>
-                    {canEdit && (
+                    {showEditColumn && (
                       <td>
-                        <button
-                          type="button"
-                          className="lnk"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditing(r);
-                          }}
-                        >
-                          Edit
-                        </button>
+                        {rowEditable(r) && (
+                          <button
+                            type="button"
+                            className="lnk"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditing(r);
+                            }}
+                          >
+                            Edit
+                          </button>
+                        )}
                       </td>
                     )}
                   </tr>
@@ -459,10 +498,17 @@ function HdisFormModal({
 function HdisDetail({ jdId }: { jdId: string }) {
   const { me } = useAuth();
   const navigate = useNavigate();
-  const editable = can(me, 'hdis', 'edit');
+  const location = useLocation();
+  // Preserves whatever filters were applied on the list page across the round trip
+  // into a record and back — falls back to a plain list link if opened directly.
+  const backTo = (location.state as { backTo?: string } | null)?.backTo ?? '/hdis';
+  const canEditAll = can(me, 'hdis', 'edit');
   const { data: rec, isLoading } = useHdisRecord(jdId);
   const { data: activity = [] } = useHdisActivity(jdId);
   const [editing, setEditing] = useState(false);
+  // Same rule as the list: blanket edit, or being personally listed as an owner of
+  // this specific record.
+  const editable = canEditAll || (!!me?.name && !!rec?.owners.includes(me.name));
 
   if (isLoading || !rec) {
     return (
@@ -482,7 +528,7 @@ function HdisDetail({ jdId }: { jdId: string }) {
           marginBottom: 12,
         }}
       >
-        <button className="lnk" onClick={() => navigate('/hdis')}>
+        <button className="lnk" onClick={() => navigate(backTo)}>
           ← Back to list
         </button>
         {editable && <Btn onClick={() => setEditing(true)}>Edit record</Btn>}

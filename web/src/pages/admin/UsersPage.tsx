@@ -18,8 +18,22 @@ export default function UsersPage() {
     ({ id }: { id: string }) => api(`/users/${id}`, { method: 'DELETE' }),
     [['users'], ['roles'], ['hierarchy']],
   );
+  const override = useApiMutation(
+    ({ id, capability, grant }: { id: string; capability: string; grant: boolean }) =>
+      api(`/users/${id}/overrides`, {
+        method: 'POST',
+        body: { section: 'hdis', capability, grant },
+      }),
+    [['users']],
+  );
 
   const isHr = me?.role.key === 'hr_manager';
+
+  function toggleHdisFullAccess(u: UserRow) {
+    const grant = !u.overrides.some((o) => o.section === 'hdis' && o.capability === 'view_all');
+    override.mutate({ id: u.id, capability: 'view_all', grant });
+    override.mutate({ id: u.id, capability: 'edit', grant });
+  }
 
   return (
     <AppShell title="Users" subtitle="Assign roles, teams and reporting lines">
@@ -37,6 +51,7 @@ export default function UsersPage() {
                   <th>Role</th>
                   <th>Manager</th>
                   <th>Status</th>
+                  <th>HDIS access</th>
                   <th />
                 </tr>
               </thead>
@@ -89,6 +104,29 @@ export default function UsersPage() {
                         )}
                       </td>
                       <td>
+                        {u.role.scope === 'org' ? (
+                          <span
+                            className="muted"
+                            style={{ fontSize: 12 }}
+                            title="Org-scope roles already see every client"
+                          >
+                            All clients
+                          </span>
+                        ) : (
+                          <button
+                            className="lnk"
+                            onClick={() => toggleHdisFullAccess(u)}
+                            disabled={override.isPending}
+                          >
+                            {u.overrides.some(
+                              (o) => o.section === 'hdis' && o.capability === 'view_all',
+                            )
+                              ? 'Full access ✓'
+                              : 'Grant full access'}
+                          </button>
+                        )}
+                      </td>
+                      <td>
                         {!locked && u.id !== me?.id && (
                           <button
                             className="lnk"
@@ -123,7 +161,9 @@ export default function UsersPage() {
             Create new accounts from <strong>Roles &amp; Access</strong> — pick the sections each
             user should see and share the generated password. Use <strong>Remove</strong> above to
             delete an account. Each row reflects the user&apos;s effective role; per-section grants
-            layer on top as overrides.
+            layer on top as overrides. By default, non-org roles only see HDIS records for the
+            clients they own — use <strong>HDIS access</strong> to grant an individual user full,
+            org-wide HDIS visibility and edit rights instead.
           </p>
         </Card>
       </div>

@@ -38,6 +38,13 @@ export async function createUser(prisma: PrismaClient, actor: CurrentUser, input
   const sections = (input.sections ?? []).filter((s): s is (typeof SECTIONS)[number] =>
     (SECTIONS as readonly string[]).includes(s),
   );
+  const overrideRows = sections.map((section) => ({ section, capability: 'view' }));
+  // "Full HDIS access" bypasses the default owner-only scoping so this user can see
+  // and update every client's records, not just the ones they're listed as owning.
+  if (input.hdisFullAccess) {
+    overrideRows.push({ section: 'hdis', capability: 'view_all' });
+    overrideRows.push({ section: 'hdis', capability: 'edit' });
+  }
   return prisma.user.create({
     data: {
       name: input.name,
@@ -46,9 +53,7 @@ export async function createUser(prisma: PrismaClient, actor: CurrentUser, input
       team: input.team,
       managerId: input.managerId ?? null,
       passwordHash,
-      overrides: sections.length
-        ? { create: sections.map((section) => ({ section, capability: 'view' })) }
-        : undefined,
+      overrides: overrideRows.length ? { create: overrideRows } : undefined,
       // Team-scope roles (e.g. Consultant) are PPG delivery staff tracked via a Consultant
       // profile — without this, new hires never show up in the consultant/team filters,
       // report charts, or the interview "Sourcing" picker.

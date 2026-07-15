@@ -1,8 +1,9 @@
 import type { Prisma, PrismaClient, HdisType } from '@prisma/client';
-import { BadRequestError, ConflictError, NotFoundError } from '../../lib/errors.js';
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../../lib/errors.js';
 import { getStorage, ALLOWED_UPLOAD_MIME } from '../../lib/storage.js';
 import { getConfig } from '../../config.js';
 import { ensureClient } from '../clients/service.js';
+import { loadDirectory, scopeNames, can, type CurrentUser } from '../rbac/index.js';
 import type { CreateHdisInput, UpdateHdisInput, PipelineInput } from './schema.js';
 
 const detailInclude = {
@@ -69,24 +70,43 @@ async function logActivity(
   await tx.hdisActivity.create({ data: { jdId, actorId, action, detail } });
 }
 
+/**
+ * Visibility filter for the HDIS module: org-scope roles (and anyone individually
+ * granted the `hdis:view_all` override — see users/service.ts's `hdisFullAccess`
+ * flag) see every record. Everyone else only sees records where they, or a teammate
+ * within their reporting scope, are listed as an owner — matched by display name
+ * since `HdisOwner.consultantOrName` is free text rather than a user FK.
+ */
+async function visibilityWhere(
+  prisma: PrismaClient,
+  user: CurrentUser,
+): Promise<Prisma.HdisWhereInput> {
+  if (user.role.scope === 'org' || can(user, 'hdis', 'view_all')) return {};
+  const directory = await loadDirectory(prisma);
+  const names = scopeNames(user, directory);
+  return { owners: { some: { consultantOrName: { in: [...names] } } } };
+}
+
 export async function listHdis(
   prisma: PrismaClient,
+  user: CurrentUser,
   filter: { month?: string; status?: string; q?: string },
 ) {
-  const where: Prisma.HdisWhereInput = {};
+  const scoped = await visibilityWhere(prisma, user);
+  const narrowed: Prisma.HdisWhereInput = {};
   if (filter.month) {
-    where.reqDate = { gte: `${filter.month}-01`, lte: `${filter.month}-31` };
+    narrowed.reqDate = { gte: `${filter.month}-01`, lte: `${filter.month}-31` };
   }
-  if (filter.status) where.status = filter.status;
+  if (filter.status) narrowed.status = filter.status;
   if (filter.q) {
-    where.OR = [
+    narrowed.OR = [
       { title: { contains: filter.q, mode: 'insensitive' } },
       { client: { contains: filter.q, mode: 'insensitive' } },
       { jdId: { contains: filter.q, mode: 'insensitive' } },
     ];
   }
   const rows = await prisma.hdis.findMany({
-    where,
+    where: { AND: [scoped, narrowed] },
     include: detailInclude,
     orderBy: { reqDate: 'desc' },
   });
@@ -97,6 +117,39 @@ export async function getHdis(prisma: PrismaClient, jdId: string) {
   const h = await prisma.hdis.findUnique({ where: { jdId }, include: detailInclude });
   if (!h) throw new NotFoundError('HDIS record not found');
   return h;
+}
+
+/** Same as `getHdis`, but 403s if the record falls outside the caller's HDIS visibility. */
+export async function getHdisForUser(prisma: PrismaClient, user: CurrentUser, jdId: string) {
+  const h = await getHdis(prisma, jdId);
+  if (user.role.scope !== 'org' && !can(user, 'hdis', 'view_all')) {
+    const directory = await loadDirectory(prisma);
+    const names = scopeNames(user, directory);
+    const visible = h.owners.some((o) => names.has(o.consultantOrName));
+    if (!visible) {
+      throw new ForbiddenError('You do not have access to this HDIS record', 'forbidden');
+    }
+  }
+  return h;
+}
+
+/**
+ * Gate for the record-level "update" actions (edit fields, pipeline, JD link,
+ * attachments): allowed with blanket `hdis:edit`, or if the caller is personally
+ * listed as an owner of this specific record — lets a consultant maintain the
+ * client requirements they own without needing org-wide edit rights.
+ */
+export async function assertCanEditHdisRecord(
+  prisma: PrismaClient,
+  user: CurrentUser,
+  jdId: string,
+): Promise<void> {
+  if (can(user, 'hdis', 'edit')) return;
+  const h = await getHdis(prisma, jdId);
+  const isOwner = h.owners.some((o) => o.consultantOrName === user.name);
+  if (!isOwner) {
+    throw new ForbiddenError('You can only update HDIS records you own', 'forbidden');
+  }
 }
 
 export async function createHdis(prisma: PrismaClient, actorId: string, input: CreateHdisInput) {

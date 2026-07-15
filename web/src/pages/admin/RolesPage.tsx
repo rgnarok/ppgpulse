@@ -36,6 +36,7 @@ function CreateUserForm() {
   const [roleKey, setRoleKey] = useState('user');
   const [managerId, setManagerId] = useState<string>(() => me?.id ?? '');
   const [sections, setSections] = useState<Set<string>>(new Set(DEFAULT_SECTIONS));
+  const [hdisFullAccess, setHdisFullAccess] = useState(false);
   const [created, setCreated] = useState<{ email: string; password: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,6 +68,7 @@ function CreateUserForm() {
     setRoleKey('user');
     setManagerId(me?.id ?? '');
     setSections(new Set(DEFAULT_SECTIONS));
+    setHdisFullAccess(false);
     setPassword(generatePassword());
   };
 
@@ -84,6 +86,7 @@ function CreateUserForm() {
           password,
           sections: [...sections],
           managerId: managerId || null,
+          hdisFullAccess,
         },
       },
       {
@@ -228,6 +231,23 @@ function CreateUserForm() {
             ))}
           </div>
         </div>
+
+        <label
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            fontSize: 13,
+            cursor: 'pointer',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={hdisFullAccess}
+            onChange={(e) => setHdisFullAccess(e.target.checked)}
+          />
+          Full HDIS access (all clients, not just the ones they own)
+        </label>
 
         {error && (
           <div

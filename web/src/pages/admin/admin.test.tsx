@@ -1,4 +1,5 @@
 import { screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { renderApp, mockFetch, jsonRoute, superAdminMe } from '../../tests/utils';
 import UsersPage from './UsersPage';
@@ -84,6 +85,38 @@ describe('Users admin (T12.1)', () => {
     expect(suhaniRow.getAttribute('data-locked')).toBe('false');
     expect(within(suhaniRow).getByRole('combobox')).toBeInTheDocument();
   });
+
+  it('marks org-scope users as already having all-client HDIS access', async () => {
+    mockFetch([
+      jsonRoute('/api/me', superAdminMe),
+      jsonRoute('/api/users', users),
+      jsonRoute('/api/roles', roles),
+    ]);
+    renderApp(<UsersPage />);
+    const kbRow = await screen.findByTestId('user-row-u_kb');
+    expect(within(kbRow).getByText('All clients')).toBeInTheDocument();
+  });
+
+  it('grants full HDIS access to a non-org user via overrides', async () => {
+    const { calls } = mockFetch([
+      jsonRoute('/api/me', superAdminMe),
+      jsonRoute('/api/users', users),
+      jsonRoute('/api/roles', roles),
+      jsonRoute('/api/users/u_suhani/overrides', users[1], { method: 'POST' }),
+    ]);
+    renderApp(<UsersPage />);
+    const suhaniRow = await screen.findByTestId('user-row-u_suhani');
+    await userEvent.click(within(suhaniRow).getByText('Grant full access'));
+
+    const posted = calls.filter(
+      (c) => c.url.endsWith('/api/users/u_suhani/overrides') && c.method === 'POST',
+    );
+    expect(posted).toHaveLength(2);
+    const capabilities = posted.map((c) => (c.body as { capability: string }).capability).sort();
+    expect(capabilities).toEqual(['edit', 'view_all']);
+    expect(posted.every((c) => (c.body as { section: string }).section === 'hdis')).toBe(true);
+    expect(posted.every((c) => (c.body as { grant: boolean }).grant === true)).toBe(true);
+  });
 });
 
 describe('Roles admin (T12.2)', () => {
@@ -139,6 +172,28 @@ describe('Roles admin (T12.2)', () => {
         expect.stringContaining('Suhani Singh'),
       ]),
     );
+  });
+
+  it('includes hdisFullAccess in the create-user payload when checked', async () => {
+    const { calls } = mockFetch([
+      jsonRoute('/api/me', superAdminMe),
+      jsonRoute('/api/roles', roles),
+      jsonRoute('/api/users', users),
+      jsonRoute('/api/users', users[1], { method: 'POST' }),
+    ]);
+    renderApp(<RolesPage />);
+    await screen.findAllByText('system');
+
+    await userEvent.type(screen.getByPlaceholderText('Full name'), 'New Person');
+    await userEvent.type(screen.getByPlaceholderText('name@vayuz.com'), 'new@vayuz.com');
+    await userEvent.click(
+      screen.getByText('Full HDIS access (all clients, not just the ones they own)'),
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Create user' }));
+
+    const posted = calls.find((c) => c.url.endsWith('/api/users') && c.method === 'POST');
+    expect(posted).toBeTruthy();
+    expect((posted!.body as { hdisFullAccess: boolean }).hdisFullAccess).toBe(true);
   });
 });
 

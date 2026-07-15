@@ -9,6 +9,9 @@ export const createUserSchema = z.object({
   password: z.string().min(6).optional(),
   /** Sections this user should be able to view, granted as per-user overrides. */
   sections: z.array(z.string()).optional(),
+  /** Grants hdis:view_all + hdis:edit overrides — full HDIS access across every
+   * client, not just the ones this user owns. Set by whoever creates the account. */
+  hdisFullAccess: z.boolean().optional(),
 });
 
 export const updateUserSchema = z

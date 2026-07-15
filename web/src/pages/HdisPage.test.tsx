@@ -4,9 +4,14 @@ import { Routes, Route } from 'react-router-dom';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { renderApp, mockFetch, jsonRoute, superAdminMe, consultantMe } from '../tests/utils';
 import HdisPage from './HdisPage';
-import type { HdisRecord } from '../lib/types';
+import type { HdisRecord, Me } from '../lib/types';
 
 afterEach(() => vi.unstubAllGlobals());
+
+// consultantMe (name "Abha Sharma") is deliberately the *owner* of `record` below, so
+// it doubles as the "owner without blanket edit" fixture. A genuine outsider — same
+// team-scope role, but not listed as an owner of anything — needs a separate identity.
+const outsiderMe: Me = { ...consultantMe, id: 'u_outsider', name: 'Someone Else' };
 
 const record: HdisRecord = {
   jdId: 'TST_QA_20260601',
@@ -124,7 +129,7 @@ describe('HDIS detail + pipeline recorder (T10.3)', () => {
   });
 
   it('read-only user sees pipeline values but no recorder', async () => {
-    mockFetch(routesFor(consultantMe));
+    mockFetch(routesFor(outsiderMe));
     renderApp(
       <Routes>
         <Route path="/hdis/:jdId" element={<HdisPage />} />
@@ -134,6 +139,23 @@ describe('HDIS detail + pipeline recorder (T10.3)', () => {
     await screen.findByText('Activity log');
     expect(screen.queryByText('Record pipeline activity')).not.toBeInTheDocument();
     expect(screen.queryByText('Log update')).not.toBeInTheDocument();
+  });
+
+  it('an owner without blanket edit rights still gets the recorder for their own record', async () => {
+    const { calls } = mockFetch([
+      ...routesFor(consultantMe),
+      jsonRoute('/api/hdis/TST_QA_20260601/pipeline', record, { method: 'PUT' }),
+    ]);
+    renderApp(
+      <Routes>
+        <Route path="/hdis/:jdId" element={<HdisPage />} />
+      </Routes>,
+      { route: '/hdis/TST_QA_20260601' },
+    );
+    await screen.findByText('Record pipeline activity');
+    await userEvent.click(screen.getByText('Log update'));
+    const put = calls.find((c) => c.url.includes('/pipeline') && c.method === 'PUT');
+    expect(put).toBeTruthy();
   });
 });
 
@@ -164,7 +186,7 @@ describe('HDIS attachments — JD link', () => {
   });
 
   it('read-only user sees the JD link (if any) but no editor', async () => {
-    mockFetch(routesFor(consultantMe));
+    mockFetch(routesFor(outsiderMe));
     renderApp(
       <Routes>
         <Route path="/hdis/:jdId" element={<HdisPage />} />
@@ -222,8 +244,8 @@ describe('HDIS edit flow', () => {
     expect(patch).toBeTruthy();
   });
 
-  it('hides the Edit button/column for read-only users', async () => {
-    mockFetch(routesFor(consultantMe));
+  it('hides the Edit button/column for a genuine outsider', async () => {
+    mockFetch(routesFor(outsiderMe));
     renderApp(
       <Routes>
         <Route path="/hdis" element={<HdisPage />} />
@@ -232,6 +254,19 @@ describe('HDIS edit flow', () => {
     );
     await screen.findByText('QA Engineer');
     expect(screen.queryByText('Edit')).not.toBeInTheDocument();
+  });
+
+  it('shows Edit for a record the consultant owns even without blanket edit rights', async () => {
+    // record is owned by "Abha Sharma"; consultantMe shares that name (see fixture note above).
+    mockFetch(routesFor(consultantMe));
+    renderApp(
+      <Routes>
+        <Route path="/hdis" element={<HdisPage />} />
+      </Routes>,
+      { route: '/hdis' },
+    );
+    await screen.findByText('QA Engineer');
+    expect(screen.getByText('Edit')).toBeInTheDocument();
   });
 });
 
@@ -272,6 +307,40 @@ describe('HDIS filters', () => {
     await userEvent.type(screen.getByLabelText('Search'), 'analyst');
     expect(screen.queryByText('QA Engineer')).not.toBeInTheDocument();
     expect(screen.getByText('Business Analyst')).toBeInTheDocument();
+  });
+});
+
+describe('HDIS filter state persists across a detail round trip', () => {
+  it('keeps the applied filter after visiting a record and clicking Back to list', async () => {
+    mockFetch([
+      // Order matters: mockFetch's route matcher uses substring inclusion, so the more
+      // specific single-record routes must be checked before the generic '/api/hdis'
+      // list route (which is itself a substring of the detail/activity URLs).
+      jsonRoute('/api/hdis/TST_BA_20260602/activity', []),
+      jsonRoute('/api/hdis/TST_BA_20260602', record2),
+      jsonRoute('/api/me', superAdminMe),
+      jsonRoute('/api/hdis', [record, record2]),
+      jsonRoute('/api/clients', clients),
+    ]);
+    renderApp(
+      <Routes>
+        <Route path="/hdis" element={<HdisPage />} />
+        <Route path="/hdis/:jdId" element={<HdisPage />} />
+      </Routes>,
+      { route: '/hdis' },
+    );
+    await screen.findByText('QA Engineer');
+    await userEvent.selectOptions(screen.getByLabelText('Client'), 'Acme Corp');
+    expect(screen.queryByText('QA Engineer')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByText('Business Analyst'));
+    await screen.findByText('Activity log');
+    await userEvent.click(screen.getByText('← Back to list'));
+
+    // Back on the list, the client filter (and therefore the narrowed result set) survived.
+    expect(await screen.findByText('Business Analyst')).toBeInTheDocument();
+    expect(screen.queryByText('QA Engineer')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Client')).toHaveValue('Acme Corp');
   });
 });
 

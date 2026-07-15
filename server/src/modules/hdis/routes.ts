@@ -10,7 +10,8 @@ import {
 } from './schema.js';
 import {
   listHdis,
-  getHdis,
+  getHdisForUser,
+  assertCanEditHdisRecord,
   toHdisDto,
   createHdis,
   updateHdis,
@@ -26,7 +27,7 @@ export default async function hdisRoutes(app: FastifyInstance) {
   app.get('/hdis', { preHandler: app.authenticate }, async (request) => {
     assertCan(request.currentUser, 'hdis', 'view');
     const q = listQuerySchema.parse(request.query);
-    return listHdis(app.prisma, q);
+    return listHdis(app.prisma, request.currentUser, q);
   });
 
   app.get<{ Params: { jdId: string } }>(
@@ -34,7 +35,7 @@ export default async function hdisRoutes(app: FastifyInstance) {
     { preHandler: app.authenticate },
     async (request) => {
       assertCan(request.currentUser, 'hdis', 'view');
-      return toHdisDto(await getHdis(app.prisma, request.params.jdId));
+      return toHdisDto(await getHdisForUser(app.prisma, request.currentUser, request.params.jdId));
     },
   );
 
@@ -49,7 +50,7 @@ export default async function hdisRoutes(app: FastifyInstance) {
     '/hdis/:jdId',
     { preHandler: app.authenticate },
     async (request) => {
-      assertCan(request.currentUser, 'hdis', 'edit');
+      await assertCanEditHdisRecord(app.prisma, request.currentUser, request.params.jdId);
       const input = updateHdisSchema.parse(request.body);
       return updateHdis(app.prisma, request.currentUser.id, request.params.jdId, input);
     },
@@ -69,7 +70,7 @@ export default async function hdisRoutes(app: FastifyInstance) {
     '/hdis/:jdId/pipeline',
     { preHandler: app.authenticate },
     async (request) => {
-      assertCan(request.currentUser, 'hdis', 'edit');
+      await assertCanEditHdisRecord(app.prisma, request.currentUser, request.params.jdId);
       const input = pipelineSchema.parse(request.body);
       return setPipeline(app.prisma, request.currentUser.id, request.params.jdId, input);
     },
@@ -79,7 +80,7 @@ export default async function hdisRoutes(app: FastifyInstance) {
     '/hdis/:jdId/link',
     { preHandler: app.authenticate },
     async (request) => {
-      assertCan(request.currentUser, 'hdis', 'edit');
+      await assertCanEditHdisRecord(app.prisma, request.currentUser, request.params.jdId);
       const { jdLink } = linkSchema.parse(request.body);
       return setLink(app.prisma, request.currentUser.id, request.params.jdId, jdLink);
     },
@@ -90,6 +91,7 @@ export default async function hdisRoutes(app: FastifyInstance) {
     { preHandler: app.authenticate },
     async (request) => {
       assertCan(request.currentUser, 'hdis', 'view');
+      await getHdisForUser(app.prisma, request.currentUser, request.params.jdId);
       return listActivity(app.prisma, request.params.jdId);
     },
   );
@@ -98,7 +100,7 @@ export default async function hdisRoutes(app: FastifyInstance) {
     '/hdis/:jdId/attachments',
     { preHandler: app.authenticate },
     async (request, reply) => {
-      assertCan(request.currentUser, 'hdis', 'edit');
+      await assertCanEditHdisRecord(app.prisma, request.currentUser, request.params.jdId);
       const file = await request.file();
       if (!file) throw new BadRequestError('No file provided', 'no_file');
       const buffer = await file.toBuffer();
@@ -119,6 +121,7 @@ export default async function hdisRoutes(app: FastifyInstance) {
     { preHandler: app.authenticate },
     async (request, reply) => {
       assertCan(request.currentUser, 'hdis', 'view');
+      await getHdisForUser(app.prisma, request.currentUser, request.params.jdId);
       const { buffer, fileName, contentType } = await getAttachment(
         app.prisma,
         request.params.jdId,
