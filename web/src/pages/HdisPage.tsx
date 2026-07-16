@@ -445,7 +445,7 @@ function HdisFormModal({
     <div role="dialog" onClick={onClose} style={overlay}>
       <div
         className="card pad"
-        style={{ width: 620, maxWidth: '100%' }}
+        style={{ width: 620, maxWidth: '100%', maxHeight: '88vh', overflowY: 'auto' }}
         onClick={(e) => e.stopPropagation()}
       >
         <SectionTitle>{mode === 'edit' ? `Edit ${initial?.jdId}` : 'New HDIS record'}</SectionTitle>

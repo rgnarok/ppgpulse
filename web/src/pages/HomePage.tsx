@@ -395,7 +395,7 @@ function RequirementModal({ id, onClose }: { id: string; onClose: () => void }) 
     >
       <div
         className="card pad"
-        style={{ width: 520, maxWidth: '100%' }}
+        style={{ width: 520, maxWidth: '100%', maxHeight: '88vh', overflowY: 'auto' }}
         onClick={(e) => e.stopPropagation()}
       >
         <SectionTitle>Requirement detail</SectionTitle>
