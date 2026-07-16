@@ -39,6 +39,13 @@ export function formatMonth(monthISO: string | null | undefined): string {
   return `${MONTH_ABBR[m - 1]} ${y}`;
 }
 
+/** Today's date as a plain 'YYYY-MM-DD' string, in the browser's local timezone. */
+export function todayISO(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 /** Full ISO datetime → 'Jul 15, 2026 · 9:41 AM'. Falls back to the raw input if invalid. */
 export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return '—';

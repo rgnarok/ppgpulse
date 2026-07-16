@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AppShell } from '../components/AppShell';
-import { Card, SectionTitle, Pill, Empty, Btn } from '../components/ui';
+import { Card, SectionTitle, Pill, Empty, Btn, SplitStatCard } from '../components/ui';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { MultiSelect } from '../components/MultiSelect';
 import { Pagination } from '../components/Pagination';
@@ -17,7 +17,7 @@ import {
   useApiMutation,
   useSetHdisLink,
 } from '../lib/hooks';
-import { formatDate, formatMonth, formatDateTime } from '../lib/format';
+import { formatDate, formatMonth, formatDateTime, todayISO } from '../lib/format';
 import { fyOfMonth, fyLabel, fyMonths, fiscalYearsFor } from '../lib/fy';
 import { DEFAULT_PAGE_SIZE } from '../lib/pagination';
 import type { HdisRecord } from '../lib/types';
@@ -33,6 +33,15 @@ const STATUS_REASON_OPTIONS: Record<string, string[]> = {
 
 function distinctSorted(values: (string | null | undefined)[]): string[] {
   return [...new Set(values.filter((v): v is string => !!v))].sort((a, b) => a.localeCompare(b));
+}
+
+/** Total count plus a RADC/RADF split — powers the two headline stat cards. */
+function typeBreakdown(records: HdisRecord[]) {
+  return {
+    total: records.length,
+    radc: records.filter((r) => r.type === 'RADC').length,
+    radf: records.filter((r) => r.type === 'RADF').length,
+  };
 }
 
 export default function HdisPage() {
@@ -106,6 +115,14 @@ function HdisList() {
   const clients = useMemo(() => distinctSorted(rows.map((r) => r.client)), [rows]);
   const owners = useMemo(() => distinctSorted(rows.flatMap((r) => r.owners)), [rows]);
 
+  // Headline stat cards — always reflect the full dataset, not the active filters.
+  const today = useMemo(() => todayISO(), []);
+  const totalStats = useMemo(() => typeBreakdown(rows), [rows]);
+  const todayStats = useMemo(
+    () => typeBreakdown(rows.filter((r) => r.reqDate === today)),
+    [rows, today],
+  );
+
   /** Writes filters + page to both state and the URL in one go — every filter change
    * resets to page 1 (a stale page number past the new, smaller result set would
    * otherwise look like an empty list). */
@@ -160,8 +177,42 @@ function HdisList() {
 
   return (
     <AppShell title="HDIS" subtitle="Hiring Display Information System — requirement master">
+      <div className="grid g-2" style={{ marginBottom: 16 }}>
+        <SplitStatCard
+          icon="▦"
+          label="Total Requirements"
+          value={totalStats.total}
+          sub="all HDIS records"
+          splits={[
+            { value: totalStats.radc, label: 'RADC', color: 'var(--violet)' },
+            { value: totalStats.radf, label: 'RADF', color: 'var(--sky)' },
+          ]}
+        />
+        <SplitStatCard
+          icon="◔"
+          label="Today's Requirement"
+          value={todayStats.total}
+          sub={formatDate(today)}
+          splits={[
+            { value: todayStats.radc, label: 'RADC', color: 'var(--violet)' },
+            { value: todayStats.radf, label: 'RADF', color: 'var(--sky)' },
+          ]}
+        />
+      </div>
+
       <div className="card pad" style={{ marginBottom: 16 }}>
-        <div className="filterbar" style={{ flexWrap: 'wrap' }}>
+        <div className="filterbar-actions">
+          <button
+            type="button"
+            className="btn btn-gho"
+            disabled={!hasFilters}
+            onClick={() => setFilters(EMPTY_FILTERS)}
+          >
+            Reset
+          </button>
+          {canAdd && <Btn onClick={() => setShowAdd(true)}>+ Add record</Btn>}
+        </div>
+        <div className="filterbar filterbar-compact">
           <div className="field">
             <label htmlFor="hdis-fy">Fiscal year</label>
             <select id="hdis-fy" value={filters.fy} onChange={(e) => setFy(e.target.value)}>
@@ -251,7 +302,7 @@ function HdisList() {
               ))}
             </select>
           </div>
-          <div className="field" style={{ minWidth: 200 }}>
+          <div className="field" style={{ minWidth: 200, maxWidth: 240 }}>
             <label htmlFor="hdis-search">Search</label>
             <input
               id="hdis-search"
@@ -260,19 +311,6 @@ function HdisList() {
               placeholder="Title, client, or JD ID"
             />
           </div>
-          <button
-            type="button"
-            className="btn btn-gho"
-            disabled={!hasFilters}
-            onClick={() => setFilters(EMPTY_FILTERS)}
-          >
-            Reset
-          </button>
-          {canAdd && (
-            <div style={{ marginLeft: 'auto' }}>
-              <Btn onClick={() => setShowAdd(true)}>+ Add record</Btn>
-            </div>
-          )}
         </div>
         {!isLoading && (
           <div className="showing" style={{ marginTop: 10 }}>

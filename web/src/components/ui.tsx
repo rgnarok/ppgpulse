@@ -23,6 +23,43 @@ export function KpiCard({
   );
 }
 
+/** A plain KPI card with a headline number plus an even split of sub-metrics
+ * below a divider (e.g. "Total Requirements" broken into RADC / RADF). */
+export function SplitStatCard({
+  icon,
+  label,
+  value,
+  sub,
+  splits,
+}: {
+  icon: string;
+  label: string;
+  value: ReactNode;
+  sub?: string;
+  splits: { value: ReactNode; label: string; color?: string }[];
+}) {
+  return (
+    <div className="skc">
+      <div className="skc-head">
+        <span className="dot" />
+        {icon} {label}
+      </div>
+      <div className="skc-num">{value}</div>
+      {sub && <div className="skc-sub">{sub}</div>}
+      <div className="skc-split">
+        {splits.map((s, i) => (
+          <div className="skc-split-item" key={i}>
+            <div className="skc-split-val" style={s.color ? { color: s.color } : undefined}>
+              {s.value}
+            </div>
+            <div className="skc-split-cap">{s.label}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function Card({
   children,
   pad = true,

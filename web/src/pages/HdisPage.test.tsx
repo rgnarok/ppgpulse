@@ -105,6 +105,33 @@ describe('HDIS list (T10.1)', () => {
     expect(screen.getByText('+ Add record')).toBeInTheDocument();
   });
 
+  it('shows Total Requirements split by RADC/RADF, unaffected by the active filters', async () => {
+    const radf: HdisRecord = {
+      ...record,
+      jdId: 'TST_RF_20260603',
+      title: 'DevOps Engineer',
+      type: 'RADF',
+      client: 'Acme Corp',
+    };
+    mockFetch(routesFor(superAdminMe, [record, record2, radf]));
+    renderApp(
+      <Routes>
+        <Route path="/hdis" element={<HdisPage />} />
+      </Routes>,
+      { route: '/hdis' },
+    );
+    await screen.findByText('QA Engineer');
+    const totalCard = screen.getByText(/Total Requirements/).closest('.skc') as HTMLElement;
+    expect(within(totalCard).getByText('3')).toBeInTheDocument();
+    expect(within(totalCard).getByText('2')).toBeInTheDocument(); // RADC
+    expect(within(totalCard).getByText('1')).toBeInTheDocument(); // RADF
+
+    // Narrowing the list filter doesn't change the headline card — it always
+    // reflects the full dataset.
+    await userEvent.selectOptions(screen.getByLabelText('Client'), 'Acme Corp');
+    expect(within(totalCard).getByText('3')).toBeInTheDocument();
+  });
+
   it('hides Add for a consultant (read-only)', async () => {
     mockFetch(routesFor(consultantMe));
     renderApp(

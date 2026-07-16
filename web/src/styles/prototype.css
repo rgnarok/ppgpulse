@@ -163,6 +163,18 @@ select.iv-f{cursor:pointer}
 .kc.green{background:linear-gradient(180deg,#e9f6ef,#d9f0e3);color:#1a7a4f}
 .kc.violet{background:linear-gradient(180deg,#f1edfb,#e6defb);color:#5b3ea8}
 .kc.teal{background:linear-gradient(180deg,#e7f5f6,#d6eef0);color:#0a7a7a}
+/* Split-stat card: a plain white KPI card with a headline number, then a
+   divider and an even row of sub-metrics (e.g. a RADC/RADF breakdown). */
+.skc{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px 20px;box-shadow:var(--shadow)}
+.skc-head{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.skc-head .dot{width:7px;height:7px;border-radius:50%;background:var(--primary);flex:none}
+.skc-num{font-size:34px;font-weight:800;letter-spacing:-1px;margin:8px 0 2px;font-family:'JetBrains Mono';line-height:1;color:var(--text)}
+.skc-sub{font-size:12.5px;color:var(--muted)}
+.skc-split{display:flex;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
+.skc-split-item{flex:1;text-align:center}
+.skc-split-item+.skc-split-item{border-left:1px solid var(--border)}
+.skc-split-val{font-size:19px;font-weight:800;font-family:'JetBrains Mono';line-height:1}
+.skc-split-cap{font-size:10.5px;color:var(--faint);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-top:4px}
 .chart-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px 20px;box-shadow:var(--shadow)}
 .chart-card.tint-blue{background:linear-gradient(180deg,#fbfcff,#f6f8fe)}
 .chart-card.tint-green{background:linear-gradient(180deg,#fbfefc,#f4fbf7)}
@@ -176,6 +188,11 @@ select.iv-f{cursor:pointer}
 .filterbar .field{min-width:150px}
 .filterbar .field input,.filterbar .field select{padding:9px 11px}
 .filterbar .showing{font-size:12.5px;color:var(--muted);margin-bottom:10px}
+/* Compact variant: caps each field's width so a row of filters packs together
+   instead of stretching out across a wide screen with large dead gaps. */
+.filterbar-compact{gap:12px}
+.filterbar-compact .field{flex:1 1 160px;min-width:140px;max-width:190px}
+.filterbar-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-bottom:14px}
 .ms-box{border:1px solid var(--border2);border-radius:10px;padding:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-height:44px}
 .ms-chip{display:inline-flex;align-items:center;gap:6px;background:var(--primary-l);color:var(--primary-d);border-radius:8px;padding:5px 8px 5px 10px;font-size:12.5px;font-weight:600}
 .ms-chip button{border:none;background:none;color:var(--primary);cursor:pointer;font-size:14px;line-height:1;padding:0}
