@@ -199,6 +199,7 @@ export interface InterviewRow {
   id: string;
   date: string;
   session: 'mid' | 'end';
+  type: string | null;
   candidate: string;
   candidateEmail: string | null;
   ref: string | null;

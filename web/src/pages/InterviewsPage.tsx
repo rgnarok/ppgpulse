@@ -19,6 +19,7 @@ import { formatDate, formatMonth } from '../lib/format';
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const ROUND_OPTIONS = ['L0', 'L1', 'L2', 'L3', 'L4', 'L5'];
 const STATUS_OPTIONS = ['Scheduled', 'Selected', 'Rejected', 'On Hold'];
+const TYPE_OPTIONS = ['RAPYD(F)', 'RAPYD(C)', 'Internal'];
 
 // ---- calendar-day arithmetic (plain YYYY-MM-DD strings, no real timezone conversion) ----
 function pad(n: number): string {
@@ -350,6 +351,11 @@ function DayTable({
                   <td>
                     <span style={{ fontWeight: 600 }}>{r.ref ?? '—'}</span>
                     {r.round ? <span className="muted"> ({r.round})</span> : null}
+                    {r.type ? (
+                      <div className="muted" style={{ fontSize: 12 }}>
+                        {r.type}
+                      </div>
+                    ) : null}
                   </td>
                   <td>
                     <div style={{ fontWeight: 600 }}>{r.candidate}</div>
@@ -436,6 +442,7 @@ function AddInterviewModal({ date, onClose }: { date: string; onClose: () => voi
 
   const [ref, setRef] = useState('');
   const [round, setRound] = useState('L1');
+  const [type, setType] = useState('');
   const [candidate, setCandidate] = useState('');
   const [email, setEmail] = useState('');
   const [time, setTime] = useState('');
@@ -458,6 +465,7 @@ function AddInterviewModal({ date, onClose }: { date: string; onClose: () => voi
         date,
         session,
         time: time.trim(),
+        type: type || undefined,
         candidate: candidate.trim(),
         candidateEmail: email.trim(),
         ref: ref.trim(),
@@ -518,6 +526,17 @@ function AddInterviewModal({ date, onClose }: { date: string; onClose: () => voi
                 {ROUND_OPTIONS.map((r) => (
                   <option key={r} value={r}>
                     {r}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <label>Type</label>
+              <select value={type} onChange={(e) => setType(e.target.value)}>
+                <option value="">—</option>
+                {TYPE_OPTIONS.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
                   </option>
                 ))}
               </select>

@@ -241,6 +241,9 @@ model Interview {
   date           String // ISO YYYY-MM-DD
   session        InterviewSession
   time           String?
+  /// "RAPYD(F)" | "RAPYD(C)" | "Internal" — free text to match the HDIS Type picker
+  /// without forcing a hard enum dependency between the two modules.
+  type           String?
   candidate      String
   candidateEmail String?
   ref            String? // interview update code, e.g. 2026090701

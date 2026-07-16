@@ -68,12 +68,20 @@ describe('Interviews — default week view (T9.1)', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Add interview' });
     const candidate = within(dialog).getByPlaceholderText('Name');
     await user.type(candidate, 'Jane Doe');
+    const typeSelect = within(dialog)
+      .getAllByRole('combobox')
+      .find((el) =>
+        Array.from((el as HTMLSelectElement).options).some((o) => o.value === 'RAPYD(C)'),
+      )!;
+    await user.selectOptions(typeSelect, 'RAPYD(C)');
     await user.click(within(dialog).getByText('Save interview'));
 
     const posted = calls.find((c) => c.url.endsWith('/api/interviews') && c.method === 'POST');
     expect(posted).toBeTruthy();
-    expect((posted!.body as { candidate: string; date: string }).candidate).toBe('Jane Doe');
-    expect((posted!.body as { candidate: string; date: string }).date).toBe(TODAY);
+    const body = posted!.body as { candidate: string; date: string; type: string };
+    expect(body.candidate).toBe('Jane Doe');
+    expect(body.date).toBe(TODAY);
+    expect(body.type).toBe('RAPYD(C)');
   });
 
   it('read-only user sees no add button', async () => {
