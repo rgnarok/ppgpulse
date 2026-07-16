@@ -19,6 +19,9 @@ export interface PeriodParams {
   to?: string;
   month?: string;
   fy?: string;
+  /** Narrows the Overview endpoint's tiles/charts to one person, without
+   * changing the response shape (or the UI that renders it). */
+  consultantId?: string;
 }
 
 function qs(params: object): string {

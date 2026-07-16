@@ -163,10 +163,20 @@ export async function teamRoster(prisma: PrismaClient, user: CurrentUser) {
   });
 }
 
-/** GET /report/overview — 7 tiles + 4 chart series, scoped + period-filtered. */
-export async function overview(prisma: PrismaClient, user: CurrentUser, periodInput: PeriodInput) {
+/** GET /report/overview — 7 tiles + 4 chart series, scoped + period-filtered.
+ * When `consultantId` is given, every tile/chart is narrowed to that one person
+ * (same response shape as the team-wide view — the UI doesn't have to change). */
+export async function overview(
+  prisma: PrismaClient,
+  user: CurrentUser,
+  periodInput: PeriodInput & { consultantId?: string },
+) {
   const period = resolvePeriod(periodInput);
-  const cons = await scopedConsultants(prisma, user);
+  let cons = await scopedConsultants(prisma, user);
+  if (periodInput.consultantId) {
+    cons = cons.filter((c) => c.id === periodInput.consultantId);
+    if (!cons.length) throw new ForbiddenError('Consultant out of scope');
+  }
   const reqs = await requirementsFor(
     prisma,
     cons.map((c) => c.id),

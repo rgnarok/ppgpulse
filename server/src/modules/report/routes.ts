@@ -16,6 +16,10 @@ const periodQuery = z.object({
   fy: z.string().optional(),
 });
 
+const overviewQuery = periodQuery.extend({
+  consultantId: z.string().optional(),
+});
+
 export default async function reportRoutes(app: FastifyInstance) {
   app.get('/consultants', { preHandler: app.authenticate }, async (request) => {
     assertCan(request.currentUser, 'myteam', 'view');
@@ -29,7 +33,7 @@ export default async function reportRoutes(app: FastifyInstance) {
 
   app.get('/report/overview', { preHandler: app.authenticate }, async (request) => {
     assertCan(request.currentUser, 'home', 'view');
-    const q = periodQuery.parse(request.query);
+    const q = overviewQuery.parse(request.query);
     return overview(app.prisma, request.currentUser, q);
   });
 

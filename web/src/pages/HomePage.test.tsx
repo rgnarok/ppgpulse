@@ -32,29 +32,24 @@ const overview = {
   },
 };
 
-const emptyReport = {
+const scopedOverview = {
   period: { lo: '2025-12-01', hi: '2026-06-30' },
-  consultant: {
-    id: 'c_abha',
-    name: 'Abha Sharma',
-    email: 'a@vayuz.com',
-    pod: 'Pod A',
-    eventsHosted: 0,
-    eventsParticipated: 0,
-    insights: 0,
+  tiles: {
+    requirementsReceived: 18,
+    totalClosures: 2,
+    closureSplit: { radc: 1, radf: 1 },
+    totalRequirements: 18,
+    insightsPublished: 6,
+    eventsHosted: 4,
+    eventsParticipated: 1,
+    consultants: 1,
   },
-  stats: { reqs: 0, closed: 0, profiles: 0, shortlist: 0, onboard: 0, l1: 0, l2: 0, l3: 0 },
-  confidence: { score: 0, band: 'No data', factors: [] },
-  kpi: { val: 0, label: 'At risk' },
-  funnel: [
-    { code: 'R0', label: 'Profiles', actual: 0, target: 8 },
-    { code: 'R1', label: 'Shortlist', actual: 0, target: 3 },
-    { code: 'R2', label: 'L1', actual: 0, target: 2 },
-    { code: 'R3', label: 'L2', actual: 0, target: 1 },
-    { code: 'R4', label: 'L3', actual: 0, target: 1 },
-    { code: 'R5', label: 'Onboard', actual: 0, target: 1 },
-  ],
-  requirements: [],
+  charts: {
+    requirementsByConsultant: [{ name: 'Abha Sharma', value: 18 }],
+    statusMix: { active: 10, onHold: 6, closed: 2 },
+    closuresByConsultant: [{ name: 'Abha Sharma', value: 2 }],
+    confidenceByConsultant: [{ name: 'Abha Sharma', value: 63 }],
+  },
 };
 
 describe('Home overview (T8.2)', () => {
@@ -89,26 +84,36 @@ describe('Home overview (T8.2)', () => {
   });
 });
 
-describe('Home consultant drilldown + empty state (T8.3)', () => {
-  it('shows the empty-period state when a consultant has no requirements', async () => {
-    mockFetch([
+describe('Home consultant filter (T8.3)', () => {
+  const consultantsList = [
+    {
+      id: 'c_abha',
+      userId: 'u_abha',
+      name: 'Abha Sharma',
+      email: 'a@vayuz.com',
+      pod: 'Pod A',
+      team: 'Pod A',
+      eventsHosted: 4,
+      eventsParticipated: 1,
+      insights: 6,
+    },
+  ];
+
+  it('scopes the same Overview tiles/charts to one person instead of showing a different page', async () => {
+    const { calls } = mockFetch([
       jsonRoute('/api/me', superAdminMe),
-      jsonRoute('/api/consultants', [
-        {
-          id: 'c_abha',
-          userId: 'u_abha',
-          name: 'Abha Sharma',
-          email: 'a@vayuz.com',
-          pod: 'Pod A',
-          team: 'Pod A',
-          eventsHosted: 0,
-          eventsParticipated: 0,
-          insights: 0,
-        },
-      ]),
-      jsonRoute('/api/report/consultant/c_abha', emptyReport),
+      jsonRoute('/api/consultants', consultantsList),
+      jsonRoute('/api/report/overview', scopedOverview),
+      jsonRoute('/api/interviews', { month: '2026-06', counts: {}, total: 0 }),
     ]);
     renderApp(<HomePage />, { route: '/?consultant=c_abha' });
-    expect(await screen.findByText('No requirements in this period')).toBeInTheDocument();
+
+    // Same tile labels as the team-wide view — no separate report/layout.
+    expect(await screen.findByText('Requirements Received')).toBeInTheDocument();
+    expect(screen.getByText('Total Closures')).toBeInTheDocument();
+    expect(screen.getByText(/Showing Abha Sharma.?s data only/)).toBeInTheDocument();
+
+    const overviewCall = calls.find((c) => c.url.includes('/api/report/overview'));
+    expect(overviewCall?.url).toContain('consultantId=c_abha');
   });
 });
