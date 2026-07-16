@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams, useSearchParams } from 'react-rout
 import { AppShell } from '../components/AppShell';
 import { Card, SectionTitle, Pill, Empty, Btn } from '../components/ui';
 import { SearchableSelect } from '../components/SearchableSelect';
+import { MultiSelect } from '../components/MultiSelect';
 import { Pagination } from '../components/Pagination';
 import { useAuth } from '../lib/auth';
 import { can } from '../lib/permissions';
@@ -12,6 +13,7 @@ import {
   useHdisRecord,
   useHdisActivity,
   useClients,
+  useConsultants,
   useApiMutation,
   useSetHdisLink,
 } from '../lib/hooks';
@@ -370,6 +372,8 @@ function HdisFormModal({
 }) {
   const { data: clientRows = [] } = useClients();
   const clientNames = useMemo(() => clientRows.map((c) => c.name), [clientRows]);
+  const { data: consultants = [] } = useConsultants();
+  const ppgNames = useMemo(() => distinctSorted(consultants.map((c) => c.name)), [consultants]);
 
   const create = useApiMutation(
     (body: Record<string, unknown>) => api<HdisRecord>('/hdis', { method: 'POST', body }),
@@ -394,7 +398,6 @@ function HdisFormModal({
     jdLink: initial?.jdLink ?? '',
   }));
   const [owners, setOwners] = useState<string[]>(initial?.owners ?? []);
-  const [ownerInput, setOwnerInput] = useState('');
   const reasonOptions = STATUS_REASON_OPTIONS[form.status] ?? [];
   const set = (k: string, v: string) =>
     setForm((f) => ({
@@ -406,12 +409,6 @@ function HdisFormModal({
         ? { statusReason: '' }
         : {}),
     }));
-
-  function addOwner() {
-    const v = ownerInput.trim();
-    if (v && !owners.includes(v)) setOwners([...owners, v]);
-    setOwnerInput('');
-  }
 
   function submit() {
     if (mode === 'edit') {
@@ -524,22 +521,14 @@ function HdisFormModal({
             />
           </div>
           <div className="field full">
-            <label>Owners</label>
-            <div className="ms-box">
-              {owners.map((o) => (
-                <span className="ms-chip" key={o}>
-                  {o}
-                  <button onClick={() => setOwners(owners.filter((x) => x !== o))}>×</button>
-                </span>
-              ))}
-              <input
-                style={{ border: 'none', flex: 1, minWidth: 120 }}
-                value={ownerInput}
-                onChange={(e) => setOwnerInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addOwner())}
-                placeholder="Add owner + Enter"
-              />
-            </div>
+            <label htmlFor="hdis-form-ppg">PPG</label>
+            <MultiSelect
+              id="hdis-form-ppg"
+              values={owners}
+              onChange={setOwners}
+              options={ppgNames}
+              placeholder="Add PPG team member…"
+            />
           </div>
           <div className="field full">
             <label>Remarks</label>

@@ -56,6 +56,31 @@ const clients = [
   { id: 'c2', name: 'Acme Corp', createdAt: '2026-06-01T00:00:00.000Z' },
 ];
 
+const consultants = [
+  {
+    id: 'c_abha',
+    userId: 'u_abha',
+    name: 'Abha Sharma',
+    email: 'a@vayuz.com',
+    pod: 'Pod A',
+    team: 'Pod A',
+    eventsHosted: 0,
+    eventsParticipated: 0,
+    insights: 0,
+  },
+  {
+    id: 'c_priya',
+    userId: 'u_priya',
+    name: 'Priya Pal',
+    email: 'p@vayuz.com',
+    pod: 'Pod B',
+    team: 'Pod B',
+    eventsHosted: 0,
+    eventsParticipated: 0,
+    insights: 0,
+  },
+];
+
 function routesFor(role: typeof superAdminMe, rows: HdisRecord[] = [record]) {
   return [
     jsonRoute('/api/me', role),
@@ -63,6 +88,7 @@ function routesFor(role: typeof superAdminMe, rows: HdisRecord[] = [record]) {
     jsonRoute('/api/hdis/TST_QA_20260601', record),
     jsonRoute('/api/hdis', rows),
     jsonRoute('/api/clients', clients),
+    jsonRoute('/api/consultants', consultants),
   ];
 }
 
@@ -92,8 +118,8 @@ describe('HDIS list (T10.1)', () => {
   });
 });
 
-describe('HDIS form owners multiselect (T10.2)', () => {
-  it('adds and removes owner chips', async () => {
+describe('HDIS form PPG multiselect (T10.2)', () => {
+  it('picks a PPG team member from the dropdown and can remove the chip', async () => {
     mockFetch(routesFor(superAdminMe));
     renderApp(
       <Routes>
@@ -103,12 +129,15 @@ describe('HDIS form owners multiselect (T10.2)', () => {
     );
     await screen.findByText('QA Engineer');
     await userEvent.click(screen.getByText('+ Add record'));
-    const input = await screen.findByPlaceholderText('Add owner + Enter');
-    await userEvent.type(input, 'Priya Pal{enter}');
-    expect(screen.getByText('Priya Pal')).toBeInTheDocument();
+    const dialog = await screen.findByRole('dialog');
+    const input = await within(dialog).findByPlaceholderText('Add PPG team member…');
+    // Only PPG team names sourced from /api/consultants are selectable — no free text.
+    await userEvent.click(input);
+    await userEvent.click(await within(dialog).findByText('Priya Pal'));
+    expect(within(dialog).getByText('Priya Pal')).toBeInTheDocument();
     // remove the chip
-    await userEvent.click(screen.getByText('×'));
-    expect(screen.queryByText('Priya Pal')).not.toBeInTheDocument();
+    await userEvent.click(within(dialog).getByLabelText('Remove Priya Pal'));
+    expect(within(dialog).queryByText('Priya Pal')).not.toBeInTheDocument();
   });
 });
 
