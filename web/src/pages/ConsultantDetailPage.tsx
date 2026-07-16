@@ -1,0 +1,334 @@
+import { useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { AppShell } from '../components/AppShell';
+import { Card, SectionTitle, Pill, KpiCard, RingGauge } from '../components/ui';
+import { DonutChart, VBarChart } from '../components/charts';
+import { useConsultantReport, type PeriodParams } from '../lib/hooks';
+import { formatDate, formatMonth } from '../lib/format';
+import type { ConsultantReport } from '../lib/types';
+
+function ConfidenceBanner({ report }: { report: ConsultantReport }) {
+  const c = report.consultant;
+  return (
+    <Card>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 8,
+        }}
+      >
+        <SectionTitle color="var(--violet)">Overall Confidence — {c.name}</SectionTitle>
+        <div className="muted" style={{ fontSize: 12.5 }}>
+          {c.role} · KPI {report.kpi.label} · {report.kpi.val}/4
+        </div>
+      </div>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 30,
+          flexWrap: 'wrap',
+          marginTop: 20,
+        }}
+      >
+        <div style={{ textAlign: 'center' }}>
+          <RingGauge value={report.confidence.score} size={104} thickness={10} />
+          <div className="muted" style={{ fontSize: 12, fontWeight: 700, marginTop: 8 }}>
+            {report.confidence.band}
+          </div>
+        </div>
+        {report.confidence.factors.map(([label, val]) => (
+          <div key={label} style={{ textAlign: 'center' }}>
+            <RingGauge value={val} size={72} thickness={7} />
+            <div className="muted" style={{ fontSize: 11.5, marginTop: 6, maxWidth: 96 }}>
+              {label}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function KpiTilesRow({ report }: { report: ConsultantReport }) {
+  const t = report.stats;
+  const c = report.consultant;
+  return (
+    <>
+      <div className="grid g-4" style={{ marginTop: 16, marginBottom: 16 }}>
+        <KpiCard
+          tone="blue"
+          icon="▤"
+          label="Total Requirements Received"
+          value={t.reqs}
+          sub="raised in this period"
+        />
+        <KpiCard
+          tone="sky"
+          icon="✓"
+          label="Total Closures Achieved"
+          value={t.closed}
+          sub={`${report.closureSplit.radc} RADC · ${report.closureSplit.radf} RADF`}
+        />
+        <KpiCard tone="sand" icon="◔" label="Attendance" value="—" sub="not captured in Q1 sheet" />
+        <KpiCard
+          tone="gold"
+          icon="◆"
+          label="Events Hosted"
+          value={c.eventsHosted}
+          sub="sessions led"
+        />
+      </div>
+      <div className="grid g-3" style={{ marginBottom: 16 }}>
+        <KpiCard
+          tone="green"
+          icon="◇"
+          label="Events Participated"
+          value={c.eventsParticipated}
+          sub="attended"
+        />
+        <KpiCard
+          tone="violet"
+          icon="✎"
+          label="Insights Published"
+          value={c.insights}
+          sub="articles / notes"
+        />
+        <KpiCard
+          tone="teal"
+          icon="★"
+          label="KPI Rating"
+          value={`${report.kpi.label} · ${report.kpi.val}`}
+          sub={`${report.kpi.val}/4`}
+        />
+      </div>
+    </>
+  );
+}
+
+/** Same [Active,OnHold,Closed] rule used server-side (metrics.ts's statusMix /
+ * isClosed), just computed client-side over the already-fetched requirements list. */
+function statusMixOf(requirements: ConsultantReport['requirements']) {
+  let active = 0;
+  let onHold = 0;
+  let closed = 0;
+  for (const r of requirements) {
+    const isClosedRow = r.onboard > 0 || r.status === 'Closed';
+    if (isClosedRow) closed++;
+    else if (r.status === 'Active') active++;
+    else if (r.status === 'On Hold') onHold++;
+  }
+  return { active, onHold, closed };
+}
+
+function monthlyCountsOf(requirements: ConsultantReport['requirements']) {
+  const map = new Map<string, number>();
+  for (const r of requirements) {
+    const m = r.reqDate.slice(0, 7);
+    map.set(m, (map.get(m) ?? 0) + 1);
+  }
+  return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
+}
+
+function ChartsRow({ report }: { report: ConsultantReport }) {
+  const mix = useMemo(() => statusMixOf(report.requirements), [report.requirements]);
+  const byMonth = useMemo(() => monthlyCountsOf(report.requirements), [report.requirements]);
+  const max = Math.max(1, ...report.funnel.map((f) => f.target));
+
+  return (
+    <div className="grid g-3" style={{ marginBottom: 16 }}>
+      <div className="chart-card tint-green">
+        <div className="chart-head">
+          <span className="ci" style={{ background: '#D9F0E3' }}>
+            ✓
+          </span>
+          <h3>Funnel — achieved vs KPI target</h3>
+        </div>
+        <div className="funnel" style={{ marginTop: 8 }}>
+          {report.funnel.map((f) => (
+            <div className="fn-row" key={f.code}>
+              <div className="fn-side">
+                <b>{f.code}</b>
+                {f.label}
+              </div>
+              <div className="fn-val">{f.actual}</div>
+              <div className="fn-track">
+                <div className="fn-ghost" style={{ width: '100%' }} />
+                <div
+                  className="fn-bar"
+                  style={{ width: `${Math.min(100, (f.actual / max) * 100)}%` }}
+                />
+              </div>
+              <div className="fn-pct">{f.target}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="chart-card">
+        <div className="chart-head">
+          <span className="ci" style={{ background: '#EBEEFE' }}>
+            ◑
+          </span>
+          <h3>Requirement status mix</h3>
+        </div>
+        <div className="chart-box sm">
+          <DonutChart
+            labels={['Active', 'On Hold', 'Closed']}
+            values={[mix.active, mix.onHold, mix.closed]}
+          />
+        </div>
+      </div>
+      <div className="chart-card">
+        <div className="chart-head">
+          <span className="ci" style={{ background: '#F3EAD0' }}>
+            ▦
+          </span>
+          <h3>Requirements by month</h3>
+        </div>
+        <div className="chart-box sm">
+          <VBarChart
+            labels={byMonth.map(([m]) => formatMonth(m))}
+            values={byMonth.map(([, v]) => v)}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RequirementsTable({ report }: { report: ConsultantReport }) {
+  return (
+    <Card pad={false}>
+      <div style={{ padding: '16px 20px 0' }}>
+        <SectionTitle>Requirements ({report.requirements.length})</SectionTitle>
+      </div>
+      <div className="tbl-wrap">
+        <table className="tbl hover">
+          <thead>
+            <tr>
+              <th>Requirement (JD ID &amp; title)</th>
+              <th>Type</th>
+              <th>JD link</th>
+              <th>Positions</th>
+              <th>Date</th>
+              <th>R0 Profiles</th>
+              <th>R1 Shortlist</th>
+              <th>R2 L1</th>
+              <th>R3 L2</th>
+              <th>R4 L3</th>
+              <th>R5 Onboard</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {report.requirements.map((r) => (
+              <tr key={r.id}>
+                <td>
+                  <div className="mono" style={{ fontWeight: 700 }}>
+                    {r.jdId ?? r.code}
+                  </div>
+                  <div style={{ fontSize: 12.5, marginTop: 2 }}>{r.title}</div>
+                  <div className="muted" style={{ fontSize: 11.5, marginTop: 1 }}>
+                    {r.client}
+                  </div>
+                </td>
+                <td>{r.type ? <Pill>{r.type}</Pill> : <span className="muted">—</span>}</td>
+                <td>
+                  {r.jdLink ? (
+                    <a className="lnk" href={r.jdLink} target="_blank" rel="noreferrer">
+                      JD ↗
+                    </a>
+                  ) : (
+                    <span className="muted">—</span>
+                  )}
+                </td>
+                <td className="mono">1</td>
+                <td className="muted">{formatDate(r.reqDate)}</td>
+                <td className="mono">{r.profiles}</td>
+                <td className="mono">{r.shortlist}</td>
+                <td className="mono">{r.l1}</td>
+                <td className="mono">{r.l2}</td>
+                <td className="mono">{r.l3}</td>
+                <td className="mono">{r.onboard}</td>
+                <td>
+                  <Pill>{r.status}</Pill>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
+export default function ConsultantDetailPage() {
+  const { consultantId } = useParams();
+  const navigate = useNavigate();
+  const [period, setPeriod] = useState<PeriodParams>({});
+  const { data: report, isLoading } = useConsultantReport(consultantId ?? null, period);
+
+  const set = (patch: Partial<PeriodParams>) => setPeriod({ ...period, ...patch });
+
+  return (
+    <AppShell
+      title={report?.consultant.name ?? 'Team member'}
+      subtitle={report ? `${report.consultant.role} · ${report.consultant.pod}` : undefined}
+    >
+      <button type="button" className="lnk" onClick={() => navigate('/team')}>
+        ← Back to team
+      </button>
+
+      <div className="card pad" style={{ marginTop: 12, marginBottom: 16 }}>
+        <div className="filterbar">
+          <div className="field">
+            <label htmlFor="cd-month">Month</label>
+            <input
+              id="cd-month"
+              type="month"
+              value={period.month ?? ''}
+              onChange={(e) =>
+                set({ month: e.target.value || undefined, from: undefined, to: undefined })
+              }
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="cd-from">From</label>
+            <input
+              id="cd-from"
+              type="date"
+              value={period.from ?? ''}
+              onChange={(e) => set({ from: e.target.value || undefined, month: undefined })}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="cd-to">To</label>
+            <input
+              id="cd-to"
+              type="date"
+              value={period.to ?? ''}
+              onChange={(e) => set({ to: e.target.value || undefined, month: undefined })}
+            />
+          </div>
+          <button type="button" className="btn btn-gho" onClick={() => setPeriod({})}>
+            Reset
+          </button>
+        </div>
+      </div>
+
+      {isLoading || !report ? (
+        <Card>Loading…</Card>
+      ) : (
+        <>
+          <ConfidenceBanner report={report} />
+          <KpiTilesRow report={report} />
+          <ChartsRow report={report} />
+          <RequirementsTable report={report} />
+        </>
+      )}
+    </AppShell>
+  );
+}

@@ -23,6 +23,52 @@ export function KpiCard({
   );
 }
 
+/** A circular percentage gauge (0-100) drawn with a conic-gradient ring — colored
+ * red/amber/green by value band, with the number centered inside. */
+export function RingGauge({
+  value,
+  size = 80,
+  thickness = 8,
+}: {
+  value: number;
+  size?: number;
+  thickness?: number;
+}) {
+  const pct = Math.max(0, Math.min(100, value));
+  const color = pct < 40 ? 'var(--red)' : pct < 70 ? 'var(--amber)' : 'var(--green)';
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        borderRadius: '50%',
+        background: `conic-gradient(${color} ${pct * 3.6}deg, var(--border) 0deg)`,
+        display: 'grid',
+        placeItems: 'center',
+        position: 'relative',
+      }}
+    >
+      <div
+        style={{
+          position: 'absolute',
+          inset: thickness,
+          background: '#fff',
+          borderRadius: '50%',
+          display: 'grid',
+          placeItems: 'center',
+        }}
+      >
+        <span
+          className="mono"
+          style={{ fontWeight: 800, fontSize: size >= 100 ? 26 : size >= 80 ? 18 : 14, color }}
+        >
+          {Math.round(value)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 /** A plain KPI card with a headline number plus an even split of sub-metrics
  * below a divider (e.g. "Total Requirements" broken into RADC / RADF). */
 export function SplitStatCard({

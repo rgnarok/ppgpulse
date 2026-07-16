@@ -60,6 +60,7 @@ export interface ConsultantReport {
     name: string;
     email: string;
     pod: string;
+    role: string;
     eventsHosted: number;
     eventsParticipated: number;
     insights: number;
@@ -77,6 +78,7 @@ export interface ConsultantReport {
   confidence: { score: number; band: string; factors: [string, number][] };
   kpi: { val: number; label: string };
   funnel: { code: string; label: string; actual: number; target: number }[];
+  closureSplit: { radc: number; radf: number };
   requirements: RequirementRow[];
 }
 
@@ -94,6 +96,25 @@ export interface RequirementRow {
   l2: number;
   l3: number;
   onboard: number;
+  type: string | null;
+  jdLink: string | null;
+}
+
+/** One row of the org-wide "PPG Team Roster" table — an all-time snapshot, not
+ * period-filtered. */
+export interface TeamRosterRow {
+  id: string;
+  name: string;
+  role: string;
+  activeReqs: number;
+  load: 'LIGHT' | 'OK' | 'OVERLOAD';
+  onboardMtd: number;
+  onboardTarget: number;
+  profilesWk: number;
+  profilesTarget: number;
+  hdisToday: boolean;
+  kpiVal: number;
+  kpiBand: 'ME' | 'SME' | 'NI';
 }
 
 export interface HdisRecord {

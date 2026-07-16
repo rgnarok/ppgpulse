@@ -10,6 +10,7 @@ import type {
   RequirementRow,
   RoleRow,
   ScopedConsultant,
+  TeamRosterRow,
   UserRow,
 } from './types';
 
@@ -32,6 +33,14 @@ export function useConsultants() {
   return useQuery({
     queryKey: ['consultants'],
     queryFn: () => api<ScopedConsultant[]>('/consultants'),
+  });
+}
+
+/** The org-wide (or pod-scoped) "PPG Team Roster" table — an all-time snapshot. */
+export function useTeamRoster() {
+  return useQuery({
+    queryKey: ['team-roster'],
+    queryFn: () => api<TeamRosterRow[]>('/report/roster'),
   });
 }
 

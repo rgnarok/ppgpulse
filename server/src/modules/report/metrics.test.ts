@@ -7,6 +7,8 @@ import {
   statusMix,
   closureCats,
   isClosed,
+  loadBucket,
+  kpiBand,
   type ReqLite,
 } from './metrics.js';
 
@@ -98,6 +100,28 @@ describe('funnel', () => {
     expect(f.map((s) => s.code)).toEqual(['R0', 'R1', 'R2', 'R3', 'R4', 'R5']);
     expect(f[0]).toEqual({ code: 'R0', label: 'Profiles', actual: 10, target: 8 });
     expect(f[5]).toEqual({ code: 'R5', label: 'Onboard', actual: 1, target: 1 });
+  });
+});
+
+describe('loadBucket', () => {
+  it('buckets active-requirement counts into LIGHT/OK/OVERLOAD', () => {
+    expect(loadBucket(0)).toBe('LIGHT');
+    expect(loadBucket(4)).toBe('LIGHT');
+    expect(loadBucket(5)).toBe('OK');
+    expect(loadBucket(11)).toBe('OK');
+    expect(loadBucket(12)).toBe('OVERLOAD');
+    expect(loadBucket(20)).toBe('OVERLOAD');
+  });
+});
+
+describe('kpiBand', () => {
+  it('bands the 0-4 kpiRating score into ME/SME/NI', () => {
+    expect(kpiBand(3.4)).toBe('ME');
+    expect(kpiBand(3)).toBe('ME');
+    expect(kpiBand(2.9)).toBe('SME');
+    expect(kpiBand(2.5)).toBe('SME');
+    expect(kpiBand(2.4)).toBe('NI');
+    expect(kpiBand(0)).toBe('NI');
   });
 });
 

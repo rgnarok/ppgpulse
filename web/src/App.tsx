@@ -7,6 +7,7 @@ import HomePage from './pages/HomePage';
 import InterviewsPage from './pages/InterviewsPage';
 import HdisPage from './pages/HdisPage';
 import MyTeamPage from './pages/MyTeamPage';
+import ConsultantDetailPage from './pages/ConsultantDetailPage';
 import ProfilePage from './pages/ProfilePage';
 import UsersPage from './pages/admin/UsersPage';
 import RolesPage from './pages/admin/RolesPage';
@@ -85,6 +86,14 @@ export default function App() {
         element={
           <Protected section="myteam">
             <MyTeamPage />
+          </Protected>
+        }
+      />
+      <Route
+        path="/team/:consultantId"
+        element={
+          <Protected section="myteam">
+            <ConsultantDetailPage />
           </Protected>
         }
       />

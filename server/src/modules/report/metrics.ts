@@ -122,6 +122,20 @@ export function statusMix(reqs: ReqLite[]): { active: number; onHold: number; cl
   return { active, onHold, closed };
 }
 
+/** Active-requirement-count bucket shown on the team roster's "Load" column. */
+export function loadBucket(activeReqs: number): 'LIGHT' | 'OK' | 'OVERLOAD' {
+  if (activeReqs <= 4) return 'LIGHT';
+  if (activeReqs >= 12) return 'OVERLOAD';
+  return 'OK';
+}
+
+/** KPI-rating badge shown next to the numeric score (0–4 scale from kpiRating()). */
+export function kpiBand(val: number): 'ME' | 'SME' | 'NI' {
+  if (val >= 3) return 'ME';
+  if (val >= 2.5) return 'SME';
+  return 'NI';
+}
+
 /** RADC/RADF split of closed requirements via HDIS category. */
 export function closureCats(
   reqs: ReqLite[],

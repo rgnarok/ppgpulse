@@ -1,7 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { assertCan } from '../rbac/index.js';
-import { listScopedConsultants, overview, consultantReport, requirementDetail } from './service.js';
+import {
+  listScopedConsultants,
+  overview,
+  consultantReport,
+  requirementDetail,
+  teamRoster,
+} from './service.js';
 
 const periodQuery = z.object({
   from: z.string().optional(),
@@ -14,6 +20,11 @@ export default async function reportRoutes(app: FastifyInstance) {
   app.get('/consultants', { preHandler: app.authenticate }, async (request) => {
     assertCan(request.currentUser, 'myteam', 'view');
     return listScopedConsultants(app.prisma, request.currentUser);
+  });
+
+  app.get('/report/roster', { preHandler: app.authenticate }, async (request) => {
+    assertCan(request.currentUser, 'myteam', 'view');
+    return teamRoster(app.prisma, request.currentUser);
   });
 
   app.get('/report/overview', { preHandler: app.authenticate }, async (request) => {

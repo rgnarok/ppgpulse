@@ -9,6 +9,8 @@ import {
   funnel,
   statusMix,
   closureCats,
+  loadBucket,
+  kpiBand,
   type ReqLite,
 } from './metrics.js';
 
@@ -81,6 +83,86 @@ export async function listScopedConsultants(prisma: PrismaClient, user: CurrentU
   return scopedConsultants(prisma, user);
 }
 
+/** GET /report/roster — one row per scoped consultant, powering the "PPG Team Roster"
+ * table (org scope sees everyone, team scope sees their pod). All-time snapshot —
+ * this table isn't period-filtered, it's a live "how's everyone doing right now" view. */
+export async function teamRoster(prisma: PrismaClient, user: CurrentUser) {
+  const directory = await loadDirectory(prisma);
+  const names = scopeNames(user, directory);
+  const consultants = await prisma.consultant.findMany({
+    include: { user: { include: { role: true } } },
+  });
+  const scoped = consultants
+    .filter((c) => names.has(c.user.name))
+    .sort((a, b) => a.user.name.localeCompare(b.user.name));
+  if (!scoped.length) return [];
+
+  const ids = scoped.map((c) => c.id);
+  const allReqs = await prisma.requirement.findMany({ where: { ownerId: { in: ids } } });
+  const reqsByOwner = new Map<string, typeof allReqs>();
+  for (const id of ids) reqsByOwner.set(id, []);
+  for (const r of allReqs) reqsByOwner.get(r.ownerId)?.push(r);
+
+  const scopedNames = scoped.map((c) => c.user.name);
+  const hdisOwners = await prisma.hdisOwner.findMany({
+    where: { consultantOrName: { in: scopedNames } },
+    include: { hdis: { select: { createdAt: true, updatedAt: true } } },
+  });
+  const today = new Date().toISOString().slice(0, 10);
+  const touchedTodayByName = new Set(
+    hdisOwners
+      .filter(
+        (o) =>
+          o.hdis.createdAt.toISOString().slice(0, 10) === today ||
+          o.hdis.updatedAt.toISOString().slice(0, 10) === today,
+      )
+      .map((o) => o.consultantOrName),
+  );
+
+  const monthPrefix = today.slice(0, 7);
+  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+
+  return scoped.map((c) => {
+    const reqs = reqsByOwner.get(c.id) ?? [];
+    const st = personStats(
+      reqs.map((r) => ({
+        ownerName: c.user.name,
+        reqDate: r.reqDate,
+        status: r.status,
+        profiles: r.profiles,
+        shortlist: r.shortlist,
+        l1: r.l1,
+        l2: r.l2,
+        l3: r.l3,
+        onboard: r.onboard,
+        jdId: r.jdId,
+      })),
+    );
+    const kpi = kpiRating(st);
+    const activeReqs = reqs.filter((r) => r.status === 'Active').length;
+    const onboardMtd = reqs
+      .filter((r) => r.reqDate.startsWith(monthPrefix))
+      .reduce((s, r) => s + r.onboard, 0);
+    const profilesWk = reqs
+      .filter((r) => r.reqDate >= weekAgo && r.reqDate <= today)
+      .reduce((s, r) => s + r.profiles, 0);
+    return {
+      id: c.id,
+      name: c.user.name,
+      role: c.user.role.label,
+      activeReqs,
+      load: loadBucket(activeReqs),
+      onboardMtd,
+      onboardTarget: 2,
+      profilesWk,
+      profilesTarget: 60,
+      hdisToday: touchedTodayByName.has(c.user.name),
+      kpiVal: kpi.val,
+      kpiBand: kpiBand(kpi.val),
+    };
+  });
+}
+
 /** GET /report/overview — 7 tiles + 4 chart series, scoped + period-filtered. */
 export async function overview(prisma: PrismaClient, user: CurrentUser, periodInput: PeriodInput) {
   const period = resolvePeriod(periodInput);
@@ -140,7 +222,7 @@ export async function consultantReport(
   const period = resolvePeriod(periodInput);
   const target = await prisma.consultant.findUnique({
     where: { id: consultantId },
-    include: { user: true },
+    include: { user: { include: { role: true } } },
   });
   if (!target) throw new NotFoundError('Consultant not found');
 
@@ -151,6 +233,7 @@ export async function consultantReport(
   const reqRows = await prisma.requirement.findMany({
     where: { ownerId: consultantId, reqDate: { gte: period.lo, lte: period.hi } },
     orderBy: { reqDate: 'desc' },
+    include: { hdis: { select: { type: true, jdLink: true } } },
   });
   const list: ReqLite[] = reqRows.map((r) => ({
     ownerName: target.user.name,
@@ -165,6 +248,7 @@ export async function consultantReport(
     jdId: r.jdId,
   }));
   const st = personStats(list);
+  const cats = await catByJd(prisma);
 
   return {
     period,
@@ -173,6 +257,7 @@ export async function consultantReport(
       name: target.user.name,
       email: target.user.email,
       pod: target.pod,
+      role: target.user.role.label,
       eventsHosted: target.eventsHosted,
       eventsParticipated: target.eventsParticipated,
       insights: target.insights,
@@ -181,6 +266,7 @@ export async function consultantReport(
     confidence: confidence(st),
     kpi: kpiRating(st),
     funnel: funnel(st),
+    closureSplit: closureCats(list, cats),
     requirements: reqRows.map((r) => ({
       id: r.id,
       code: r.code,
@@ -195,6 +281,8 @@ export async function consultantReport(
       l2: r.l2,
       l3: r.l3,
       onboard: r.onboard,
+      type: r.hdis?.type ?? null,
+      jdLink: r.hdis?.jdLink ?? null,
     })),
   };
 }

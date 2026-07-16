@@ -35,6 +35,35 @@ export function HBarChart({ labels, values }: { labels: string[]; values: number
   );
 }
 
+/** Vertical column chart — used for "requirements by month" style trends. */
+export function VBarChart({
+  labels,
+  values,
+  color = '#C99A2E',
+}: {
+  labels: string[];
+  values: number[];
+  color?: string;
+}) {
+  return (
+    <Bar
+      data={{
+        labels,
+        datasets: [{ data: values, backgroundColor: color, borderRadius: 6, barThickness: 24 }],
+      }}
+      options={{
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { beginAtZero: true, grid: { color: '#EEF1F6' }, ticks: { precision: 0 } },
+          x: { grid: { display: false } },
+        },
+      }}
+    />
+  );
+}
+
 export function DonutChart({ labels, values }: { labels: string[]; values: number[] }) {
   return (
     <Doughnut
