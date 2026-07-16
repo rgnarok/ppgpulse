@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Routes, Route } from 'react-router-dom';
 import { describe, it, expect, afterEach, vi } from 'vitest';
@@ -20,6 +20,8 @@ const record: HdisRecord = {
   type: 'RADC',
   openings: 1,
   status: 'Active',
+  statusReason: null,
+  remarks: null,
   priority: 'NA',
   confidence: 'Medium',
   reqDate: '2026-06-01',
@@ -267,6 +269,102 @@ describe('HDIS edit flow', () => {
     );
     await screen.findByText('QA Engineer');
     expect(screen.getByText('Edit')).toBeInTheDocument();
+  });
+});
+
+describe('HDIS status reason + remarks', () => {
+  it('shows a status-reason select only for On Hold / Closed, with the right options', async () => {
+    mockFetch(routesFor(superAdminMe));
+    renderApp(
+      <Routes>
+        <Route path="/hdis" element={<HdisPage />} />
+      </Routes>,
+      { route: '/hdis' },
+    );
+    await screen.findByText('QA Engineer');
+    await userEvent.click(screen.getByText('+ Add record'));
+    expect(screen.queryByText('Status reason')).not.toBeInTheDocument();
+
+    const dialog = screen.getByRole('dialog');
+    const statusSelect = within(dialog)
+      .getAllByRole('combobox')
+      .find((el) =>
+        Array.from((el as HTMLSelectElement).options).some((o) => o.value === 'On Hold'),
+      )!;
+    await userEvent.selectOptions(statusSelect, 'On Hold');
+    expect(screen.getByText('Status reason')).toBeInTheDocument();
+    expect(screen.getByText('Hold By client')).toBeInTheDocument();
+    expect(screen.getByText('Hold By VAYUZ')).toBeInTheDocument();
+
+    await userEvent.selectOptions(statusSelect, 'Closed');
+    expect(screen.getByText('Closed by VAYUZ')).toBeInTheDocument();
+    expect(screen.queryByText('Hold By client')).not.toBeInTheDocument();
+
+    await userEvent.selectOptions(statusSelect, 'Active');
+    expect(screen.queryByText('Status reason')).not.toBeInTheDocument();
+  });
+
+  it('submits the chosen status reason and remarks on create', async () => {
+    const { calls } = mockFetch([
+      ...routesFor(superAdminMe),
+      jsonRoute('/api/hdis', record, { method: 'POST' }),
+    ]);
+    renderApp(
+      <Routes>
+        <Route path="/hdis" element={<HdisPage />} />
+      </Routes>,
+      { route: '/hdis' },
+    );
+    await screen.findByText('QA Engineer');
+    await userEvent.click(screen.getByText('+ Add record'));
+
+    await userEvent.type(screen.getByPlaceholderText('VAY_XX_20260601'), 'NEW_JD_20260701');
+    const dialog = screen.getByRole('dialog');
+    const statusSelect = within(dialog)
+      .getAllByRole('combobox')
+      .find((el) =>
+        Array.from((el as HTMLSelectElement).options).some((o) => o.value === 'On Hold'),
+      )!;
+    await userEvent.selectOptions(statusSelect, 'On Hold');
+    await userEvent.selectOptions(
+      within(dialog).getByDisplayValue('Select a reason…'),
+      'Hold By client',
+    );
+    await userEvent.type(
+      screen.getByPlaceholderText('Optional context for this record — shown on the detail page'),
+      'Client paused hiring for Q3.',
+    );
+    await userEvent.click(screen.getByText('Save record'));
+
+    const posted = calls.find((c) => c.url.endsWith('/api/hdis') && c.method === 'POST');
+    expect(posted).toBeTruthy();
+    const body = posted!.body as { statusReason: string; remarks: string };
+    expect(body.statusReason).toBe('Hold By client');
+    expect(body.remarks).toBe('Client paused hiring for Q3.');
+  });
+
+  it('shows remarks on the detail page when present', async () => {
+    const withRemarks = {
+      ...record,
+      statusReason: 'Hold By VAYUZ',
+      remarks: 'Waiting on budget approval.',
+    };
+    mockFetch([
+      jsonRoute('/api/me', superAdminMe),
+      jsonRoute('/api/hdis/TST_QA_20260601/activity', []),
+      jsonRoute('/api/hdis/TST_QA_20260601', withRemarks),
+      jsonRoute('/api/hdis', [withRemarks]),
+      jsonRoute('/api/clients', clients),
+    ]);
+    renderApp(
+      <Routes>
+        <Route path="/hdis/:jdId" element={<HdisPage />} />
+      </Routes>,
+      { route: '/hdis/TST_QA_20260601' },
+    );
+    await screen.findByText('Activity log');
+    expect(screen.getByText(/Hold By VAYUZ/)).toBeInTheDocument();
+    expect(screen.getByText('Waiting on budget approval.')).toBeInTheDocument();
   });
 });
 

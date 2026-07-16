@@ -137,6 +137,11 @@ model Hdis {
   type         HdisType
   openings     Int              @default(1)
   status       String
+  /// Free-text reason shown alongside "On Hold"/"Closed" statuses — e.g. "Hold By
+  /// client", "Closed by VAYUZ". Not meaningful while status is "Active".
+  statusReason String?
+  /// Optional freeform note captured with the status, shown on the record detail page.
+  remarks      String?
   priority     String           @default("NA")
   confidence   String           @default("Medium")
   reqDate      String // ISO YYYY-MM-DD

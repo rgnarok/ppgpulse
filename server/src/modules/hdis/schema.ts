@@ -18,6 +18,8 @@ export const createHdisSchema = z.object({
   type: hdisTypeEnum,
   openings: z.number().int().positive().default(1),
   status: z.enum(['Active', 'On Hold', 'Closed']),
+  statusReason: z.string().min(1).nullable().optional(),
+  remarks: z.string().nullable().optional(),
   priority: z.string().default('NA'),
   confidence: z.string().default('Medium'),
   reqDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -32,6 +34,8 @@ export const updateHdisSchema = z
     type: hdisTypeEnum.optional(),
     openings: z.number().int().positive().optional(),
     status: z.enum(['Active', 'On Hold', 'Closed']).optional(),
+    statusReason: z.string().min(1).nullable().optional(),
+    remarks: z.string().nullable().optional(),
     priority: z.string().optional(),
     confidence: z.string().optional(),
     reqDate: z

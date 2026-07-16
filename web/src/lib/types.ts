@@ -103,6 +103,8 @@ export interface HdisRecord {
   type: 'RADC' | 'RADF' | 'Internal';
   openings: number;
   status: string;
+  statusReason: string | null;
+  remarks: string | null;
   priority: string;
   confidence: string;
   reqDate: string;

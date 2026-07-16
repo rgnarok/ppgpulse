@@ -22,6 +22,12 @@ import type { HdisRecord } from '../lib/types';
 
 const TYPE_OPTIONS = ['RADC', 'RADF', 'Internal'];
 const STATUS_OPTIONS = ['Active', 'On Hold', 'Closed'];
+/** Status-specific reasons — only meaningful (and only shown) while the record is
+ * "On Hold" or "Closed"; cleared automatically when the status moves back to Active. */
+const STATUS_REASON_OPTIONS: Record<string, string[]> = {
+  'On Hold': ['Hold By client', 'Hold By VAYUZ'],
+  Closed: ['Closed by VAYUZ', 'Closed by others'],
+};
 
 function distinctSorted(values: (string | null | undefined)[]): string[] {
   return [...new Set(values.filter((v): v is string => !!v))].sort((a, b) => a.localeCompare(b));
@@ -382,12 +388,24 @@ function HdisFormModal({
     client: initial?.client ?? '',
     type: initial?.type ?? 'RADC',
     status: initial?.status ?? 'Active',
+    statusReason: initial?.statusReason ?? '',
+    remarks: initial?.remarks ?? '',
     reqDate: initial?.reqDate ?? '2026-06-01',
     jdLink: initial?.jdLink ?? '',
   }));
   const [owners, setOwners] = useState<string[]>(initial?.owners ?? []);
   const [ownerInput, setOwnerInput] = useState('');
-  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const reasonOptions = STATUS_REASON_OPTIONS[form.status] ?? [];
+  const set = (k: string, v: string) =>
+    setForm((f) => ({
+      ...f,
+      [k]: v,
+      // Status reasons only apply to On Hold / Closed — drop a stale one when the
+      // status moves away from whichever it belonged to.
+      ...(k === 'status' && !(STATUS_REASON_OPTIONS[v] ?? []).includes(f.statusReason)
+        ? { statusReason: '' }
+        : {}),
+    }));
 
   function addOwner() {
     const v = ownerInput.trim();
@@ -403,6 +421,8 @@ function HdisFormModal({
           client: form.client,
           type: form.type,
           status: form.status,
+          statusReason: form.statusReason || null,
+          remarks: form.remarks.trim() || null,
           reqDate: form.reqDate,
           jdLink: form.jdLink || null,
           owners,
@@ -412,7 +432,14 @@ function HdisFormModal({
       return;
     }
     create.mutate(
-      { ...form, jdLink: form.jdLink || null, openings: 1, owners },
+      {
+        ...form,
+        statusReason: form.statusReason || null,
+        remarks: form.remarks.trim() || null,
+        jdLink: form.jdLink || null,
+        openings: 1,
+        owners,
+      },
       { onSuccess: onClose },
     );
   }
@@ -474,6 +501,20 @@ function HdisFormModal({
               ))}
             </select>
           </div>
+          {reasonOptions.length > 0 && (
+            <div className="field">
+              <label>Status reason</label>
+              <select
+                value={form.statusReason}
+                onChange={(e) => set('statusReason', e.target.value)}
+              >
+                <option value="">Select a reason…</option>
+                {reasonOptions.map((r) => (
+                  <option key={r}>{r}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="field">
             <label>JD link</label>
             <input
@@ -499,6 +540,15 @@ function HdisFormModal({
                 placeholder="Add owner + Enter"
               />
             </div>
+          </div>
+          <div className="field full">
+            <label>Remarks</label>
+            <textarea
+              value={form.remarks}
+              onChange={(e) => set('remarks', e.target.value)}
+              placeholder="Optional context for this record — shown on the detail page"
+              rows={3}
+            />
           </div>
         </div>
         {mutation.isError && (
@@ -568,7 +618,15 @@ function HdisDetail({ jdId }: { jdId: string }) {
         <div className="db-meta">
           <div className="db-item">
             <div className="dl">Status</div>
-            <div className="dv">{rec.status}</div>
+            <div className="dv">
+              {rec.status}
+              {rec.statusReason && (
+                <span className="muted" style={{ fontSize: 12.5 }}>
+                  {' '}
+                  · {rec.statusReason}
+                </span>
+              )}
+            </div>
           </div>
           <div className="db-item">
             <div className="dl">Requirement date</div>
@@ -596,6 +654,15 @@ function HdisDetail({ jdId }: { jdId: string }) {
           </div>
         </div>
       </div>
+
+      {rec.remarks && (
+        <div style={{ marginBottom: 16 }}>
+          <Card>
+            <SectionTitle color="var(--gold)">Remarks</SectionTitle>
+            <p style={{ marginTop: 10, whiteSpace: 'pre-wrap' }}>{rec.remarks}</p>
+          </Card>
+        </div>
+      )}
 
       <Attachments rec={rec} editable={editable} />
 
