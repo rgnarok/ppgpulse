@@ -101,6 +101,79 @@ describe('Interviews — default week view (T9.1)', () => {
   });
 });
 
+const clients = [
+  { id: 'cl1', name: 'Testify', createdAt: '2026-06-01T00:00:00.000Z' },
+  { id: 'cl2', name: 'Acme Corp', createdAt: '2026-06-01T00:00:00.000Z' },
+];
+const hdisRecords = [
+  {
+    jdId: 'TST_QA_20260601',
+    title: 'QA Engineer',
+    client: 'Testify',
+    type: 'RADC',
+    openings: 1,
+    status: 'Active',
+    statusReason: null,
+    remarks: null,
+    priority: 'NA',
+    confidence: 'Medium',
+    reqDate: '2026-06-01',
+    jdLink: null,
+    owners: ['Abha Sharma'],
+    pipeline: { r0: 0, r1: 0, r2: 0, r3: 0, r4: 0, r5: 0, stage: 'R0 · Sourcing' },
+    attachments: [],
+    createdAt: '2026-06-01T00:00:00.000Z',
+    updatedAt: '2026-06-01T00:00:00.000Z',
+  },
+];
+
+describe('Interviews — Add interview modal Client + Profile (HDIS)', () => {
+  it('lists Client from the client master and Profile from the caller’s HDIS records, auto-filling client on pick', async () => {
+    const user = userEvent.setup({ delay: null });
+    const { calls } = mockFetch([
+      jsonRoute('/api/me', consultantMe),
+      jsonRoute(`/api/interviews/day/${TODAY}`, emptyDay(TODAY)),
+      jsonRoute('/api/interviews', monthCounts),
+      jsonRoute('/api/consultants', consultants),
+      jsonRoute('/api/clients', clients),
+      jsonRoute('/api/hdis', hdisRecords),
+      jsonRoute('/api/interviews', { id: 'iv1' }, { method: 'POST' }),
+    ]);
+    renderApp(<InterviewsPage />);
+    await screen.findByText(TODAY_LABEL);
+    await user.click(screen.getByText('+ Add interview'));
+    const dialog = await screen.findByRole('dialog', { name: 'Add interview' });
+
+    // Client is a plain select sourced from the client master.
+    const clientSelect = within(dialog).getByLabelText('Client');
+    expect(within(clientSelect).getByText('Testify')).toBeInTheDocument();
+    expect(within(clientSelect).getByText('Acme Corp')).toBeInTheDocument();
+
+    // Profile is a select sourced from the caller's (RBAC-scoped) HDIS records.
+    const profileSelect = within(dialog).getByLabelText('Profile');
+    expect(
+      within(profileSelect).getByText('QA Engineer — Testify (TST_QA_20260601)'),
+    ).toBeInTheDocument();
+
+    await user.type(within(dialog).getByPlaceholderText('Name'), 'Jane Doe');
+    await user.selectOptions(profileSelect, 'TST_QA_20260601');
+    // Picking the HDIS profile auto-fills the client, still overridable.
+    expect((clientSelect as HTMLSelectElement).value).toBe('Testify');
+
+    await user.click(within(dialog).getByText('Save interview'));
+
+    const posted = calls.find((c) => c.url.endsWith('/api/interviews') && c.method === 'POST');
+    const body = posted!.body as {
+      client: string;
+      profile: string;
+      requirementRef: string;
+    };
+    expect(body.client).toBe('Testify');
+    expect(body.profile).toBe('QA Engineer');
+    expect(body.requirementRef).toBe('TST_QA_20260601');
+  });
+});
+
 describe('Interviews — Add interview modal confirm-before-discard', () => {
   async function openModalWithCandidateTyped() {
     const user = userEvent.setup({ delay: null });

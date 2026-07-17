@@ -248,9 +248,10 @@ model Interview {
   candidateEmail String?
   ref            String? // interview update code, e.g. 2026090701
   round          String? // L0–L5
-  profile        String? // role/position the candidate interviewed for
+  client         String? // client name, from the Client master list
+  profile        String? // role/position the candidate interviewed for — sourced from an HDIS record's title
   interviewer    String? // "With" — the interviewer's name
-  requirementRef String?
+  requirementRef String? // the HDIS jdId this interview's Profile was picked from
   ppgConsultantId String? // "Sourcing" — the PPG consultant running it
   stage          String?
   status         String?

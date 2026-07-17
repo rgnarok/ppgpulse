@@ -11,6 +11,8 @@ import {
   useInterviewMonths,
   useInterviewDay,
   useApiMutation,
+  useClients,
+  useHdisList,
   type InterviewRow,
   type InterviewScopeFilter,
 } from '../lib/hooks';
@@ -331,6 +333,7 @@ function DayTable({
               <th>Interview</th>
               <th>Candidate</th>
               <th>Time</th>
+              <th>Client</th>
               <th>Profile</th>
               <th>With</th>
               <th>Sourcing</th>
@@ -341,7 +344,7 @@ function DayTable({
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={editable ? 8 : 7} className="muted" style={{ padding: 16 }}>
+                <td colSpan={editable ? 9 : 8} className="muted" style={{ padding: 16 }}>
                   No interviews logged for this day.
                 </td>
               </tr>
@@ -366,6 +369,7 @@ function DayTable({
                     ) : null}
                   </td>
                   <td className="muted">{r.time ?? '—'}</td>
+                  <td className="muted">{r.client ?? '—'}</td>
                   <td className="muted">{r.profile ?? '—'}</td>
                   <td className="muted">{r.interviewer ?? '—'}</td>
                   <td className="muted">{r.ppgConsultantName ?? '—'}</td>
@@ -435,6 +439,10 @@ function DayTable({
 function AddInterviewModal({ date, onClose }: { date: string; onClose: () => void }) {
   const { me } = useAuth();
   const { data: consultants = [] } = useConsultants();
+  const { data: clients = [] } = useClients();
+  // Already RBAC-scoped server-side — team/own-scope users only get back the HDIS
+  // records assigned to them, org-scope users get everything.
+  const { data: hdisOptions = [] } = useHdisList({});
   const create = useApiMutation(
     (body: Record<string, unknown>) => api('/interviews', { method: 'POST', body }),
     [['interview-day', date], ['interviews']],
@@ -446,12 +454,20 @@ function AddInterviewModal({ date, onClose }: { date: string; onClose: () => voi
   const [candidate, setCandidate] = useState('');
   const [email, setEmail] = useState('');
   const [time, setTime] = useState('');
-  const [profile, setProfile] = useState('');
+  const [client, setClient] = useState('');
+  const [hdisJdId, setHdisJdId] = useState('');
   const [interviewer, setInterviewer] = useState('');
   const [session, setSession] = useState<'mid' | 'end'>('mid');
   const [status, setStatus] = useState('Scheduled');
   const [consultantId, setConsultantId] = useState(me?.consultant?.id ?? '');
   const [error, setError] = useState<string | null>(null);
+
+  function selectHdis(jdId: string) {
+    setHdisJdId(jdId);
+    // Pre-fill the client from the chosen requirement — still editable afterward.
+    const picked = hdisOptions.find((h) => h.jdId === jdId);
+    if (picked) setClient(picked.client);
+  }
 
   // Any field typed in besides the defaults means there's something to lose on close.
   const isDirty =
@@ -461,7 +477,8 @@ function AddInterviewModal({ date, onClose }: { date: string; onClose: () => voi
     !!candidate.trim() ||
     !!email.trim() ||
     !!time.trim() ||
-    !!profile.trim() ||
+    !!client ||
+    !!hdisJdId ||
     !!interviewer.trim() ||
     session !== 'mid' ||
     status !== 'Scheduled' ||
@@ -509,6 +526,7 @@ function AddInterviewModal({ date, onClose }: { date: string; onClose: () => voi
       return;
     }
     setError(null);
+    const selectedHdis = hdisOptions.find((h) => h.jdId === hdisJdId);
     create.mutate(
       {
         date,
@@ -519,7 +537,9 @@ function AddInterviewModal({ date, onClose }: { date: string; onClose: () => voi
         candidateEmail: email.trim(),
         ref: ref.trim(),
         round,
-        profile: profile.trim(),
+        client: client || undefined,
+        profile: selectedHdis?.title ?? '',
+        requirementRef: hdisJdId || undefined,
         interviewer: interviewer.trim(),
         status,
         ppgConsultantId: consultantId || null,
@@ -594,6 +614,17 @@ function AddInterviewModal({ date, onClose }: { date: string; onClose: () => voi
               </select>
             </div>
             <div className="field">
+              <label htmlFor="iv-client">Client</label>
+              <select id="iv-client" value={client} onChange={(e) => setClient(e.target.value)}>
+                <option value="">—</option>
+                {clients.map((c) => (
+                  <option key={c.id} value={c.name}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
               <label>Candidate</label>
               <input
                 value={candidate}
@@ -619,12 +650,15 @@ function AddInterviewModal({ date, onClose }: { date: string; onClose: () => voi
               />
             </div>
             <div className="field">
-              <label>Profile</label>
-              <input
-                value={profile}
-                onChange={(e) => setProfile(e.target.value)}
-                placeholder="Sr. People Consultant"
-              />
+              <label htmlFor="iv-profile">Profile</label>
+              <select id="iv-profile" value={hdisJdId} onChange={(e) => selectHdis(e.target.value)}>
+                <option value="">—</option>
+                {hdisOptions.map((h) => (
+                  <option key={h.jdId} value={h.jdId}>
+                    {h.title} — {h.client} ({h.jdId})
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="field">
               <label>With (interviewer)</label>
