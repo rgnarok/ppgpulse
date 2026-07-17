@@ -101,6 +101,65 @@ describe('Interviews — default week view (T9.1)', () => {
   });
 });
 
+describe('Interviews — Add interview modal confirm-before-discard', () => {
+  async function openModalWithCandidateTyped() {
+    const user = userEvent.setup({ delay: null });
+    mockFetch([
+      jsonRoute('/api/me', consultantMe),
+      jsonRoute(`/api/interviews/day/${TODAY}`, emptyDay(TODAY)),
+      jsonRoute('/api/interviews', monthCounts),
+      jsonRoute('/api/consultants', consultants),
+    ]);
+    renderApp(<InterviewsPage />);
+    await screen.findByText(TODAY_LABEL);
+    await user.click(screen.getByText('+ Add interview'));
+    const dialog = await screen.findByRole('dialog', { name: 'Add interview' });
+    await user.type(within(dialog).getByPlaceholderText('Name'), 'Jane Doe');
+    return { user, dialog };
+  }
+
+  it('does not close on backdrop click when dirty and the user cancels the confirm', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const { user, dialog } = await openModalWithCandidateTyped();
+
+    // Click the backdrop itself (the dialog root), not the inner card.
+    await user.click(dialog);
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: 'Add interview' })).toBeInTheDocument();
+  });
+
+  it('closes on X button when dirty and the user confirms discard', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const { user } = await openModalWithCandidateTyped();
+
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(screen.queryByRole('dialog', { name: 'Add interview' })).not.toBeInTheDocument();
+  });
+
+  it('closes Cancel without confirming when the form is untouched', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm');
+    const user = userEvent.setup({ delay: null });
+    mockFetch([
+      jsonRoute('/api/me', consultantMe),
+      jsonRoute(`/api/interviews/day/${TODAY}`, emptyDay(TODAY)),
+      jsonRoute('/api/interviews', monthCounts),
+      jsonRoute('/api/consultants', consultants),
+    ]);
+    renderApp(<InterviewsPage />);
+    await screen.findByText(TODAY_LABEL);
+    await user.click(screen.getByText('+ Add interview'));
+    await screen.findByRole('dialog', { name: 'Add interview' });
+
+    await user.click(screen.getByText('Cancel'));
+
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog', { name: 'Add interview' })).not.toBeInTheDocument();
+  });
+});
+
 describe('Interviews — calendar (month) view', () => {
   it('switching to calendar view and picking a date loads that day below the calendar', async () => {
     const user = userEvent.setup({ delay: null });

@@ -130,7 +130,8 @@ export function SectionTitle({ children, color }: { children: ReactNode; color?:
 const PILL_TONES: Record<string, string> = {
   Active: 'p-blue',
   'On Hold': 'p-amber',
-  Closed: 'p-green',
+  Fulfilled: 'p-green',
+  Closed: 'p-grey',
   RADC: 'p-violet',
   RADF: 'p-blue',
   Internal: 'p-grey',

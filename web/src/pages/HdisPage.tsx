@@ -23,11 +23,12 @@ import { DEFAULT_PAGE_SIZE } from '../lib/pagination';
 import type { HdisRecord } from '../lib/types';
 
 const TYPE_OPTIONS = ['RADC', 'RADF', 'Internal'];
-const STATUS_OPTIONS = ['Active', 'On Hold', 'Closed'];
+const STATUS_OPTIONS = ['Active', 'On Hold', 'Fulfilled', 'Closed'];
 /** Status-specific reasons — only meaningful (and only shown) while the record is
- * "On Hold" or "Closed"; cleared automatically when the status moves back to Active. */
+ * "On Hold", "Fulfilled", or "Closed"; cleared automatically when the status moves back to Active. */
 const STATUS_REASON_OPTIONS: Record<string, string[]> = {
   'On Hold': ['Hold By client', 'Hold By VAYUZ'],
+  Fulfilled: ['Fulfilled by VAYUZ', 'Fulfilled by others'],
   Closed: ['Closed by VAYUZ', 'Closed by others'],
 };
 

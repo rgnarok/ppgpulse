@@ -360,6 +360,32 @@ describe('HDIS status reason + remarks', () => {
     expect(screen.queryByText('Status reason')).not.toBeInTheDocument();
   });
 
+  it('offers Fulfilled as a status with its own reason options', async () => {
+    mockFetch(routesFor(superAdminMe));
+    renderApp(
+      <Routes>
+        <Route path="/hdis" element={<HdisPage />} />
+      </Routes>,
+      { route: '/hdis' },
+    );
+    await screen.findByText('QA Engineer');
+    await userEvent.click(screen.getByText('+ Add record'));
+
+    const dialog = screen.getByRole('dialog');
+    const statusSelect = within(dialog)
+      .getAllByRole('combobox')
+      .find((el) =>
+        Array.from((el as HTMLSelectElement).options).some((o) => o.value === 'Fulfilled'),
+      )!;
+    expect(within(statusSelect).getByRole('option', { name: 'Fulfilled' })).toBeInTheDocument();
+
+    await userEvent.selectOptions(statusSelect, 'Fulfilled');
+    expect(screen.getByText('Status reason')).toBeInTheDocument();
+    expect(screen.getByText('Fulfilled by VAYUZ')).toBeInTheDocument();
+    expect(screen.getByText('Fulfilled by others')).toBeInTheDocument();
+    expect(screen.queryByText('Hold By client')).not.toBeInTheDocument();
+  });
+
   it('submits the chosen status reason and remarks on create', async () => {
     const { calls } = mockFetch([
       ...routesFor(superAdminMe),

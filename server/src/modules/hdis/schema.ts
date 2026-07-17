@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const hdisTypeEnum = z.enum(['RADC', 'RADF', 'Internal']);
+export const hdisStatusEnum = z.enum(['Active', 'On Hold', 'Fulfilled', 'Closed']);
 
 export const listQuerySchema = z.object({
   month: z
@@ -17,7 +18,7 @@ export const createHdisSchema = z.object({
   client: z.string().min(1),
   type: hdisTypeEnum,
   openings: z.number().int().positive().default(1),
-  status: z.enum(['Active', 'On Hold', 'Closed']),
+  status: hdisStatusEnum,
   statusReason: z.string().min(1).nullable().optional(),
   remarks: z.string().nullable().optional(),
   priority: z.string().default('NA'),
@@ -33,7 +34,7 @@ export const updateHdisSchema = z
     client: z.string().min(1).optional(),
     type: hdisTypeEnum.optional(),
     openings: z.number().int().positive().optional(),
-    status: z.enum(['Active', 'On Hold', 'Closed']).optional(),
+    status: hdisStatusEnum.optional(),
     statusReason: z.string().min(1).nullable().optional(),
     remarks: z.string().nullable().optional(),
     priority: z.string().optional(),

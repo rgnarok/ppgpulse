@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AppShell } from '../components/AppShell';
 import { Card, SectionTitle, Empty, Btn } from '../components/ui';
@@ -453,6 +453,55 @@ function AddInterviewModal({ date, onClose }: { date: string; onClose: () => voi
   const [consultantId, setConsultantId] = useState(me?.consultant?.id ?? '');
   const [error, setError] = useState<string | null>(null);
 
+  // Any field typed in besides the defaults means there's something to lose on close.
+  const isDirty =
+    !!ref.trim() ||
+    round !== 'L1' ||
+    !!type ||
+    !!candidate.trim() ||
+    !!email.trim() ||
+    !!time.trim() ||
+    !!profile.trim() ||
+    !!interviewer.trim() ||
+    session !== 'mid' ||
+    status !== 'Scheduled' ||
+    consultantId !== (me?.consultant?.id ?? '');
+
+  // Kept fresh each render so the popstate handler (registered once) always sees
+  // the current dirty state without needing to be re-subscribed.
+  const dirtyRef = useRef(isDirty);
+  dirtyRef.current = isDirty;
+
+  // Guards backdrop click / X / Cancel: only these call requestClose(), which
+  // confirms before discarding if the form has unsaved data.
+  const closingRef = useRef(false);
+  function requestClose() {
+    if (dirtyRef.current && !window.confirm('Discard the interview details you entered?')) return;
+    closingRef.current = true;
+    onClose();
+  }
+
+  // Browser back button: push a history entry on mount so back triggers popstate
+  // instead of leaving the page; confirm-and-close on genuine back presses, but
+  // don't re-confirm when we ourselves call history.back() from requestClose().
+  useEffect(() => {
+    window.history.pushState({ interviewModal: true }, '');
+    function onPopState() {
+      if (closingRef.current) return;
+      if (dirtyRef.current && !window.confirm('Discard the interview details you entered?')) {
+        window.history.pushState({ interviewModal: true }, '');
+        return;
+      }
+      closingRef.current = true;
+      onClose();
+    }
+    window.addEventListener('popstate', onPopState);
+    return () => {
+      window.removeEventListener('popstate', onPopState);
+      if (closingRef.current) window.history.back();
+    };
+  }, []);
+
   function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!candidate.trim()) {
@@ -476,7 +525,10 @@ function AddInterviewModal({ date, onClose }: { date: string; onClose: () => voi
         ppgConsultantId: consultantId || null,
       },
       {
-        onSuccess: onClose,
+        onSuccess: () => {
+          closingRef.current = true;
+          onClose();
+        },
         onError: (err) =>
           setError(err instanceof Error ? err.message : 'Could not add the interview'),
       },
@@ -487,7 +539,7 @@ function AddInterviewModal({ date, onClose }: { date: string; onClose: () => voi
     <div
       role="dialog"
       aria-label="Add interview"
-      onClick={onClose}
+      onClick={requestClose}
       style={{
         position: 'fixed',
         inset: 0,
@@ -505,7 +557,7 @@ function AddInterviewModal({ date, onClose }: { date: string; onClose: () => voi
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <SectionTitle>Add interview — {formatDate(date)}</SectionTitle>
-          <button type="button" className="lnk" onClick={onClose} aria-label="Close">
+          <button type="button" className="lnk" onClick={requestClose} aria-label="Close">
             ✕
           </button>
         </div>
@@ -622,7 +674,7 @@ function AddInterviewModal({ date, onClose }: { date: string; onClose: () => voi
           )}
 
           <div style={{ marginTop: 16, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-            <button type="button" className="btn btn-gho" onClick={onClose}>
+            <button type="button" className="btn btn-gho" onClick={requestClose}>
               Cancel
             </button>
             <Btn type="submit" disabled={create.isPending}>
