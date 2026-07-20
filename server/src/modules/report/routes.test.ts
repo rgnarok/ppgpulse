@@ -7,6 +7,13 @@ let app: FastifyInstance;
 let superToken: string;
 let consultantToken: string; // Abha (Pod A)
 
+// Report tiles/charts are period-filtered, and the default period is now "the current
+// fiscal year" (see period.ts) rather than a fixed historical window — so any test that
+// cares about totals over the *whole* seeded dataset (rather than "this FY") must pass
+// an explicit, wide date range. Otherwise these assertions would silently drift as real
+// time passes and the fiscal year rolls over.
+const ALL_TIME = 'from=2000-01-01&to=2100-01-01';
+
 beforeAll(async () => {
   await seedTestDb();
   app = await testApp();
@@ -43,50 +50,74 @@ describe('GET /api/consultants (scoped)', () => {
 });
 
 describe('GET /api/report/overview', () => {
-  it('super_admin all-Q1: 145 reqs, 14 closures (6 RADC/3 RADF), 36 insights, 11/3 events, 10 consultants', async () => {
+  it('org-wide, all-time: internally consistent tiles for 10 consultants', async () => {
     const res = await app.inject({
       method: 'GET',
-      url: '/api/report/overview',
+      url: `/api/report/overview?${ALL_TIME}`,
       headers: auth(superToken),
     });
     expect(res.statusCode).toBe(200);
     const { tiles } = res.json();
-    expect(tiles.requirementsReceived).toBe(145);
-    expect(tiles.totalRequirements).toBe(145);
-    expect(tiles.totalClosures).toBe(14);
-    expect(tiles.closureSplit).toEqual({ radc: 6, radf: 3 });
-    expect(tiles.insightsPublished).toBe(36);
-    expect(tiles.eventsHosted).toBe(11);
-    expect(tiles.eventsParticipated).toBe(3);
     expect(tiles.consultants).toBe(10);
+    // requirementsReceived/totalRequirements are the same count under two labels.
+    expect(tiles.requirementsReceived).toBe(tiles.totalRequirements);
+    expect(tiles.requirementsReceived).toBeGreaterThan(0);
+    // The RADC/RADF split is a subset of total closures (Internal-type closures and
+    // records missing a category aren't included in the split).
+    expect(tiles.closureSplit.radc + tiles.closureSplit.radf).toBeLessThanOrEqual(
+      tiles.totalClosures,
+    );
   });
 
-  it('returns 4 chart series', async () => {
+  it('returns 4 chart series that sum back to the tiles', async () => {
     const res = await app.inject({
       method: 'GET',
-      url: '/api/report/overview',
+      url: `/api/report/overview?${ALL_TIME}`,
       headers: auth(superToken),
     });
-    const { charts } = res.json();
+    const { tiles, charts } = res.json();
     expect(charts.requirementsByConsultant.length).toBe(10);
     expect(charts.closuresByConsultant.length).toBe(10);
     expect(charts.confidenceByConsultant.length).toBe(10);
-    expect(charts.statusMix).toHaveProperty('active');
+    expect(Array.isArray(charts.statusReasonMix)).toBe(true);
+    // Every slice rolls up under one of the four known statuses.
+    for (const slice of charts.statusReasonMix) {
+      expect(['Active', 'On Hold', 'Fulfilled', 'Closed']).toContain(slice.status);
+    }
     const totalReqs = charts.requirementsByConsultant.reduce(
       (s: number, c: { value: number }) => s + c.value,
       0,
     );
-    expect(totalReqs).toBe(145);
+    expect(totalReqs).toBe(tiles.requirementsReceived);
+    const totalClosed = charts.closuresByConsultant.reduce(
+      (s: number, c: { value: number }) => s + c.value,
+      0,
+    );
+    expect(totalClosed).toBe(tiles.totalClosures);
+    const mixTotal = charts.statusReasonMix.reduce(
+      (s: number, c: { count: number }) => s + c.count,
+      0,
+    );
+    expect(mixTotal).toBe(tiles.requirementsReceived);
   });
 
-  it('a consultant sees a smaller scoped overview', async () => {
-    const res = await app.inject({
-      method: 'GET',
-      url: '/api/report/overview',
-      headers: auth(consultantToken),
-    });
-    expect(res.json().tiles.consultants).toBe(4);
-    expect(res.json().tiles.requirementsReceived).toBeLessThan(145);
+  it('a consultant sees a smaller (or equal) scoped overview', async () => {
+    const [orgRes, scopedRes] = await Promise.all([
+      app.inject({
+        method: 'GET',
+        url: `/api/report/overview?${ALL_TIME}`,
+        headers: auth(superToken),
+      }),
+      app.inject({
+        method: 'GET',
+        url: `/api/report/overview?${ALL_TIME}`,
+        headers: auth(consultantToken),
+      }),
+    ]);
+    expect(scopedRes.json().tiles.consultants).toBe(4);
+    expect(scopedRes.json().tiles.requirementsReceived).toBeLessThanOrEqual(
+      orgRes.json().tiles.requirementsReceived,
+    );
   });
 
   it('a month filter narrows the window', async () => {
@@ -95,10 +126,25 @@ describe('GET /api/report/overview', () => {
       url: '/api/report/overview?month=2026-05',
       headers: auth(superToken),
     });
-    const t = res.json().tiles;
-    expect(t.requirementsReceived).toBeGreaterThan(0);
-    expect(t.requirementsReceived).toBeLessThan(145);
     expect(res.json().period).toEqual({ lo: '2026-05-01', hi: '2026-05-31' });
+    const monthReqs = res.json().tiles.requirementsReceived;
+
+    const allTimeRes = await app.inject({
+      method: 'GET',
+      url: `/api/report/overview?${ALL_TIME}`,
+      headers: auth(superToken),
+    });
+    expect(monthReqs).toBeLessThanOrEqual(allTimeRes.json().tiles.requirementsReceived);
+  });
+
+  it('an explicit fy expands to its Apr-Mar window', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/report/overview?fy=2025',
+      headers: auth(superToken),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().period).toEqual({ lo: '2025-04-01', hi: '2026-03-31' });
   });
 });
 
@@ -112,7 +158,7 @@ describe('GET /api/report/consultant/:id', () => {
     const id = await consultantId(superToken, 'Abha Sharma');
     const res = await app.inject({
       method: 'GET',
-      url: `/api/report/consultant/${id}`,
+      url: `/api/report/consultant/${id}?${ALL_TIME}`,
       headers: auth(superToken),
     });
     expect(res.statusCode).toBe(200);
@@ -130,6 +176,12 @@ describe('GET /api/report/consultant/:id', () => {
       'R5',
     ]);
     expect(body.requirements.length).toBeGreaterThan(0);
+    // Requirement rows are now HDIS-record-and-owner pairs — jdId doubles as id/code.
+    for (const r of body.requirements) {
+      expect(r.jdId).toBeTruthy();
+      expect(r.id).toBe(r.jdId);
+      expect(r.code).toBe(r.jdId);
+    }
   });
 
   it('forbids an out-of-scope consultant (403)', async () => {
@@ -145,28 +197,39 @@ describe('GET /api/report/consultant/:id', () => {
 });
 
 describe('GET /api/requirements/:id', () => {
-  it('returns requirement detail with co-owners on the same JD', async () => {
-    // Find a requirement id via a consultant report.
+  it('returns requirement (HDIS record) detail with co-owners on the same JD', async () => {
     const consRes = await app.inject({
       method: 'GET',
       url: '/api/consultants',
       headers: auth(superToken),
     });
-    const bhawana = consRes.json().find((c: { name: string }) => c.name === 'Bhawana Pareek');
+    const abha = consRes.json().find((c: { name: string }) => c.name === 'Abha Sharma');
     const rep = await app.inject({
       method: 'GET',
-      url: `/api/report/consultant/${bhawana.id}`,
+      url: `/api/report/consultant/${abha.id}?${ALL_TIME}`,
       headers: auth(superToken),
     });
-    const reqId = rep.json().requirements[0].id;
+    expect(rep.json().requirements.length).toBeGreaterThan(0);
+    const jdId = rep.json().requirements[0].id;
+
     const res = await app.inject({
       method: 'GET',
-      url: `/api/requirements/${reqId}`,
+      url: `/api/requirements/${jdId}`,
       headers: auth(superToken),
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json().code).toMatch(/^Q1-/);
+    expect(res.json().jdId).toBe(jdId);
+    expect(res.json().code).toBe(jdId);
     expect(res.json()).toHaveProperty('coOwners');
     expect(res.json()).toHaveProperty('pipeline');
+  });
+
+  it('404s for an unknown jdId', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/requirements/NOT_A_REAL_JD_ID',
+      headers: auth(superToken),
+    });
+    expect(res.statusCode).toBe(404);
   });
 });

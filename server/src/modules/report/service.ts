@@ -1,14 +1,15 @@
 import type { PrismaClient } from '@prisma/client';
 import { ForbiddenError, NotFoundError } from '../../lib/errors.js';
 import { loadDirectory, scopeNames, type CurrentUser } from '../rbac/index.js';
-import { resolvePeriod, type PeriodInput } from './period.js';
+import { resolvePeriod, inPeriod, type PeriodInput } from './period.js';
 import {
   personStats,
   confidence,
   kpiRating,
   funnel,
-  statusMix,
+  statusReasonMix,
   closureCats,
+  isClosed,
   loadBucket,
   kpiBand,
   type ReqLite,
@@ -49,33 +50,76 @@ async function scopedConsultants(
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-async function requirementsFor(
-  prisma: PrismaClient,
-  ownerIds: string[],
-  period: { lo: string; hi: string },
-): Promise<ReqLite[]> {
-  if (!ownerIds.length) return [];
-  const reqs = await prisma.requirement.findMany({
-    where: { ownerId: { in: ownerIds }, reqDate: { gte: period.lo, lte: period.hi } },
-    include: { owner: { include: { user: true } } },
-  });
-  return reqs.map((r) => ({
-    ownerName: r.owner.user.name,
-    reqDate: r.reqDate,
-    status: r.status,
-    profiles: r.profiles,
-    shortlist: r.shortlist,
-    l1: r.l1,
-    l2: r.l2,
-    l3: r.l3,
-    onboard: r.onboard,
-    jdId: r.jdId,
-  }));
+/** One row per (HDIS record, owner) pair — the live equivalent of the old Requirement
+ * table's grain, sourced from HDIS + its pipeline recorder instead of a table nothing
+ * in the app ever writes to. `names` are display names, matched the same free-text way
+ * HDIS visibility scoping works everywhere else (HdisOwner.consultantOrName). */
+interface HdisReqRow {
+  jdId: string;
+  title: string;
+  client: string;
+  type: string;
+  reqDate: string;
+  status: string;
+  statusReason: string | null;
+  jdLink: string | null;
+  ownerName: string;
+  createdAt: Date;
+  updatedAt: Date;
+  profiles: number;
+  shortlist: number;
+  l1: number;
+  l2: number;
+  l3: number;
+  onboard: number;
 }
 
-async function catByJd(prisma: PrismaClient): Promise<Map<string, string>> {
-  const rows = await prisma.hdis.findMany({ select: { jdId: true, type: true } });
-  return new Map(rows.map((h) => [h.jdId, h.type as string]));
+async function hdisReqRowsFor(prisma: PrismaClient, names: string[]): Promise<HdisReqRow[]> {
+  if (!names.length) return [];
+  const owners = await prisma.hdisOwner.findMany({
+    where: { consultantOrName: { in: names } },
+    include: { hdis: { include: { pipeline: true } } },
+  });
+  return owners.map((o) => {
+    const h = o.hdis;
+    const p = h.pipeline;
+    return {
+      jdId: h.jdId,
+      title: h.title,
+      client: h.client,
+      type: h.type as string,
+      reqDate: h.reqDate,
+      status: h.status,
+      statusReason: h.statusReason,
+      jdLink: h.jdLink,
+      ownerName: o.consultantOrName,
+      createdAt: h.createdAt,
+      updatedAt: h.updatedAt,
+      profiles: p?.r0 ?? 0,
+      shortlist: p?.r1 ?? 0,
+      l1: p?.r2 ?? 0,
+      l2: p?.r3 ?? 0,
+      l3: p?.r4 ?? 0,
+      onboard: p?.r5 ?? 0,
+    };
+  });
+}
+
+function toReqLite(row: HdisReqRow): ReqLite {
+  return {
+    ownerName: row.ownerName,
+    reqDate: row.reqDate,
+    status: row.status,
+    statusReason: row.statusReason,
+    profiles: row.profiles,
+    shortlist: row.shortlist,
+    l1: row.l1,
+    l2: row.l2,
+    l3: row.l3,
+    onboard: row.onboard,
+    jdId: row.jdId,
+    type: row.type,
+  };
 }
 
 /** GET /consultants — consultants visible to the caller (scoped). */
@@ -97,53 +141,35 @@ export async function teamRoster(prisma: PrismaClient, user: CurrentUser) {
     .sort((a, b) => a.user.name.localeCompare(b.user.name));
   if (!scoped.length) return [];
 
-  const ids = scoped.map((c) => c.id);
-  const allReqs = await prisma.requirement.findMany({ where: { ownerId: { in: ids } } });
-  const reqsByOwner = new Map<string, typeof allReqs>();
-  for (const id of ids) reqsByOwner.set(id, []);
-  for (const r of allReqs) reqsByOwner.get(r.ownerId)?.push(r);
-
   const scopedNames = scoped.map((c) => c.user.name);
-  const hdisOwners = await prisma.hdisOwner.findMany({
-    where: { consultantOrName: { in: scopedNames } },
-    include: { hdis: { select: { createdAt: true, updatedAt: true } } },
-  });
+  const rows = await hdisReqRowsFor(prisma, scopedNames);
+  const rowsByName = new Map<string, HdisReqRow[]>();
+  for (const n of scopedNames) rowsByName.set(n, []);
+  for (const r of rows) rowsByName.get(r.ownerName)?.push(r);
+
   const today = new Date().toISOString().slice(0, 10);
   const touchedTodayByName = new Set(
-    hdisOwners
+    rows
       .filter(
-        (o) =>
-          o.hdis.createdAt.toISOString().slice(0, 10) === today ||
-          o.hdis.updatedAt.toISOString().slice(0, 10) === today,
+        (r) =>
+          r.createdAt.toISOString().slice(0, 10) === today ||
+          r.updatedAt.toISOString().slice(0, 10) === today,
       )
-      .map((o) => o.consultantOrName),
+      .map((r) => r.ownerName),
   );
 
   const monthPrefix = today.slice(0, 7);
   const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
 
   return scoped.map((c) => {
-    const reqs = reqsByOwner.get(c.id) ?? [];
-    const st = personStats(
-      reqs.map((r) => ({
-        ownerName: c.user.name,
-        reqDate: r.reqDate,
-        status: r.status,
-        profiles: r.profiles,
-        shortlist: r.shortlist,
-        l1: r.l1,
-        l2: r.l2,
-        l3: r.l3,
-        onboard: r.onboard,
-        jdId: r.jdId,
-      })),
-    );
+    const personRows = rowsByName.get(c.user.name) ?? [];
+    const st = personStats(personRows.map(toReqLite));
     const kpi = kpiRating(st);
-    const activeReqs = reqs.filter((r) => r.status === 'Active').length;
-    const onboardMtd = reqs
+    const activeReqs = personRows.filter((r) => r.status === 'Active').length;
+    const onboardMtd = personRows
       .filter((r) => r.reqDate.startsWith(monthPrefix))
       .reduce((s, r) => s + r.onboard, 0);
-    const profilesWk = reqs
+    const profilesWk = personRows
       .filter((r) => r.reqDate >= weekAgo && r.reqDate <= today)
       .reduce((s, r) => s + r.profiles, 0);
     return {
@@ -177,12 +203,11 @@ export async function overview(
     cons = cons.filter((c) => c.id === periodInput.consultantId);
     if (!cons.length) throw new ForbiddenError('Consultant out of scope');
   }
-  const reqs = await requirementsFor(
+  const allRows = await hdisReqRowsFor(
     prisma,
-    cons.map((c) => c.id),
-    period,
+    cons.map((c) => c.name),
   );
-  const cats = await catByJd(prisma);
+  const reqs = allRows.filter((r) => inPeriod(r.reqDate, period)).map(toReqLite);
 
   const byOwner = new Map<string, ReqLite[]>();
   for (const c of cons) byOwner.set(c.name, []);
@@ -195,8 +220,8 @@ export async function overview(
   });
 
   const totalReqs = reqs.length;
-  const closed = reqs.filter((r) => r.onboard > 0 || r.status === 'Closed').length;
-  const cc = closureCats(reqs, cats);
+  const closed = reqs.filter(isClosed).length;
+  const cc = closureCats(reqs);
   const insights = cons.reduce((s, c) => s + c.insights, 0);
   const eventsHosted = cons.reduce((s, c) => s + c.eventsHosted, 0);
   const eventsParticipated = cons.reduce((s, c) => s + c.eventsParticipated, 0);
@@ -215,7 +240,7 @@ export async function overview(
     },
     charts: {
       requirementsByConsultant: perConsultant.map((p) => ({ name: p.name, value: p.stats.reqs })),
-      statusMix: statusMix(reqs),
+      statusReasonMix: statusReasonMix(reqs),
       closuresByConsultant: perConsultant.map((p) => ({ name: p.name, value: p.stats.closed })),
       confidenceByConsultant: perConsultant.map((p) => ({ name: p.name, value: p.confidence })),
     },
@@ -240,25 +265,12 @@ export async function consultantReport(
   const names = scopeNames(user, directory);
   if (!names.has(target.user.name)) throw new ForbiddenError('Consultant out of scope');
 
-  const reqRows = await prisma.requirement.findMany({
-    where: { ownerId: consultantId, reqDate: { gte: period.lo, lte: period.hi } },
-    orderBy: { reqDate: 'desc' },
-    include: { hdis: { select: { type: true, jdLink: true } } },
-  });
-  const list: ReqLite[] = reqRows.map((r) => ({
-    ownerName: target.user.name,
-    reqDate: r.reqDate,
-    status: r.status,
-    profiles: r.profiles,
-    shortlist: r.shortlist,
-    l1: r.l1,
-    l2: r.l2,
-    l3: r.l3,
-    onboard: r.onboard,
-    jdId: r.jdId,
-  }));
+  const allRows = await hdisReqRowsFor(prisma, [target.user.name]);
+  const rows = allRows
+    .filter((r) => inPeriod(r.reqDate, period))
+    .sort((a, b) => b.reqDate.localeCompare(a.reqDate));
+  const list = rows.map(toReqLite);
   const st = personStats(list);
-  const cats = await catByJd(prisma);
 
   return {
     period,
@@ -276,72 +288,69 @@ export async function consultantReport(
     confidence: confidence(st),
     kpi: kpiRating(st),
     funnel: funnel(st),
-    closureSplit: closureCats(list, cats),
-    requirements: reqRows.map((r) => ({
-      id: r.id,
-      code: r.code,
+    closureSplit: closureCats(list),
+    requirements: rows.map((r) => ({
+      id: r.jdId,
+      code: r.jdId,
       jdId: r.jdId,
       title: r.title,
       client: r.client,
       reqDate: r.reqDate,
       status: r.status,
+      statusReason: r.statusReason,
       profiles: r.profiles,
       shortlist: r.shortlist,
       l1: r.l1,
       l2: r.l2,
       l3: r.l3,
       onboard: r.onboard,
-      type: r.hdis?.type ?? null,
-      jdLink: r.hdis?.jdLink ?? null,
+      type: r.type,
+      jdLink: r.jdLink,
     })),
   };
 }
 
-/** GET /requirements/:id — detail + co-owners on the same JD. */
-export async function requirementDetail(prisma: PrismaClient, user: CurrentUser, id: string) {
-  const req = await prisma.requirement.findUnique({
-    where: { id },
-    include: { owner: { include: { user: true } }, hdis: true },
+/** GET /requirements/:id — requirement (HDIS record) detail + co-owners on the same JD.
+ * `id` is the HDIS jdId — requirements are HDIS-record-and-owner pairs, not rows in a
+ * separate table, so a JD's "co-owners" are simply its other listed HDIS owners. */
+export async function requirementDetail(prisma: PrismaClient, user: CurrentUser, jdId: string) {
+  const h = await prisma.hdis.findUnique({
+    where: { jdId },
+    include: { owners: true, pipeline: true },
   });
-  if (!req) throw new NotFoundError('Requirement not found');
+  if (!h) throw new NotFoundError('Requirement not found');
 
   const directory = await loadDirectory(prisma);
   const names = scopeNames(user, directory);
-  if (!names.has(req.owner.user.name)) throw new ForbiddenError('Requirement out of scope');
+  const visible = h.owners.some((o) => names.has(o.consultantOrName));
+  if (!visible) throw new ForbiddenError('Requirement out of scope');
 
-  // Co-owners: other requirements on the same JD (excluding this one).
-  const coOwners = req.jdId
-    ? await prisma.requirement.findMany({
-        where: { jdId: req.jdId, id: { not: req.id } },
-        include: { owner: { include: { user: true } } },
-      })
-    : [];
+  const p = h.pipeline;
+  const [primaryOwner, ...coOwners] = h.owners;
 
   return {
-    id: req.id,
-    code: req.code,
-    jdId: req.jdId,
-    title: req.title,
-    client: req.client,
-    reqDate: req.reqDate,
-    status: req.status,
-    owner: { id: req.owner.id, name: req.owner.user.name },
+    id: h.jdId,
+    code: h.jdId,
+    jdId: h.jdId,
+    title: h.title,
+    client: h.client,
+    reqDate: h.reqDate,
+    status: h.status,
+    owner: primaryOwner ? { id: primaryOwner.id, name: primaryOwner.consultantOrName } : null,
     pipeline: {
-      profiles: req.profiles,
-      shortlist: req.shortlist,
-      l1: req.l1,
-      l2: req.l2,
-      l3: req.l3,
-      onboard: req.onboard,
+      profiles: p?.r0 ?? 0,
+      shortlist: p?.r1 ?? 0,
+      l1: p?.r2 ?? 0,
+      l2: p?.r3 ?? 0,
+      l3: p?.r4 ?? 0,
+      onboard: p?.r5 ?? 0,
     },
-    hdis: req.hdis
-      ? { jdId: req.hdis.jdId, title: req.hdis.title, type: req.hdis.type, status: req.hdis.status }
-      : null,
-    coOwners: coOwners.map((c) => ({
-      id: c.id,
-      code: c.code,
-      ownerName: c.owner.user.name,
-      status: c.status,
+    hdis: { jdId: h.jdId, title: h.title, type: h.type, status: h.status },
+    coOwners: coOwners.map((o) => ({
+      id: o.id,
+      code: h.jdId,
+      ownerName: o.consultantOrName,
+      status: h.status,
     })),
   };
 }

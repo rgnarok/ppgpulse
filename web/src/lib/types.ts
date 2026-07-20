@@ -47,7 +47,9 @@ export interface OverviewResponse {
   };
   charts: {
     requirementsByConsultant: { name: string; value: number }[];
-    statusMix: { active: number; onHold: number; closed: number };
+    /** Status mix broken down by the HDIS status-reason detail (e.g. "Fulfilled by
+     * VAYUZ" vs "Fulfilled by others"), grouped under Active/On Hold/Fulfilled/Closed. */
+    statusReasonMix: { status: string; label: string; count: number }[];
     closuresByConsultant: { name: string; value: number }[];
     confidenceByConsultant: { name: string; value: number }[];
   };
@@ -90,6 +92,7 @@ export interface RequirementRow {
   client: string;
   reqDate: string;
   status: string;
+  statusReason: string | null;
   profiles: number;
   shortlist: number;
   l1: number;

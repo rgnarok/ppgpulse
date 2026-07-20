@@ -6,7 +6,10 @@
 export interface ReqLite {
   ownerName: string;
   reqDate: string;
-  status: string; // 'Active' | 'On Hold' | 'Closed'
+  status: string; // 'Active' | 'On Hold' | 'Fulfilled' | 'Closed'
+  /** Free-text sub-reason shown alongside On Hold/Fulfilled/Closed, e.g. "Fulfilled by
+   * VAYUZ" — null while Active or when no reason was recorded. */
+  statusReason?: string | null;
   profiles: number;
   shortlist: number;
   l1: number;
@@ -14,6 +17,8 @@ export interface ReqLite {
   l3: number;
   onboard: number;
   jdId: string | null;
+  /** HDIS category (RADC/RADF/Internal) — used for the closure RADC/RADF split. */
+  type?: string | null;
 }
 
 export interface PersonStats {
@@ -28,7 +33,7 @@ export interface PersonStats {
 }
 
 export function isClosed(r: Pick<ReqLite, 'onboard' | 'status'>): boolean {
-  return r.onboard > 0 || r.status === 'Closed';
+  return r.onboard > 0 || r.status === 'Closed' || r.status === 'Fulfilled';
 }
 
 /** Aggregate stats over a set of requirements (already period+scope filtered). */
@@ -114,12 +119,43 @@ export function funnel(st: PersonStats): FunnelStage[] {
   ];
 }
 
-/** [Active, On Hold, Closed] counts (Closed = isClosed; others exclude closed). */
-export function statusMix(reqs: ReqLite[]): { active: number; onHold: number; closed: number } {
-  const active = reqs.filter((r) => r.status === 'Active' && !isClosed(r)).length;
-  const onHold = reqs.filter((r) => r.status === 'On Hold' && !isClosed(r)).length;
-  const closed = reqs.filter((r) => isClosed(r)).length;
-  return { active, onHold, closed };
+export interface StatusReasonSlice {
+  /** The bare HDIS status this slice rolls up under — 'Active' | 'On Hold' |
+   * 'Fulfilled' | 'Closed'. */
+  status: string;
+  /** The chart label — the status-reason detail (e.g. "Fulfilled by VAYUZ") when one
+   * was recorded, otherwise the bare status. */
+  label: string;
+  count: number;
+}
+
+const STATUS_ORDER = ['Active', 'On Hold', 'Fulfilled', 'Closed'];
+
+/**
+ * Status mix broken down by the HDIS status-reason detail rather than just the bare
+ * status, so the chart shows what's actually driving each bucket — e.g. "Fulfilled by
+ * VAYUZ" vs "Fulfilled by others", "Hold By client" vs "Hold By VAYUZ" — falling back
+ * to the bare status when no reason was recorded (or for Active, which has none).
+ * Grouped by status in a stable order, then by count (desc) within each status.
+ */
+export function statusReasonMix(reqs: ReqLite[]): StatusReasonSlice[] {
+  const byStatus = new Map<string, Map<string, number>>();
+  for (const r of reqs) {
+    const label = r.statusReason?.trim() ? r.statusReason : r.status;
+    const m = byStatus.get(r.status) ?? new Map<string, number>();
+    m.set(label, (m.get(label) ?? 0) + 1);
+    byStatus.set(r.status, m);
+  }
+  const order = [...STATUS_ORDER, ...[...byStatus.keys()].filter((s) => !STATUS_ORDER.includes(s))];
+  const out: StatusReasonSlice[] = [];
+  for (const status of order) {
+    const m = byStatus.get(status);
+    if (!m) continue;
+    for (const [label, count] of [...m.entries()].sort((a, b) => b[1] - a[1])) {
+      out.push({ status, label, count });
+    }
+  }
+  return out;
 }
 
 /** Active-requirement-count bucket shown on the team roster's "Load" column. */
@@ -137,16 +173,12 @@ export function kpiBand(val: number): 'ME' | 'SME' | 'NI' {
 }
 
 /** RADC/RADF split of closed requirements via HDIS category. */
-export function closureCats(
-  reqs: ReqLite[],
-  catByJd: Map<string, string>,
-): { radc: number; radf: number } {
+export function closureCats(reqs: ReqLite[]): { radc: number; radf: number } {
   let radc = 0;
   let radf = 0;
   for (const r of reqs.filter(isClosed)) {
-    const c = r.jdId ? catByJd.get(r.jdId) : undefined;
-    if (c === 'RADC') radc++;
-    else if (c === 'RADF') radf++;
+    if (r.type === 'RADC') radc++;
+    else if (r.type === 'RADF') radf++;
   }
   return { radc, radf };
 }

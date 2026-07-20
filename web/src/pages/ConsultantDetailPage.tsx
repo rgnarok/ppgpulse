@@ -109,19 +109,30 @@ function KpiTilesRow({ report }: { report: ConsultantReport }) {
   );
 }
 
-/** Same [Active,OnHold,Closed] rule used server-side (metrics.ts's statusMix /
- * isClosed), just computed client-side over the already-fetched requirements list. */
-function statusMixOf(requirements: ConsultantReport['requirements']) {
-  let active = 0;
-  let onHold = 0;
-  let closed = 0;
+const STATUS_ORDER = ['Active', 'On Hold', 'Fulfilled', 'Closed'];
+
+/** Same status-reason breakdown rule used server-side (metrics.ts's statusReasonMix),
+ * computed client-side over the already-fetched requirements list — shows what's
+ * actually driving each bucket (e.g. "Fulfilled by VAYUZ" vs "Fulfilled by others")
+ * instead of just the bare status. */
+function statusReasonMixOf(requirements: ConsultantReport['requirements']) {
+  const byStatus = new Map<string, Map<string, number>>();
   for (const r of requirements) {
-    const isClosedRow = r.onboard > 0 || r.status === 'Closed';
-    if (isClosedRow) closed++;
-    else if (r.status === 'Active') active++;
-    else if (r.status === 'On Hold') onHold++;
+    const label = r.statusReason?.trim() ? r.statusReason : r.status;
+    const m = byStatus.get(r.status) ?? new Map<string, number>();
+    m.set(label, (m.get(label) ?? 0) + 1);
+    byStatus.set(r.status, m);
   }
-  return { active, onHold, closed };
+  const order = [...STATUS_ORDER, ...[...byStatus.keys()].filter((s) => !STATUS_ORDER.includes(s))];
+  const out: { status: string; label: string; count: number }[] = [];
+  for (const status of order) {
+    const m = byStatus.get(status);
+    if (!m) continue;
+    for (const [label, count] of [...m.entries()].sort((a, b) => b[1] - a[1])) {
+      out.push({ status, label, count });
+    }
+  }
+  return out;
 }
 
 function monthlyCountsOf(requirements: ConsultantReport['requirements']) {
@@ -134,7 +145,7 @@ function monthlyCountsOf(requirements: ConsultantReport['requirements']) {
 }
 
 function ChartsRow({ report }: { report: ConsultantReport }) {
-  const mix = useMemo(() => statusMixOf(report.requirements), [report.requirements]);
+  const mix = useMemo(() => statusReasonMixOf(report.requirements), [report.requirements]);
   const byMonth = useMemo(() => monthlyCountsOf(report.requirements), [report.requirements]);
   const max = Math.max(1, ...report.funnel.map((f) => f.target));
 
@@ -175,10 +186,7 @@ function ChartsRow({ report }: { report: ConsultantReport }) {
           <h3>Requirement status mix</h3>
         </div>
         <div className="chart-box sm">
-          <DonutChart
-            labels={['Active', 'On Hold', 'Closed']}
-            values={[mix.active, mix.onHold, mix.closed]}
-          />
+          <DonutChart labels={mix.map((m) => m.label)} values={mix.map((m) => m.count)} />
         </div>
       </div>
       <div className="chart-card">

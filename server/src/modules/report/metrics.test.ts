@@ -4,7 +4,7 @@ import {
   confidence,
   kpiRating,
   funnel,
-  statusMix,
+  statusReasonMix,
   closureCats,
   isClosed,
   loadBucket,
@@ -17,6 +17,7 @@ function req(p: Partial<ReqLite>): ReqLite {
     ownerName: 'X',
     reqDate: '2026-05-01',
     status: 'Active',
+    statusReason: null,
     profiles: 0,
     shortlist: 0,
     l1: 0,
@@ -24,15 +25,18 @@ function req(p: Partial<ReqLite>): ReqLite {
     l3: 0,
     onboard: 0,
     jdId: null,
+    type: null,
     ...p,
   };
 }
 
 describe('isClosed', () => {
-  it('is true when onboard>0 or status Closed', () => {
+  it('is true when onboard>0, status Closed, or status Fulfilled', () => {
     expect(isClosed({ onboard: 1, status: 'Active' })).toBe(true);
     expect(isClosed({ onboard: 0, status: 'Closed' })).toBe(true);
+    expect(isClosed({ onboard: 0, status: 'Fulfilled' })).toBe(true);
     expect(isClosed({ onboard: 0, status: 'Active' })).toBe(false);
+    expect(isClosed({ onboard: 0, status: 'On Hold' })).toBe(false);
   });
 });
 
@@ -125,29 +129,59 @@ describe('kpiBand', () => {
   });
 });
 
-describe('statusMix and closureCats', () => {
-  it('splits status buckets (closed wins over status)', () => {
+describe('statusReasonMix', () => {
+  it('groups by status in a stable order, falling back to the bare status with no reason', () => {
     const reqs = [
       req({ status: 'Active' }),
-      req({ status: 'On Hold' }),
-      req({ status: 'Active', onboard: 1 }), // counts as closed
-      req({ status: 'Closed' }),
+      req({ status: 'Active' }),
+      req({ status: 'On Hold', statusReason: 'Hold By client' }),
+      req({ status: 'Closed', statusReason: 'Closed by VAYUZ' }),
     ];
-    expect(statusMix(reqs)).toEqual({ active: 1, onHold: 1, closed: 2 });
+    expect(statusReasonMix(reqs)).toEqual([
+      { status: 'Active', label: 'Active', count: 2 },
+      { status: 'On Hold', label: 'Hold By client', count: 1 },
+      { status: 'Closed', label: 'Closed by VAYUZ', count: 1 },
+    ]);
   });
 
-  it('splits closures by HDIS category', () => {
-    const cats = new Map([
-      ['A', 'RADC'],
-      ['B', 'RADF'],
-      ['C', 'Internal'],
-    ]);
+  it('surfaces the Fulfilled-by-VAYUZ / Fulfilled-by-others split', () => {
     const reqs = [
-      req({ status: 'Closed', jdId: 'A' }),
-      req({ onboard: 1, jdId: 'B' }),
-      req({ status: 'Closed', jdId: 'C' }),
-      req({ status: 'Closed', jdId: null }),
+      req({ status: 'Fulfilled', statusReason: 'Fulfilled by VAYUZ' }),
+      req({ status: 'Fulfilled', statusReason: 'Fulfilled by VAYUZ' }),
+      req({ status: 'Fulfilled', statusReason: 'Fulfilled by others' }),
     ];
-    expect(closureCats(reqs, cats)).toEqual({ radc: 1, radf: 1 });
+    expect(statusReasonMix(reqs)).toEqual([
+      { status: 'Fulfilled', label: 'Fulfilled by VAYUZ', count: 2 },
+      { status: 'Fulfilled', label: 'Fulfilled by others', count: 1 },
+    ]);
+  });
+
+  it('orders slices Active, On Hold, Fulfilled, Closed regardless of input order', () => {
+    const reqs = [
+      req({ status: 'Closed', statusReason: 'Closed by others' }),
+      req({ status: 'Fulfilled', statusReason: 'Fulfilled by others' }),
+      req({ status: 'On Hold', statusReason: 'Hold By VAYUZ' }),
+      req({ status: 'Active' }),
+    ];
+    expect(statusReasonMix(reqs).map((s) => s.status)).toEqual([
+      'Active',
+      'On Hold',
+      'Fulfilled',
+      'Closed',
+    ]);
+  });
+});
+
+describe('closureCats', () => {
+  it('splits closed (Closed/Fulfilled/onboarded) requirements by HDIS category', () => {
+    const reqs = [
+      req({ status: 'Closed', type: 'RADC' }),
+      req({ status: 'Fulfilled', type: 'RADC' }),
+      req({ onboard: 1, type: 'RADF' }),
+      req({ status: 'Closed', type: 'Internal' }),
+      req({ status: 'Closed', type: null }),
+      req({ status: 'Active', type: 'RADC' }), // not closed — excluded
+    ];
+    expect(closureCats(reqs)).toEqual({ radc: 2, radf: 1 });
   });
 });

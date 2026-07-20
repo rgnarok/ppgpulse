@@ -50,6 +50,7 @@ const report: ConsultantReport = {
       client: 'NavsoftAI',
       reqDate: '2026-06-29',
       status: 'Active',
+      statusReason: null,
       profiles: 1,
       shortlist: 2,
       l1: 2,

@@ -26,7 +26,13 @@ const overview = {
   },
   charts: {
     requirementsByConsultant: [{ name: 'Abha Sharma', value: 18 }],
-    statusMix: { active: 40, onHold: 90, closed: 15 },
+    statusReasonMix: [
+      { status: 'Active', label: 'Active', count: 40 },
+      { status: 'On Hold', label: 'Hold By client', count: 60 },
+      { status: 'On Hold', label: 'Hold By VAYUZ', count: 30 },
+      { status: 'Fulfilled', label: 'Fulfilled by VAYUZ', count: 10 },
+      { status: 'Closed', label: 'Closed by VAYUZ', count: 5 },
+    ],
     closuresByConsultant: [{ name: 'Abha Sharma', value: 0 }],
     confidenceByConsultant: [{ name: 'Abha Sharma', value: 63 }],
   },
@@ -46,7 +52,11 @@ const scopedOverview = {
   },
   charts: {
     requirementsByConsultant: [{ name: 'Abha Sharma', value: 18 }],
-    statusMix: { active: 10, onHold: 6, closed: 2 },
+    statusReasonMix: [
+      { status: 'Active', label: 'Active', count: 10 },
+      { status: 'On Hold', label: 'Hold By client', count: 6 },
+      { status: 'Fulfilled', label: 'Fulfilled by VAYUZ', count: 2 },
+    ],
     closuresByConsultant: [{ name: 'Abha Sharma', value: 2 }],
     confidenceByConsultant: [{ name: 'Abha Sharma', value: 63 }],
   },

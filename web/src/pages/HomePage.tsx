@@ -182,9 +182,11 @@ function OverviewView({
             <h3>Status mix</h3>
           </div>
           <div className="chart-box">
+            {/* Broken down by the HDIS status-reason detail (e.g. "Fulfilled by
+                VAYUZ" vs "Fulfilled by others"), not just the bare status. */}
             <DonutChart
-              labels={['Active', 'On Hold', 'Closed']}
-              values={[c.statusMix.active, c.statusMix.onHold, c.statusMix.closed]}
+              labels={c.statusReasonMix.map((s) => s.label)}
+              values={c.statusReasonMix.map((s) => s.count)}
             />
           </div>
         </div>

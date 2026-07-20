@@ -16,14 +16,18 @@ Consultant      id, userId(fk User, unique), pod('Pod A'|...), eventsHosted,
 
 Requirement     id, code(e.g. Q1-001), jdId(nullable, fk Hdis.jdId), owner(fk Consultant),
                 title, client, reqDate, status('Active'|'On Hold'|'Closed'),
-                profiles, shortlist, l1, l2, l3, onboard   // PPG self-reported stages
-                // period filtering uses reqDate
+                profiles, shortlist, l1, l2, l3, onboard   // legacy seed-only table;
+                // nothing in the live app writes to it (see note below) — kept for the
+                // original seed data only, not used by /report/* as of the HDIS switch.
 
 Hdis            jdId(pk, string e.g. VAY_AC_20260701), title, client,
-                type('RADC'|'RADF'|'Internal'), openings, status, priority,
-                confidence, reqDate, jdLink(nullable), createdAt, updatedAt
+                type('RADC'|'RADF'|'Internal'), openings, status('Active'|'On Hold'|
+                'Fulfilled'|'Closed'), statusReason(nullable), remarks(nullable),
+                priority, confidence, reqDate, jdLink(nullable), createdAt, updatedAt
 HdisOwner       id, jdId(fk), consultantOrName        // owners (may be non-PPG names)
 HdisPipeline    jdId(pk fk Hdis), r0,r1,r2,r3,r4,r5(int), stage(string), updatedAt
+                // r0..r5 = Profiles/Shortlist/L1/L2/L3/Onboard — logged live via the
+                // HDIS record detail page's pipeline recorder.
 HdisAttachment  id, jdId(fk), fileName, storageKey, contentType, size, uploadedBy, at
 HdisActivity    id, jdId(fk), actorId(fk User), action, detail, at   // append-only log
 
@@ -38,6 +42,15 @@ Indexes: `Requirement(owner, reqDate)`, `Requirement(reqDate)`, `Interview(date)
 Seed: `/server/prisma/seed.json` (provided) → 13 users, 3 roles, 10 consultants,
 145 requirements, 138 HDIS records with owners. Passwords seeded to `Passw0rd!`
 (dev only), forced reset flag optional.
+
+**`/report/*` data source:** Home, the Team Roster, and the per-consultant report all
+read live from `Hdis` + `HdisOwner` + `HdisPipeline` — not `Requirement`. Requirement
+rows are only ever written by the seed script, so a dashboard built on them would never
+reflect anything entered through the live HDIS UI. Each `HdisOwner` row is one
+"requirement" in the old sense (a JD × owner pair); `HdisPipeline.r0..r5` supplies the
+Profiles/Shortlist/L1/L2/L3/Onboard funnel numbers Requirement used to carry, `Hdis.type`
+supplies the RADC/RADF category directly (no join needed), and `Fulfilled` is bucketed
+with `Closed` for the "Total Closures" tile and the closed side of any status split.
 
 ## 2. RBAC
 
@@ -79,9 +92,10 @@ GET  /me                    -> current user + effective permissions + scope
 
 # People / report
 GET  /consultants?scope           -> consultants visible to caller (scoped)
-GET  /report/overview?from&to&month&fy   -> tiles + chart series (scoped)
+GET  /report/overview?from&to&month&fy   -> tiles + chart series (scoped, sourced live
+                                             from Hdis/HdisOwner/HdisPipeline)
 GET  /report/consultant/:id?from&to&month&fy -> confidence, funnel, kpi, requirements
-GET  /requirements/:id            -> requirement detail (+ workers on same jd)
+GET  /requirements/:id            -> requirement (HDIS jdId) detail + co-owners on same jd
 
 # HDIS
 GET  /hdis?month&status&q                 -> list (monthly)
@@ -113,7 +127,7 @@ Every endpoint: zod-validate input, authorize (role/override + scope), return ty
 and be covered by a test asserting **both** an allowed and a denied case.
 
 ## 4. Derived metrics (match prototype)
-- `personStats` over reqs in period: reqs, closed(=onboard>0 or status Closed),
+- `personStats` over reqs in period: reqs, closed(=onboard>0 or status Closed/Fulfilled),
   profiles(Σprofiles), shortlist(Σshortlist), onboard(Σonboard).
 - `confidence` 0–100 = 0.3·pipelineProgression + 0.25·shortlistQuality + 0.2·tat +
   0.25·conversion (see prototype `confidence()` for exact formulas).
@@ -122,6 +136,11 @@ and be covered by a test asserting **both** an allowed and a denied case.
   Total Requirements, Insights Published, Events Hosted, Events Participated, Consultants.
 - Charts: requirements-by-consultant (h-bar), status mix (donut), closures-by-consultant,
   confidence-by-consultant. All scoped + period-filtered.
+- Status mix is broken down by the HDIS status-reason detail rather than the bare
+  status — e.g. "Fulfilled by VAYUZ" vs "Fulfilled by others", "Hold By client" vs
+  "Hold By VAYUZ" — grouped under Active/On Hold/Fulfilled/Closed in that order
+  (`statusReasonMix` in `report/metrics.ts`), falling back to the bare status when no
+  reason was recorded.
 
 ## 5. Non-functional
 - CORS locked to web origin; helmet; rate-limit auth; refresh-token rotation.
