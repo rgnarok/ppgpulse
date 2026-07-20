@@ -182,3 +182,44 @@ export function closureCats(reqs: ReqLite[]): { radc: number; radf: number } {
   }
   return { radc, radf };
 }
+
+export interface PipelineSums {
+  r0: number;
+  r1: number;
+  r2: number;
+  r3: number;
+  r4: number;
+  r5: number;
+}
+
+export interface OrgFunnelStage {
+  code: string;
+  label: string;
+  count: number;
+  /** % of the previous stage's count that didn't make it to this stage; null for R0,
+   * which has no previous stage to drop off from. 0 when the previous stage was
+   * itself empty (nothing to drop off from). */
+  dropoffPct: number | null;
+}
+
+const ORG_FUNNEL_LABELS: [string, string][] = [
+  ['R0', 'Profiles Shared'],
+  ['R1', 'Client Shortlist'],
+  ['R2', 'Technical Interview'],
+  ['R3', 'Fitment / Org'],
+  ['R4', 'HR Interview'],
+  ['R5', 'Offer & Onboarded'],
+];
+
+/** Org-wide R0-R5 funnel (aggregate pipeline counts, not per-person) with stage-over-
+ * stage drop-off percentages — powers the Dhruva "Recruitment Lifecycle Funnel". */
+export function orgFunnel(sums: PipelineSums): OrgFunnelStage[] {
+  const counts = [sums.r0, sums.r1, sums.r2, sums.r3, sums.r4, sums.r5];
+  return ORG_FUNNEL_LABELS.map(([code, label], i) => {
+    const count = counts[i];
+    if (i === 0) return { code, label, count, dropoffPct: null };
+    const prev = counts[i - 1];
+    const dropoffPct = prev > 0 ? Math.round((1 - count / prev) * 100) : 0;
+    return { code, label, count, dropoffPct };
+  });
+}

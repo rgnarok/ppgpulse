@@ -29,8 +29,9 @@ const KPI_TONE: Record<TeamRosterRow['kpiBand'], string> = {
 
 /** Org-wide (or pod-scoped) performance table — Consultant/Role/Active Reqs/Load/
  * Onboard MTD/Profiles per wk/HDIS Today/KPI Rating. Clicking a row opens that
- * person's dedicated report page. */
-function TeamRosterTable() {
+ * person's dedicated report page. Exported for reuse on the Dhruva dashboard, which
+ * shows the same org-wide roster in its "PPG Team Roster" section. */
+export function TeamRosterTable() {
   const navigate = useNavigate();
   const { data: rows = [], isLoading } = useTeamRoster();
   const { page, setPage, pageCount, pageItems, pageSize, totalItems } = usePagination(rows, 20);

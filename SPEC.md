@@ -54,7 +54,7 @@ with `Closed` for the "Total Closures" tile and the closed side of any status sp
 
 ## 2. RBAC
 
-Sections: `home, interviews, hdis, myteam, profile, users, roles, hierarchy`
+Sections: `home, interviews, hdis, myteam, profile, users, roles, hierarchy, auditlog, dhruva`
 Capabilities per section: `view, add, edit, delete` (+ `export` where relevant).
 
 Default role → permission matrix:
@@ -69,6 +69,8 @@ Default role → permission matrix:
 | users       | view, edit         | view, edit*                 | —                 |
 | roles       | view, edit         | view, edit*                 | —                 |
 | hierarchy   | view, edit         | view, edit                  | —                 |
+| auditlog    | view               | —                            | —                 |
+| dhruva      | view               | —                            | —                 |
 
 Special rules (must be enforced server-side + tested):
 - `scope`: `super_admin`/`hr_manager` = `org`; `consultant` = `team`. `team` = the
@@ -96,6 +98,13 @@ GET  /report/overview?from&to&month&fy   -> tiles + chart series (scoped, source
                                              from Hdis/HdisOwner/HdisPipeline)
 GET  /report/consultant/:id?from&to&month&fy -> confidence, funnel, kpi, requirements
 GET  /requirements/:id            -> requirement (HDIS jdId) detail + co-owners on same jd
+GET  /report/dhruva?priority&client&ppg&from&to -> super-admin-only org-wide dashboard:
+                                     RAPYD Active split, Active Clients, Interviews Today
+                                     split, Priority (P1/P2/P3/Uncategorised) tiles, the
+                                     org-wide R0-R5 funnel with drop-off % (filterable by
+                                     priority/client/PPG owner/date range), and Top
+                                     Clients by people deployed (RADC/RADF, top 5 each).
+                                     perm dhruva.view (super_admin only)
 
 # HDIS
 GET  /hdis?month&status&q                 -> list (monthly)

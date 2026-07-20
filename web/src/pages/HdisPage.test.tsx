@@ -475,6 +475,62 @@ describe('HDIS status reason + remarks', () => {
   });
 });
 
+describe('HDIS priority', () => {
+  it('shows "Uncategorised" for the default NA priority in the list', async () => {
+    mockFetch(routesFor(superAdminMe));
+    renderApp(
+      <Routes>
+        <Route path="/hdis" element={<HdisPage />} />
+      </Routes>,
+      { route: '/hdis' },
+    );
+    await screen.findByText('QA Engineer');
+    // "Uncategorised" also appears as an option in the Priority filter select, so
+    // there's more than one match — just confirm the pill rendered somewhere.
+    expect(screen.getAllByText('Uncategorised').length).toBeGreaterThan(0);
+  });
+
+  it('submits the chosen priority on create', async () => {
+    const { calls } = mockFetch([
+      ...routesFor(superAdminMe),
+      jsonRoute('/api/hdis', record, { method: 'POST' }),
+    ]);
+    renderApp(
+      <Routes>
+        <Route path="/hdis" element={<HdisPage />} />
+      </Routes>,
+      { route: '/hdis' },
+    );
+    await screen.findByText('QA Engineer');
+    await userEvent.click(screen.getByText('+ Add record'));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.selectOptions(within(dialog).getByLabelText('Priority'), 'P1');
+    await userEvent.type(screen.getByPlaceholderText('VAY_XX_20260601'), 'NEW_JD_20260702');
+    await userEvent.click(screen.getByText('Save record'));
+
+    const posted = calls.find((c) => c.url.endsWith('/api/hdis') && c.method === 'POST');
+    expect(posted).toBeTruthy();
+    expect((posted!.body as { priority: string }).priority).toBe('P1');
+  });
+
+  it('narrows the list by priority', async () => {
+    const p1: HdisRecord = { ...record2, priority: 'P1' };
+    mockFetch(routesFor(superAdminMe, [record, p1]));
+    renderApp(
+      <Routes>
+        <Route path="/hdis" element={<HdisPage />} />
+      </Routes>,
+      { route: '/hdis' },
+    );
+    await screen.findByText('QA Engineer');
+    expect(screen.getByText('Business Analyst')).toBeInTheDocument();
+
+    await userEvent.selectOptions(screen.getByLabelText('Priority'), 'P1');
+    expect(screen.queryByText('QA Engineer')).not.toBeInTheDocument();
+    expect(screen.getByText('Business Analyst')).toBeInTheDocument();
+  });
+});
+
 describe('HDIS filters', () => {
   it('narrows the list by client and supports Reset', async () => {
     mockFetch(routesFor(superAdminMe, [record, record2]));

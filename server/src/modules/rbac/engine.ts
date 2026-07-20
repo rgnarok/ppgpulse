@@ -11,6 +11,8 @@ export const SECTIONS = [
   'roles',
   'hierarchy',
   'auditlog',
+  // Super-admin-only org-wide operations dashboard (RAPYD/priority/funnel/top clients).
+  'dhruva',
 ] as const;
 export type Section = (typeof SECTIONS)[number];
 export type Capability = 'view' | 'add' | 'edit' | 'delete' | 'export';

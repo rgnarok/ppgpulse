@@ -9,6 +9,7 @@ import {
   isClosed,
   loadBucket,
   kpiBand,
+  orgFunnel,
   type ReqLite,
 } from './metrics.js';
 
@@ -169,6 +170,30 @@ describe('statusReasonMix', () => {
       'Fulfilled',
       'Closed',
     ]);
+  });
+});
+
+describe('orgFunnel', () => {
+  it('maps stage codes/labels and computes drop-off % between consecutive stages', () => {
+    const f = orgFunnel({ r0: 340, r1: 102, r2: 41, r3: 12, r4: 12, r5: 7 });
+    expect(f.map((s) => s.code)).toEqual(['R0', 'R1', 'R2', 'R3', 'R4', 'R5']);
+    expect(f[0]).toEqual({ code: 'R0', label: 'Profiles Shared', count: 340, dropoffPct: null });
+    // 102/340 kept -> 70% dropped
+    expect(f[1]).toEqual({
+      code: 'R1',
+      label: 'Client Shortlist',
+      count: 102,
+      dropoffPct: 70,
+    });
+    // 12/12 kept -> 0% dropped
+    expect(f[4]).toEqual({ code: 'R4', label: 'HR Interview', count: 12, dropoffPct: 0 });
+    // 7/12 kept -> 42% dropped
+    expect(f[5]).toEqual({ code: 'R5', label: 'Offer & Onboarded', count: 7, dropoffPct: 42 });
+  });
+
+  it('treats drop-off as 0% when the previous stage was already empty', () => {
+    const f = orgFunnel({ r0: 0, r1: 0, r2: 0, r3: 0, r4: 0, r5: 0 });
+    expect(f.every((s) => s.dropoffPct === null || s.dropoffPct === 0)).toBe(true);
   });
 });
 

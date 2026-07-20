@@ -24,6 +24,12 @@ import type { HdisRecord } from '../lib/types';
 
 const TYPE_OPTIONS = ['RADC', 'RADF', 'Internal'];
 const STATUS_OPTIONS = ['Active', 'On Hold', 'Fulfilled', 'Closed'];
+/** P1/P2/P3 = live priority tiers shown on the Dhruva dashboard; "NA" (displayed as
+ * "Uncategorised") is the default for records nobody has triaged yet. */
+const PRIORITY_OPTIONS = ['P1', 'P2', 'P3', 'NA'];
+function priorityLabel(p: string): string {
+  return p === 'NA' ? 'Uncategorised' : p;
+}
 /** Status-specific reasons — only meaningful (and only shown) while the record is
  * "On Hold", "Fulfilled", or "Closed"; cleared automatically when the status moves back to Active. */
 const STATUS_REASON_OPTIONS: Record<string, string[]> = {
@@ -57,6 +63,7 @@ interface HdisFilters {
   client: string;
   owner: string;
   type: string;
+  priority: string;
   status: string;
   q: string;
 }
@@ -66,6 +73,7 @@ const EMPTY_FILTERS: HdisFilters = {
   client: '',
   owner: '',
   type: '',
+  priority: '',
   status: '',
   q: '',
 };
@@ -79,6 +87,7 @@ function filtersFromParams(params: URLSearchParams): HdisFilters {
     client: params.get('client') ?? '',
     owner: params.get('owner') ?? '',
     type: params.get('type') ?? '',
+    priority: params.get('priority') ?? '',
     status: params.get('status') ?? '',
     q: params.get('q') ?? '',
   };
@@ -155,6 +164,7 @@ function HdisList() {
       if (filters.client && r.client !== filters.client) return false;
       if (filters.owner && !r.owners.includes(filters.owner)) return false;
       if (filters.type && r.type !== filters.type) return false;
+      if (filters.priority && r.priority !== filters.priority) return false;
       if (filters.status && r.status !== filters.status) return false;
       if (needle) {
         const hay = `${r.title} ${r.client} ${r.jdId}`.toLowerCase();
@@ -289,6 +299,21 @@ function HdisList() {
             </select>
           </div>
           <div className="field">
+            <label htmlFor="hdis-priority">Priority</label>
+            <select
+              id="hdis-priority"
+              value={filters.priority}
+              onChange={(e) => set({ priority: e.target.value })}
+            >
+              <option value="">All priorities</option>
+              {PRIORITY_OPTIONS.map((p) => (
+                <option key={p} value={p}>
+                  {priorityLabel(p)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
             <label htmlFor="hdis-status">Status</label>
             <select
               id="hdis-status"
@@ -335,6 +360,7 @@ function HdisList() {
                   <th>Title</th>
                   <th>Client</th>
                   <th>Type</th>
+                  <th>Priority</th>
                   <th>Status</th>
                   <th>Owners</th>
                   {showEditColumn && <th />}
@@ -358,6 +384,11 @@ function HdisList() {
                     <td>{r.client}</td>
                     <td>
                       <Pill>{r.type}</Pill>
+                    </td>
+                    <td>
+                      <Pill tone={r.priority === 'NA' ? 'p-grey' : 'p-amber'}>
+                        {priorityLabel(r.priority)}
+                      </Pill>
                     </td>
                     <td>
                       <Pill>{r.status}</Pill>
@@ -431,6 +462,7 @@ function HdisFormModal({
     title: initial?.title ?? '',
     client: initial?.client ?? '',
     type: initial?.type ?? 'RADC',
+    priority: initial?.priority ?? 'NA',
     status: initial?.status ?? 'Active',
     statusReason: initial?.statusReason ?? '',
     remarks: initial?.remarks ?? '',
@@ -462,6 +494,7 @@ function HdisFormModal({
           title: form.title,
           client: form.client,
           type: form.type,
+          priority: form.priority,
           status: form.status,
           statusReason: form.statusReason || null,
           remarks: form.remarks.trim() || null,
@@ -540,6 +573,20 @@ function HdisFormModal({
             <select value={form.status} onChange={(e) => set('status', e.target.value)}>
               {STATUS_OPTIONS.map((s) => (
                 <option key={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="hdis-form-priority">Priority</label>
+            <select
+              id="hdis-form-priority"
+              value={form.priority}
+              onChange={(e) => set('priority', e.target.value)}
+            >
+              {PRIORITY_OPTIONS.map((p) => (
+                <option key={p} value={p}>
+                  {priorityLabel(p)}
+                </option>
               ))}
             </select>
           </div>
@@ -665,6 +712,10 @@ function HdisDetail({ jdId }: { jdId: string }) {
           <div className="db-item">
             <div className="dl">Requirement date</div>
             <div className="dv">{formatDate(rec.reqDate)}</div>
+          </div>
+          <div className="db-item">
+            <div className="dl">Priority</div>
+            <div className="dv">{priorityLabel(rec.priority)}</div>
           </div>
           <div className="db-item">
             <div className="dl">Openings</div>

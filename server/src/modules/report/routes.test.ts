@@ -233,3 +233,57 @@ describe('GET /api/requirements/:id', () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+describe('GET /api/report/dhruva', () => {
+  it('returns the RAPYD/priority/funnel/top-clients shape for a super admin', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/report/dhruva',
+      headers: auth(superToken),
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.rapyd.radc + body.rapyd.radf).toBeLessThanOrEqual(body.rapyd.total);
+    expect(body.activeClients).toBeGreaterThanOrEqual(0);
+    expect(
+      body.priority.p1 + body.priority.p2 + body.priority.p3 + body.priority.uncategorised,
+    ).toBe(body.rapyd.total);
+    expect(body.funnel.map((f: { code: string }) => f.code)).toEqual([
+      'R0',
+      'R1',
+      'R2',
+      'R3',
+      'R4',
+      'R5',
+    ]);
+    expect(body.funnel[0].dropoffPct).toBeNull();
+    expect(Array.isArray(body.topClients.radc)).toBe(true);
+    expect(Array.isArray(body.topClients.radf)).toBe(true);
+    expect(body.interviewsToday.radc + body.interviewsToday.radf).toBeLessThanOrEqual(
+      body.interviewsToday.total,
+    );
+  });
+
+  it('a priority filter narrows the funnel totals to (at most) the unfiltered total', async () => {
+    const [all, p1Only] = await Promise.all([
+      app.inject({ method: 'GET', url: '/api/report/dhruva', headers: auth(superToken) }),
+      app.inject({
+        method: 'GET',
+        url: '/api/report/dhruva?priority=P1',
+        headers: auth(superToken),
+      }),
+    ]);
+    const allR0 = all.json().funnel[0].count;
+    const p1R0 = p1Only.json().funnel[0].count;
+    expect(p1R0).toBeLessThanOrEqual(allR0);
+  });
+
+  it('forbids a non-super-admin (403)', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/report/dhruva',
+      headers: auth(consultantToken),
+    });
+    expect(res.statusCode).toBe(403);
+  });
+});

@@ -14,6 +14,7 @@ import RolesPage from './pages/admin/RolesPage';
 import HierarchyPage from './pages/admin/HierarchyPage';
 import ClientsPage from './pages/admin/ClientsPage';
 import AuditLogPage from './pages/admin/AuditLogPage';
+import DhruvaPage from './pages/admin/DhruvaPage';
 
 function FullPageMessage({ children }: { children: ReactNode }) {
   return (
@@ -142,6 +143,14 @@ export default function App() {
         element={
           <Protected section="auditlog">
             <AuditLogPage />
+          </Protected>
+        }
+      />
+      <Route
+        path="/admin/dhruva"
+        element={
+          <Protected section="dhruva">
+            <DhruvaPage />
           </Protected>
         }
       />

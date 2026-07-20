@@ -16,6 +16,7 @@ const SECTION_LABELS: Record<string, string> = {
   roles: 'Roles & Access',
   hierarchy: 'Team Hierarchy',
   auditlog: 'Activity Log',
+  dhruva: 'Dhruva',
 };
 
 export default function AuditLogPage() {

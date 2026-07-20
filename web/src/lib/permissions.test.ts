@@ -56,4 +56,23 @@ describe('visibleNav', () => {
     const lead = makeMe({ scope: 'team', hasReports: true });
     expect(visibleNav(lead).some((n) => n.key === 'myteam')).toBe(true);
   });
+
+  it('shows Dhruva only for a user with dhruva:view (super_admin by default)', () => {
+    const consultant = makeMe();
+    expect(visibleNav(consultant).some((n) => n.key === 'dhruva')).toBe(false);
+
+    const hrManager = makeMe({
+      role: { key: 'hr_manager', label: 'HR Manager', sub: 'Admin', scope: 'org' },
+      scope: 'org',
+      permissions: { home: ['view'], hdis: ['view', 'add', 'edit', 'delete'] },
+    });
+    expect(visibleNav(hrManager).some((n) => n.key === 'dhruva')).toBe(false);
+
+    const admin = makeMe({
+      role: { key: 'super_admin', label: 'Super Admin', sub: 'Co-Founder', scope: 'org' },
+      scope: 'org',
+      permissions: { home: ['view'], dhruva: ['view'] },
+    });
+    expect(visibleNav(admin).some((n) => n.key === 'dhruva')).toBe(true);
+  });
 });

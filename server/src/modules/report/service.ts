@@ -12,6 +12,7 @@ import {
   isClosed,
   loadBucket,
   kpiBand,
+  orgFunnel,
   type ReqLite,
 } from './metrics.js';
 
@@ -352,5 +353,122 @@ export async function requirementDetail(prisma: PrismaClient, user: CurrentUser,
       ownerName: o.consultantOrName,
       status: h.status,
     })),
+  };
+}
+
+/** A record is "live" (still open work, not yet resolved) when its status hasn't
+ * reached Fulfilled or Closed — mirrors isClosed()'s bucketing but at the bare-status
+ * level, since the Dhruva tiles work off whole HDIS records rather than per-owner rows. */
+function isLiveStatus(status: string): boolean {
+  return status !== 'Fulfilled' && status !== 'Closed';
+}
+
+export interface DhruvaFilters {
+  /** Narrows the funnel + its drop-off %s only — the headline tiles (RAPYD Active,
+   * Active Clients, Priority split) always reflect the whole live dataset, same as
+   * the "always full dataset" convention used by the HDIS list's headline cards. */
+  priority?: string;
+  client?: string;
+  ppg?: string;
+  from?: string;
+  to?: string;
+}
+
+/** GET /report/dhruva — super-admin-only org-wide operations dashboard: RAPYD Active
+ * split, Active Clients, Interviews Today split, Priority (P1/P2/P3/Uncategorised)
+ * tiles, the org-wide R0-R5 funnel (filterable), and Top Clients by people deployed. */
+export async function dhruvaDashboard(
+  prisma: PrismaClient,
+  user: CurrentUser,
+  filters: DhruvaFilters,
+) {
+  const directory = await loadDirectory(prisma);
+  const names = scopeNames(user, directory);
+  const rows = await prisma.hdis.findMany({
+    where: { owners: { some: { consultantOrName: { in: [...names] } } } },
+    include: { owners: true, pipeline: true },
+  });
+
+  const rapyd = { total: 0, radc: 0, radf: 0 };
+  const priority = { p1: 0, p2: 0, p3: 0, uncategorised: 0 };
+  const clientAgg = new Map<string, { radc: number; radf: number }>();
+  for (const h of rows) {
+    if (!isLiveStatus(h.status)) continue;
+    rapyd.total++;
+    if (h.type === 'RADC') rapyd.radc++;
+    else if (h.type === 'RADF') rapyd.radf++;
+
+    if (h.priority === 'P1') priority.p1++;
+    else if (h.priority === 'P2') priority.p2++;
+    else if (h.priority === 'P3') priority.p3++;
+    else priority.uncategorised++;
+  }
+  const activeClients = new Set(rows.filter((h) => isLiveStatus(h.status)).map((h) => h.client))
+    .size;
+
+  // Top Clients — people deployed (R5/onboard) per client, split RADC/RADF — counts
+  // across the whole dataset (closed records included; a past deployment still counts
+  // as someone placed at that client), unaffected by the funnel filters below.
+  for (const h of rows) {
+    if (h.type !== 'RADC' && h.type !== 'RADF') continue;
+    const deployed = h.pipeline?.r5 ?? 0;
+    if (!deployed) continue;
+    const cur = clientAgg.get(h.client) ?? { radc: 0, radf: 0 };
+    if (h.type === 'RADC') cur.radc += deployed;
+    else cur.radf += deployed;
+    clientAgg.set(h.client, cur);
+  }
+  const rankClients = (pick: (v: { radc: number; radf: number }) => number) =>
+    [...clientAgg.entries()]
+      .map(([client, v]) => ({ client, deployed: pick(v) }))
+      .filter((c) => c.deployed > 0)
+      .sort((a, b) => b.deployed - a.deployed)
+      .slice(0, 5);
+  const topClients = {
+    radc: rankClients((v) => v.radc),
+    radf: rankClients((v) => v.radf),
+  };
+
+  // Funnel — filterable by priority/client/PPG owner/date range.
+  const funnelRows = rows.filter((h) => {
+    if (filters.priority && h.priority !== filters.priority) return false;
+    if (filters.client && h.client !== filters.client) return false;
+    if (filters.ppg && !h.owners.some((o) => o.consultantOrName === filters.ppg)) return false;
+    if (filters.from && h.reqDate < filters.from) return false;
+    if (filters.to && h.reqDate > filters.to) return false;
+    return true;
+  });
+  const sums = funnelRows.reduce(
+    (acc, h) => {
+      const p = h.pipeline;
+      acc.r0 += p?.r0 ?? 0;
+      acc.r1 += p?.r1 ?? 0;
+      acc.r2 += p?.r2 ?? 0;
+      acc.r3 += p?.r3 ?? 0;
+      acc.r4 += p?.r4 ?? 0;
+      acc.r5 += p?.r5 ?? 0;
+      return acc;
+    },
+    { r0: 0, r1: 0, r2: 0, r3: 0, r4: 0, r5: 0 },
+  );
+
+  // Interviews today — org-wide, split RAPYD(C)/RAPYD(F) to match the Type field's
+  // free-text values used on the Interviews form.
+  const today = new Date().toISOString().slice(0, 10);
+  const todaysInterviews = await prisma.interview.findMany({ where: { date: today } });
+  const interviewsToday = { total: todaysInterviews.length, radc: 0, radf: 0 };
+  for (const iv of todaysInterviews) {
+    if (iv.type === 'RAPYD(C)') interviewsToday.radc++;
+    else if (iv.type === 'RAPYD(F)') interviewsToday.radf++;
+  }
+
+  return {
+    rapyd,
+    activeClients,
+    interviewsToday,
+    priority,
+    funnel: orgFunnel(sums),
+    funnelTotal: funnelRows.length,
+    topClients,
   };
 }

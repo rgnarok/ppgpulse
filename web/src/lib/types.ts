@@ -120,6 +120,30 @@ export interface TeamRosterRow {
   kpiBand: 'ME' | 'SME' | 'NI';
 }
 
+export interface DhruvaFunnelStage {
+  code: string;
+  label: string;
+  count: number;
+  /** % of the previous stage's count that didn't make it here; null for R0. */
+  dropoffPct: number | null;
+}
+
+export interface DhruvaTopClient {
+  client: string;
+  deployed: number;
+}
+
+/** GET /report/dhruva — super-admin-only org-wide operations dashboard. */
+export interface DhruvaDashboard {
+  rapyd: { total: number; radc: number; radf: number };
+  activeClients: number;
+  interviewsToday: { total: number; radc: number; radf: number };
+  priority: { p1: number; p2: number; p3: number; uncategorised: number };
+  funnel: DhruvaFunnelStage[];
+  funnelTotal: number;
+  topClients: { radc: DhruvaTopClient[]; radf: DhruvaTopClient[] };
+}
+
 export interface HdisRecord {
   jdId: string;
   title: string;

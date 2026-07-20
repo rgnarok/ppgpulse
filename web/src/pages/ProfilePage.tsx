@@ -2,7 +2,18 @@ import { AppShell } from '../components/AppShell';
 import { Card, SectionTitle } from '../components/ui';
 import { useAuth } from '../lib/auth';
 
-const SECTIONS = ['home', 'interviews', 'hdis', 'myteam', 'profile', 'users', 'roles', 'hierarchy'];
+const SECTIONS = [
+  'home',
+  'interviews',
+  'hdis',
+  'myteam',
+  'profile',
+  'users',
+  'roles',
+  'hierarchy',
+  'auditlog',
+  'dhruva',
+];
 const CAPS = ['view', 'add', 'edit', 'delete'];
 
 export default function ProfilePage() {

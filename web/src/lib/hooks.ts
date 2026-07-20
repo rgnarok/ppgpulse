@@ -3,6 +3,7 @@ import { api } from './api';
 import type {
   AuditLogEntry,
   ConsultantReport,
+  DhruvaDashboard,
   HdisActivityEntry,
   HdisRecord,
   OverviewResponse,
@@ -44,6 +45,24 @@ export function useTeamRoster() {
   return useQuery({
     queryKey: ['team-roster'],
     queryFn: () => api<TeamRosterRow[]>('/report/roster'),
+  });
+}
+
+export interface DhruvaFilterParams {
+  priority?: string;
+  client?: string;
+  ppg?: string;
+  from?: string;
+  to?: string;
+}
+
+/** The Dhruva org-wide operations dashboard (super-admin only). Only the `funnel` +
+ * `funnelTotal` fields respond to the filter params — the headline tiles always
+ * reflect the whole live dataset. */
+export function useDhruva(filters: DhruvaFilterParams) {
+  return useQuery({
+    queryKey: ['dhruva', filters],
+    queryFn: () => api<DhruvaDashboard>(`/report/dhruva${qs({ ...filters })}`),
   });
 }
 

@@ -7,6 +7,7 @@ import {
   consultantReport,
   requirementDetail,
   teamRoster,
+  dhruvaDashboard,
 } from './service.js';
 
 const periodQuery = z.object({
@@ -18,6 +19,14 @@ const periodQuery = z.object({
 
 const overviewQuery = periodQuery.extend({
   consultantId: z.string().optional(),
+});
+
+const dhruvaQuery = z.object({
+  priority: z.string().optional(),
+  client: z.string().optional(),
+  ppg: z.string().optional(),
+  from: z.string().optional(),
+  to: z.string().optional(),
 });
 
 export default async function reportRoutes(app: FastifyInstance) {
@@ -55,4 +64,10 @@ export default async function reportRoutes(app: FastifyInstance) {
       return requirementDetail(app.prisma, request.currentUser, request.params.id);
     },
   );
+
+  app.get('/report/dhruva', { preHandler: app.authenticate }, async (request) => {
+    assertCan(request.currentUser, 'dhruva', 'view');
+    const q = dhruvaQuery.parse(request.query);
+    return dhruvaDashboard(app.prisma, request.currentUser, q);
+  });
 }

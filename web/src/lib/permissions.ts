@@ -22,6 +22,14 @@ export interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { key: 'home', label: 'Home', path: '/', section: 'home', icon: '⌂', group: 'Workspace' },
   {
+    key: 'dhruva',
+    label: 'Dhruva',
+    path: '/admin/dhruva',
+    section: 'dhruva',
+    icon: '◈',
+    group: 'Admin',
+  },
+  {
     key: 'interviews',
     label: 'Interviews',
     path: '/interviews',

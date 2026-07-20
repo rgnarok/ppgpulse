@@ -26,6 +26,8 @@ export const superAdminMe: Me = {
     users: ['view', 'edit'],
     roles: ['view', 'edit'],
     hierarchy: ['view', 'edit'],
+    auditlog: ['view'],
+    dhruva: ['view'],
   },
   consultant: null,
 };
