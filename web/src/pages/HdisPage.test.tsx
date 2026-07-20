@@ -13,6 +13,15 @@ afterEach(() => vi.unstubAllGlobals());
 // team-scope role, but not listed as an owner of anything — needs a separate identity.
 const outsiderMe: Me = { ...consultantMe, id: 'u_outsider', name: 'Someone Else' };
 
+// A genuinely view-only role (no hdis:add) — distinct from consultantMe, which now
+// carries hdis:add so consultants can log their own JDs.
+const viewOnlyMe: Me = {
+  ...consultantMe,
+  id: 'u_viewonly',
+  name: 'View Only',
+  permissions: { ...consultantMe.permissions, hdis: ['view'] },
+};
+
 const record: HdisRecord = {
   jdId: 'TST_QA_20260601',
   title: 'QA Engineer',
@@ -132,8 +141,8 @@ describe('HDIS list (T10.1)', () => {
     expect(within(totalCard).getByText('3')).toBeInTheDocument();
   });
 
-  it('hides Add for a consultant (read-only)', async () => {
-    mockFetch(routesFor(consultantMe));
+  it('hides Add for a genuinely view-only user', async () => {
+    mockFetch(routesFor(viewOnlyMe));
     renderApp(
       <Routes>
         <Route path="/hdis" element={<HdisPage />} />
@@ -142,6 +151,22 @@ describe('HDIS list (T10.1)', () => {
     );
     await screen.findByText('QA Engineer');
     expect(screen.queryByText('+ Add record')).not.toBeInTheDocument();
+  });
+
+  it('lets a consultant add a record for their own JD, pre-owned by themselves', async () => {
+    mockFetch(routesFor(consultantMe));
+    renderApp(
+      <Routes>
+        <Route path="/hdis" element={<HdisPage />} />
+      </Routes>,
+      { route: '/hdis' },
+    );
+    await screen.findByText('QA Engineer');
+    expect(screen.getByText('+ Add record')).toBeInTheDocument();
+    await userEvent.click(screen.getByText('+ Add record'));
+    const dialog = await screen.findByRole('dialog');
+    // The creator is pre-added as an owner — still removable/extendable.
+    expect(within(dialog).getByText('Abha Sharma')).toBeInTheDocument();
   });
 });
 

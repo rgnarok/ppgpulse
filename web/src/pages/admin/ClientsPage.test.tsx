@@ -109,9 +109,12 @@ describe('Clients admin page', () => {
     expect(screen.getByText('Testify')).toBeInTheDocument();
   });
 
-  it('is hidden from a consultant (no hdis:add capability)', () => {
+  it('is hidden from a consultant (no hdis:edit capability, even though they can add HDIS records)', () => {
     // Purely a sanity check on the fixture — the actual route gating is exercised at
     // the App.tsx / permissions.ts level for nav + Protected route visibility.
-    expect(consultantMe.permissions.hdis).not.toContain('add');
+    // Consultants have hdis:add (to log their own JDs) but not hdis:edit, so the
+    // standalone client-master admin screen (gated on 'edit') stays admin-only.
+    expect(consultantMe.permissions.hdis).toContain('add');
+    expect(consultantMe.permissions.hdis).not.toContain('edit');
   });
 });

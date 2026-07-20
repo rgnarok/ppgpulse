@@ -409,6 +409,7 @@ function HdisFormModal({
   initial?: HdisRecord;
   onClose: () => void;
 }) {
+  const { me } = useAuth();
   const { data: clientRows = [] } = useClients();
   const clientNames = useMemo(() => clientRows.map((c) => c.name), [clientRows]);
   const { data: consultants = [] } = useConsultants();
@@ -436,7 +437,12 @@ function HdisFormModal({
     reqDate: initial?.reqDate ?? '2026-06-01',
     jdLink: initial?.jdLink ?? '',
   }));
-  const [owners, setOwners] = useState<string[]>(initial?.owners ?? []);
+  // Consultants adding a record for their own JD start out as its owner (still
+  // removable/extendable). Org-scope roles routinely add records on behalf of the
+  // team, so they still get a blank picker, same as before.
+  const [owners, setOwners] = useState<string[]>(
+    initial?.owners ?? (mode === 'create' && me?.scope !== 'org' && me?.name ? [me.name] : []),
+  );
   const reasonOptions = STATUS_REASON_OPTIONS[form.status] ?? [];
   const set = (k: string, v: string) =>
     setForm((f) => ({

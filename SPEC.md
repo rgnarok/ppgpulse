@@ -50,7 +50,7 @@ Default role → permission matrix:
 |-------------|--------------------|-----------------------------|-------------------|
 | home        | view               | view                        | view (own/team)   |
 | interviews  | view, edit         | view, edit                  | view, edit        |
-| hdis        | view,add,edit,delete | view,add,edit,delete      | view              |
+| hdis        | view,add,edit,delete | view,add,edit,delete      | view, add (own JDs only — see below) |
 | myteam      | view               | view                        | view (own/team)   |
 | profile     | view, edit         | view, edit                  | view, edit        |
 | users       | view, edit         | view, edit*                 | —                 |

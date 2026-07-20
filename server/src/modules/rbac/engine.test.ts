@@ -53,7 +53,10 @@ const roles: Record<string, RbacRole> = {
     permissions: {
       home: ['view'],
       interviews: ['view', 'edit'],
-      hdis: ['view'],
+      // 'add' lets a consultant create an HDIS record for their own JDs; editing
+      // still requires either the blanket 'edit' capability or record ownership
+      // (enforced in hdis/service.ts's assertCanEditHdisRecord, not by this matrix).
+      hdis: ['view', 'add'],
       myteam: ['view'],
       profile: ['view', 'edit'],
     },
@@ -97,11 +100,11 @@ describe('rbac matrix (SPEC §2)', () => {
     expect(can(u, 'users', 'edit')).toBe(true);
   });
 
-  it('consultant has hdis read-only and no admin sections', () => {
+  it('consultant can view + add hdis (own JDs), but not blanket-edit or admin sections', () => {
     const u = user('consultant');
     expect(can(u, 'hdis', 'view')).toBe(true);
+    expect(can(u, 'hdis', 'add')).toBe(true);
     expect(can(u, 'hdis', 'edit')).toBe(false);
-    expect(can(u, 'hdis', 'add')).toBe(false);
     expect(can(u, 'users', 'view')).toBe(false);
     expect(can(u, 'roles', 'view')).toBe(false);
     expect(can(u, 'hierarchy', 'view')).toBe(false);

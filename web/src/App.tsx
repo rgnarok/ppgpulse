@@ -132,7 +132,7 @@ export default function App() {
       <Route
         path="/admin/clients"
         element={
-          <Protected section="hdis" capability="add">
+          <Protected section="hdis" capability="edit">
             <ClientsPage />
           </Protected>
         }

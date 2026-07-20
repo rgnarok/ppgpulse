@@ -20,9 +20,14 @@ function makeMe(overrides: Partial<Me> = {}): Me {
 }
 
 describe('visibleNav', () => {
-  it('hides the Clients admin item unless the user can add HDIS records', () => {
+  it('hides the Clients admin item unless the user can edit HDIS records', () => {
     const consultant = makeMe({ permissions: { home: ['view'], hdis: ['view'] } });
     expect(visibleNav(consultant).some((n) => n.key === 'clients')).toBe(false);
+
+    // Can add HDIS records (their own JDs) but not edit — still no standalone
+    // client-master admin screen; they add new clients inline via the HDIS form.
+    const consultantWithAdd = makeMe({ permissions: { home: ['view'], hdis: ['view', 'add'] } });
+    expect(visibleNav(consultantWithAdd).some((n) => n.key === 'clients')).toBe(false);
 
     const admin = makeMe({
       role: { key: 'super_admin', label: 'Super Admin', sub: 'Co-Founder', scope: 'org' },

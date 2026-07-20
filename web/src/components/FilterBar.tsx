@@ -1,5 +1,7 @@
+import { useMemo } from 'react';
 import type { ScopedConsultant } from '../lib/types';
 import type { PeriodParams } from '../lib/hooks';
+import { currentFy, recentFiscalYears, fyLabel } from '../lib/fy';
 
 export interface FilterState extends PeriodParams {
   consultantId: string; // '' = team overview
@@ -15,6 +17,7 @@ export function FilterBar({
   consultants: ScopedConsultant[];
 }) {
   const set = (patch: Partial<FilterState>) => onChange({ ...state, ...patch });
+  const fys = useMemo(() => recentFiscalYears(), []);
   return (
     <div className="card pad" style={{ marginBottom: 16 }}>
       <div className="filterbar">
@@ -41,7 +44,11 @@ export function FilterBar({
             onChange={(e) => set({ fy: e.target.value || undefined })}
           >
             <option value="">All</option>
-            <option value="2025">FY 2025-26</option>
+            {fys.map((fy) => (
+              <option key={fy} value={fy}>
+                {fyLabel(fy)}
+              </option>
+            ))}
           </select>
         </div>
         <div className="field">
@@ -76,7 +83,7 @@ export function FilterBar({
         <button
           type="button"
           className="btn btn-gho"
-          onClick={() => onChange({ consultantId: '' })}
+          onClick={() => onChange({ consultantId: '', fy: currentFy() })}
         >
           Reset
         </button>

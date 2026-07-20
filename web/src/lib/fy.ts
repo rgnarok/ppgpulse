@@ -40,3 +40,16 @@ export function fiscalYearsFor(monthISOs: string[]): string[] {
   }
   return [...fys].sort((a, b) => Number(b) - Number(a));
 }
+
+/** The fiscal year (starting-year string) containing "now" — used to default filters to
+ * the year currently in progress instead of a stale hardcoded one. */
+export function currentFy(now: Date = new Date()): string {
+  return fyOfMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`)!;
+}
+
+/** A handful of fiscal years around the current one, newest first — for pickers that
+ * don't have a live dataset to derive exact years from (e.g. the Home filter bar). */
+export function recentFiscalYears(count = 4, now: Date = new Date()): string[] {
+  const cur = Number(currentFy(now));
+  return Array.from({ length: count }, (_, i) => String(cur - i));
+}

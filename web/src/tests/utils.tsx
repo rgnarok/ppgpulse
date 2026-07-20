@@ -43,7 +43,9 @@ export const consultantMe: Me = {
   permissions: {
     home: ['view'],
     interviews: ['view', 'edit'],
-    hdis: ['view'],
+    // Consultants can add HDIS records for their own JDs, but not blanket-edit —
+    // matches the real seeded 'consultant' role (SPEC.md §2).
+    hdis: ['view', 'add'],
     myteam: ['view'],
     profile: ['view', 'edit'],
   },

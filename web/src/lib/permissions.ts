@@ -79,9 +79,11 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Clients',
     path: '/admin/clients',
     section: 'hdis',
-    // Reuses the 'hdis' permission section: only those who can add HDIS records
-    // (org-scope roles) can manage the client master.
-    capability: 'add',
+    // Reuses the 'hdis' permission section: gated on 'edit' (org-scope roles) rather
+    // than 'add', since consultants now also have hdis:add (to log their own JDs) but
+    // shouldn't get the standalone client-master admin screen — they can still add a
+    // brand-new client inline from the HDIS form itself (ensureClient on create/edit).
+    capability: 'edit',
     icon: '🏢',
     group: 'Admin',
   },

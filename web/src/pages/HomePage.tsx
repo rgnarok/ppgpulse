@@ -7,6 +7,7 @@ import { FilterBar, type FilterState } from '../components/FilterBar';
 import { useAuth } from '../lib/auth';
 import { useConsultants, useOverview, useInterviewMonth } from '../lib/hooks';
 import { formatMonth } from '../lib/format';
+import { currentFy } from '../lib/fy';
 import type { ScopedConsultant } from '../lib/types';
 
 /** Everything the Overview endpoint takes, including the optional single-consultant
@@ -225,14 +226,18 @@ function OverviewView({
 export default function HomePage() {
   const { data: consultants = [] } = useConsultants();
   const [params, setParams] = useSearchParams();
+  // Defaults to the fiscal year currently in progress — matches the "keep the latest
+  // fiscal year active" expectation instead of opening on a stale historical window.
   const [state, setState] = useState<FilterState>({
     consultantId: params.get('consultant') ?? '',
+    fy: params.get('fy') ?? currentFy(),
   });
 
   function updateState(next: FilterState) {
     setState(next);
     const p = new URLSearchParams();
     if (next.consultantId) p.set('consultant', next.consultantId);
+    if (next.fy) p.set('fy', next.fy);
     setParams(p, { replace: true });
   }
 
