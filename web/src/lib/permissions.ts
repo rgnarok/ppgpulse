@@ -22,12 +22,14 @@ export interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { key: 'home', label: 'Home', path: '/', section: 'home', icon: '⌂', group: 'Workspace' },
   {
+    // Sits in the Workspace group (not Admin) so it renders immediately below Home in
+    // the sidebar, even though it's still gated to super_admin via the 'dhruva' section.
     key: 'dhruva',
     label: 'Dhruva',
     path: '/admin/dhruva',
     section: 'dhruva',
     icon: '◈',
-    group: 'Admin',
+    group: 'Workspace',
   },
   {
     key: 'interviews',

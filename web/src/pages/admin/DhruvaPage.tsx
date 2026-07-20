@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AppShell } from '../../components/AppShell';
 import { Card, SectionTitle, Empty, KpiCard } from '../../components/ui';
 import { useClients, useConsultants, useDhruva, type DhruvaFilterParams } from '../../lib/hooks';
@@ -76,25 +77,70 @@ function RapydTiles({
   );
 }
 
+/** Wraps a KpiCard so the whole tile is a keyboard-accessible click target — used to
+ * jump into the HDIS list pre-filtered to that priority. */
+function ClickableTile({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      style={{ cursor: 'pointer' }}
+    >
+      {children}
+    </div>
+  );
+}
+
 function PriorityTiles({
   priority,
 }: {
   priority: { p1: number; p2: number; p3: number; uncategorised: number };
 }) {
+  const navigate = useNavigate();
   const total = priority.p1 + priority.p2 + priority.p3 + priority.uncategorised || 1;
   const pct = (n: number) => `${Math.round((n / total) * 100)}% of live`;
+  // Only Active (not On Hold) — these tiles are meant as a "what needs attention right
+  // now" jump-off point, and an On Hold requirement isn't actionable today.
+  const goTo = (p: string) => () => navigate(`/hdis?priority=${p}&status=Active`);
   return (
     <div className="grid g-4" style={{ marginBottom: 16 }}>
-      <KpiCard tone="sand" icon="●" label="P1 — Live" value={priority.p1} sub={pct(priority.p1)} />
-      <KpiCard tone="gold" icon="●" label="P2 — Live" value={priority.p2} sub={pct(priority.p2)} />
-      <KpiCard tone="sky" icon="●" label="P3 — Live" value={priority.p3} sub={pct(priority.p3)} />
-      <KpiCard
-        tone="blue"
-        icon="○"
-        label="Uncategorised"
-        value={priority.uncategorised}
-        sub={pct(priority.uncategorised)}
-      />
+      <ClickableTile onClick={goTo('P1')}>
+        <KpiCard
+          tone="sand"
+          icon="●"
+          label="P1 — Live"
+          value={priority.p1}
+          sub={pct(priority.p1)}
+        />
+      </ClickableTile>
+      <ClickableTile onClick={goTo('P2')}>
+        <KpiCard
+          tone="gold"
+          icon="●"
+          label="P2 — Live"
+          value={priority.p2}
+          sub={pct(priority.p2)}
+        />
+      </ClickableTile>
+      <ClickableTile onClick={goTo('P3')}>
+        <KpiCard tone="sky" icon="●" label="P3 — Live" value={priority.p3} sub={pct(priority.p3)} />
+      </ClickableTile>
+      <ClickableTile onClick={goTo('NA')}>
+        <KpiCard
+          tone="blue"
+          icon="○"
+          label="Uncategorised"
+          value={priority.uncategorised}
+          sub={pct(priority.uncategorised)}
+        />
+      </ClickableTile>
     </div>
   );
 }

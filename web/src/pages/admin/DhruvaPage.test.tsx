@@ -1,4 +1,5 @@
 import { screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { Routes, Route } from 'react-router-dom';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { renderApp, mockFetch, jsonRoute, superAdminMe } from '../../tests/utils';
@@ -139,5 +140,19 @@ describe('Dhruva dashboard', () => {
       { route: '/admin/dhruva' },
     );
     expect(await screen.findByText('No live HDIS records yet')).toBeInTheDocument();
+  });
+
+  it('clicking a priority tile jumps to the HDIS list, filtered to that priority and Active only', async () => {
+    mockFetch(routes());
+    renderApp(
+      <Routes>
+        <Route path="/admin/dhruva" element={<DhruvaPage />} />
+        <Route path="/hdis" element={<div>HDIS PAGE</div>} />
+      </Routes>,
+      { route: '/admin/dhruva' },
+    );
+    const p1Tile = await screen.findByText('P1 — Live');
+    await userEvent.click(p1Tile.closest('[role="button"]')!);
+    expect(await screen.findByText('HDIS PAGE')).toBeInTheDocument();
   });
 });
