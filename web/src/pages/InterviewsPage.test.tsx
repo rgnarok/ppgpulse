@@ -149,16 +149,17 @@ describe('Interviews — Add interview modal Client + Profile (HDIS)', () => {
     expect(within(clientSelect).getByText('Testify')).toBeInTheDocument();
     expect(within(clientSelect).getByText('Acme Corp')).toBeInTheDocument();
 
-    // Profile is a select sourced from the caller's (RBAC-scoped) HDIS records.
-    const profileSelect = within(dialog).getByLabelText('Profile');
-    expect(
-      within(profileSelect).getByText('QA Engineer — Testify (TST_QA_20260601)'),
-    ).toBeInTheDocument();
-
+    // Profile is a search-as-you-type field over the caller's (RBAC-scoped) HDIS records.
     await user.type(within(dialog).getByPlaceholderText('Name'), 'Jane Doe');
-    await user.selectOptions(profileSelect, 'TST_QA_20260601');
+    const profileInput = within(dialog).getByLabelText('Profile');
+    await user.type(profileInput, 'QA');
+    const option = await within(dialog).findByText('QA Engineer — Testify (TST_QA_20260601)');
+    await user.click(option);
     // Picking the HDIS profile auto-fills the client, still overridable.
     expect((clientSelect as HTMLSelectElement).value).toBe('Testify');
+    expect((profileInput as HTMLInputElement).value).toBe(
+      'QA Engineer — Testify (TST_QA_20260601)',
+    );
 
     await user.click(within(dialog).getByText('Save interview'));
 
@@ -171,6 +172,74 @@ describe('Interviews — Add interview modal Client + Profile (HDIS)', () => {
     expect(body.client).toBe('Testify');
     expect(body.profile).toBe('QA Engineer');
     expect(body.requirementRef).toBe('TST_QA_20260601');
+  });
+});
+
+describe('Interviews — Edit interview', () => {
+  const existingInterview = {
+    id: 'iv1',
+    date: TODAY,
+    session: 'mid' as const,
+    type: 'RAPYD(C)',
+    candidate: 'Jane Doe',
+    candidateEmail: null,
+    ref: '2026090701',
+    round: 'L1',
+    client: 'Testify',
+    profile: 'QA Engineer',
+    requirementRef: 'TST_QA_20260601',
+    interviewer: 'Ravi',
+    ppgConsultantId: 'c_abha',
+    ppgConsultantName: 'Abha Sharma',
+    stage: null,
+    status: 'Scheduled',
+    time: '12:30 PM',
+    createdByName: 'Abha Sharma',
+  };
+
+  it('shows an Edit action alongside Remove, and opens a pre-filled modal that PATCHes on save', async () => {
+    const user = userEvent.setup({ delay: null });
+    const { calls } = mockFetch([
+      jsonRoute('/api/me', consultantMe),
+      jsonRoute(`/api/interviews/day/${TODAY}`, {
+        date: TODAY,
+        mid: [existingInterview],
+        end: [],
+        byConsultant: [],
+      }),
+      jsonRoute('/api/interviews', monthCounts),
+      jsonRoute('/api/consultants', consultants),
+      jsonRoute('/api/clients', clients),
+      jsonRoute('/api/hdis', hdisRecords),
+      jsonRoute('/api/interviews/iv1', { id: 'iv1' }, { method: 'PATCH' }),
+    ]);
+    renderApp(<InterviewsPage />);
+    await screen.findByText(TODAY_LABEL);
+    await screen.findByText('Jane Doe');
+
+    expect(screen.getByText('Edit')).toBeInTheDocument();
+    expect(screen.getByText('Remove')).toBeInTheDocument();
+
+    await user.click(screen.getByText('Edit'));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit interview' });
+
+    // Pre-filled from the existing row. The Profile field's search input shows the
+    // interview's already-stored profile text immediately (via SearchableOptionSelect's
+    // fallbackLabel) — it doesn't wait on the HDIS list fetch to resolve first.
+    expect(within(dialog).getByPlaceholderText('Name')).toHaveValue('Jane Doe');
+    expect(within(dialog).getByLabelText('Profile')).toHaveValue('QA Engineer');
+    expect(within(dialog).getByText('Save changes')).toBeInTheDocument();
+
+    await user.clear(within(dialog).getByPlaceholderText('12:30 PM'));
+    await user.type(within(dialog).getByPlaceholderText('12:30 PM'), '2:00 PM');
+    await user.click(within(dialog).getByText('Save changes'));
+
+    const patched = calls.find(
+      (c) => c.url.endsWith('/api/interviews/iv1') && c.method === 'PATCH',
+    );
+    expect(patched).toBeTruthy();
+    const body = patched!.body as { time: string };
+    expect(body.time).toBe('2:00 PM');
   });
 });
 

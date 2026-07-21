@@ -237,6 +237,7 @@ export interface InterviewRow {
   round: string | null;
   client: string | null;
   profile: string | null;
+  requirementRef: string | null;
   interviewer: string | null;
   ppgConsultantId: string | null;
   ppgConsultantName: string | null;

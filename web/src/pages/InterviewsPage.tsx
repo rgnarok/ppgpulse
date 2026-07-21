@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AppShell } from '../components/AppShell';
 import { Card, SectionTitle, Empty, Btn } from '../components/ui';
+import { SearchableOptionSelect } from '../components/SearchableOptionSelect';
 import { useAuth } from '../lib/auth';
 import { can } from '../lib/permissions';
 import { api } from '../lib/api';
@@ -99,6 +100,7 @@ export default function InterviewsPage() {
   const [anchor, setAnchor] = useState(initialDate);
   const [selected, setSelected] = useState(initialDate);
   const [addOpen, setAddOpen] = useState(false);
+  const [editing, setEditing] = useState<InterviewRow | null>(null);
 
   // Super admins/HR (org scope) filter by team; team-scope roles filter down to one of
   // their own team members; own-scope users see only their own rows — no filter shown.
@@ -265,12 +267,21 @@ export default function InterviewsPage() {
             editable={editable}
             filter={filter}
             onAdd={() => setAddOpen(true)}
+            onEdit={setEditing}
           />
         </Card>
       </div>
 
       {addOpen && editable && (
-        <AddInterviewModal date={selected} onClose={() => setAddOpen(false)} />
+        <InterviewFormModal mode="create" date={selected} onClose={() => setAddOpen(false)} />
+      )}
+      {editing && editable && (
+        <InterviewFormModal
+          mode="edit"
+          date={editing.date}
+          initial={editing}
+          onClose={() => setEditing(null)}
+        />
       )}
     </AppShell>
   );
@@ -281,11 +292,13 @@ function DayTable({
   editable,
   filter,
   onAdd,
+  onEdit,
 }: {
   date: string;
   editable: boolean;
   filter: InterviewScopeFilter;
   onAdd: () => void;
+  onEdit: (row: InterviewRow) => void;
 }) {
   const { data } = useInterviewDay(date, filter);
   const invalidate = [['interview-day', date], ['interviews']];
@@ -396,13 +409,18 @@ function DayTable({
                   </td>
                   {editable && (
                     <td>
-                      <button
-                        className="lnk"
-                        style={{ color: 'var(--danger, #c0392b)' }}
-                        onClick={() => remove.mutate({ id: r.id })}
-                      >
-                        Remove
-                      </button>
+                      <div style={{ display: 'flex', gap: 10 }}>
+                        <button className="lnk" onClick={() => onEdit(r)}>
+                          Edit
+                        </button>
+                        <button
+                          className="lnk"
+                          style={{ color: 'var(--danger, #c0392b)' }}
+                          onClick={() => remove.mutate({ id: r.id })}
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </td>
                   )}
                 </tr>
@@ -436,30 +454,51 @@ function DayTable({
   );
 }
 
-function AddInterviewModal({ date, onClose }: { date: string; onClose: () => void }) {
+function InterviewFormModal({
+  mode,
+  date,
+  initial,
+  onClose,
+}: {
+  mode: 'create' | 'edit';
+  date: string;
+  initial?: InterviewRow;
+  onClose: () => void;
+}) {
   const { me } = useAuth();
   const { data: consultants = [] } = useConsultants();
   const { data: clients = [] } = useClients();
   // Already RBAC-scoped server-side — team/own-scope users only get back the HDIS
   // records assigned to them, org-scope users get everything.
   const { data: hdisOptions = [] } = useHdisList({});
+  const hdisChoices = useMemo(
+    () => hdisOptions.map((h) => ({ id: h.jdId, label: `${h.title} — ${h.client} (${h.jdId})` })),
+    [hdisOptions],
+  );
+  const invalidate = [['interview-day', date], ['interviews']];
   const create = useApiMutation(
     (body: Record<string, unknown>) => api('/interviews', { method: 'POST', body }),
-    [['interview-day', date], ['interviews']],
+    invalidate,
   );
+  const update = useApiMutation(
+    (body: Record<string, unknown>) => api(`/interviews/${initial?.id}`, { method: 'PATCH', body }),
+    invalidate,
+  );
+  const mutation = mode === 'edit' ? update : create;
 
-  const [ref, setRef] = useState('');
-  const [round, setRound] = useState('L1');
-  const [type, setType] = useState('');
-  const [candidate, setCandidate] = useState('');
-  const [email, setEmail] = useState('');
-  const [time, setTime] = useState('');
-  const [client, setClient] = useState('');
-  const [hdisJdId, setHdisJdId] = useState('');
-  const [interviewer, setInterviewer] = useState('');
-  const [session, setSession] = useState<'mid' | 'end'>('mid');
-  const [status, setStatus] = useState('Scheduled');
-  const [consultantId, setConsultantId] = useState(me?.consultant?.id ?? '');
+  const defaultConsultantId = mode === 'create' ? (me?.consultant?.id ?? '') : '';
+  const [ref, setRef] = useState(initial?.ref ?? '');
+  const [round, setRound] = useState(initial?.round ?? 'L1');
+  const [type, setType] = useState(initial?.type ?? '');
+  const [candidate, setCandidate] = useState(initial?.candidate ?? '');
+  const [email, setEmail] = useState(initial?.candidateEmail ?? '');
+  const [time, setTime] = useState(initial?.time ?? '');
+  const [client, setClient] = useState(initial?.client ?? '');
+  const [hdisJdId, setHdisJdId] = useState(initial?.requirementRef ?? '');
+  const [interviewer, setInterviewer] = useState(initial?.interviewer ?? '');
+  const [session, setSession] = useState<'mid' | 'end'>(initial?.session ?? 'mid');
+  const [status, setStatus] = useState(initial?.status ?? 'Scheduled');
+  const [consultantId, setConsultantId] = useState(initial?.ppgConsultantId ?? defaultConsultantId);
   const [error, setError] = useState<string | null>(null);
 
   function selectHdis(jdId: string) {
@@ -469,20 +508,22 @@ function AddInterviewModal({ date, onClose }: { date: string; onClose: () => voi
     if (picked) setClient(picked.client);
   }
 
-  // Any field typed in besides the defaults means there's something to lose on close.
+  // Any field that differs from its starting point means there's something to lose
+  // on close — "starting point" is the initial record's values in edit mode, or the
+  // blank defaults in create mode.
   const isDirty =
-    !!ref.trim() ||
-    round !== 'L1' ||
-    !!type ||
-    !!candidate.trim() ||
-    !!email.trim() ||
-    !!time.trim() ||
-    !!client ||
-    !!hdisJdId ||
-    !!interviewer.trim() ||
-    session !== 'mid' ||
-    status !== 'Scheduled' ||
-    consultantId !== (me?.consultant?.id ?? '');
+    ref.trim() !== (initial?.ref ?? '') ||
+    round !== (initial?.round ?? 'L1') ||
+    type !== (initial?.type ?? '') ||
+    candidate.trim() !== (initial?.candidate ?? '') ||
+    email.trim() !== (initial?.candidateEmail ?? '') ||
+    time.trim() !== (initial?.time ?? '') ||
+    client !== (initial?.client ?? '') ||
+    hdisJdId !== (initial?.requirementRef ?? '') ||
+    interviewer.trim() !== (initial?.interviewer ?? '') ||
+    session !== (initial?.session ?? 'mid') ||
+    status !== (initial?.status ?? 'Scheduled') ||
+    consultantId !== (initial?.ppgConsultantId ?? defaultConsultantId);
 
   // Kept fresh each render so the popstate handler (registered once) always sees
   // the current dirty state without needing to be re-subscribed.
@@ -527,38 +568,40 @@ function AddInterviewModal({ date, onClose }: { date: string; onClose: () => voi
     }
     setError(null);
     const selectedHdis = hdisOptions.find((h) => h.jdId === hdisJdId);
-    create.mutate(
-      {
-        date,
-        session,
-        time: time.trim(),
-        type: type || undefined,
-        candidate: candidate.trim(),
-        candidateEmail: email.trim(),
-        ref: ref.trim(),
-        round,
-        client: client || undefined,
-        profile: selectedHdis?.title ?? '',
-        requirementRef: hdisJdId || undefined,
-        interviewer: interviewer.trim(),
-        status,
-        ppgConsultantId: consultantId || null,
+    const body = {
+      date,
+      session,
+      time: time.trim(),
+      type: type || undefined,
+      candidate: candidate.trim(),
+      candidateEmail: email.trim(),
+      ref: ref.trim(),
+      round,
+      client: client || undefined,
+      profile: selectedHdis?.title ?? (mode === 'edit' ? (initial?.profile ?? '') : ''),
+      requirementRef: hdisJdId || undefined,
+      interviewer: interviewer.trim(),
+      status,
+      ppgConsultantId: consultantId || null,
+    };
+    mutation.mutate(body, {
+      onSuccess: () => {
+        closingRef.current = true;
+        onClose();
       },
-      {
-        onSuccess: () => {
-          closingRef.current = true;
-          onClose();
-        },
-        onError: (err) =>
-          setError(err instanceof Error ? err.message : 'Could not add the interview'),
-      },
-    );
+      onError: (err) =>
+        setError(
+          err instanceof Error
+            ? err.message
+            : `Could not ${mode === 'edit' ? 'save' : 'add'} the interview`,
+        ),
+    });
   }
 
   return (
     <div
       role="dialog"
-      aria-label="Add interview"
+      aria-label={mode === 'edit' ? 'Edit interview' : 'Add interview'}
       onClick={requestClose}
       style={{
         position: 'fixed',
@@ -576,7 +619,9 @@ function AddInterviewModal({ date, onClose }: { date: string; onClose: () => voi
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <SectionTitle>Add interview — {formatDate(date)}</SectionTitle>
+          <SectionTitle>
+            {mode === 'edit' ? 'Edit interview' : 'Add interview'} — {formatDate(date)}
+          </SectionTitle>
           <button type="button" className="lnk" onClick={requestClose} aria-label="Close">
             ✕
           </button>
@@ -651,14 +696,14 @@ function AddInterviewModal({ date, onClose }: { date: string; onClose: () => voi
             </div>
             <div className="field">
               <label htmlFor="iv-profile">Profile</label>
-              <select id="iv-profile" value={hdisJdId} onChange={(e) => selectHdis(e.target.value)}>
-                <option value="">—</option>
-                {hdisOptions.map((h) => (
-                  <option key={h.jdId} value={h.jdId}>
-                    {h.title} — {h.client} ({h.jdId})
-                  </option>
-                ))}
-              </select>
+              <SearchableOptionSelect
+                id="iv-profile"
+                value={hdisJdId}
+                onChange={selectHdis}
+                options={hdisChoices}
+                placeholder="Search by title, client, or JD ID…"
+                fallbackLabel={mode === 'edit' ? (initial?.profile ?? undefined) : undefined}
+              />
             </div>
             <div className="field">
               <label>With (interviewer)</label>
@@ -711,8 +756,8 @@ function AddInterviewModal({ date, onClose }: { date: string; onClose: () => voi
             <button type="button" className="btn btn-gho" onClick={requestClose}>
               Cancel
             </button>
-            <Btn type="submit" disabled={create.isPending}>
-              {create.isPending ? 'Saving…' : 'Save interview'}
+            <Btn type="submit" disabled={mutation.isPending}>
+              {mutation.isPending ? 'Saving…' : mode === 'edit' ? 'Save changes' : 'Save interview'}
             </Btn>
           </div>
         </form>
