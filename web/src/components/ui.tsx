@@ -60,7 +60,11 @@ export function RingGauge({
       >
         <span
           className="mono"
-          style={{ fontWeight: 800, fontSize: size >= 100 ? 26 : size >= 80 ? 18 : 14, color }}
+          style={{
+            fontWeight: 800,
+            fontSize: size >= 120 ? 34 : size >= 100 ? 26 : size >= 80 ? 18 : 14,
+            color,
+          }}
         >
           {Math.round(value)}
         </span>

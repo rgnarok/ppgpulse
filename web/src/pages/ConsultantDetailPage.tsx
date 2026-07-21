@@ -7,6 +7,14 @@ import { useConsultantReport, type PeriodParams } from '../lib/hooks';
 import { formatDate, formatMonth } from '../lib/format';
 import type { ConsultantReport } from '../lib/types';
 
+// All five gauges (overall score + the four contributing factors) render at this one
+// size so nothing on the banner reads as more or less important than another metric.
+// Sized up from the original 104/72px mix, plus larger labels below, so the whole
+// banner is legible at a glance without leaning in — not just for low-vision users,
+// but for anyone glancing at a dashboard on a shared screen or TV.
+const GAUGE_SIZE = 128;
+const GAUGE_THICKNESS = 13;
+
 function ConfidenceBanner({ report }: { report: ConsultantReport }) {
   const c = report.consultant;
   return (
@@ -21,31 +29,33 @@ function ConfidenceBanner({ report }: { report: ConsultantReport }) {
         }}
       >
         <SectionTitle color="var(--violet)">Overall Confidence — {c.name}</SectionTitle>
-        <div className="muted" style={{ fontSize: 12.5 }}>
+        <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)' }}>
           {c.role} · KPI {report.kpi.label} · {report.kpi.val}/4
         </div>
       </div>
       <div
         style={{
           display: 'flex',
-          alignItems: 'center',
-          gap: 30,
+          alignItems: 'flex-start',
+          gap: 36,
           flexWrap: 'wrap',
-          marginTop: 20,
+          marginTop: 24,
         }}
       >
-        <div style={{ textAlign: 'center' }}>
-          <RingGauge value={report.confidence.score} size={104} thickness={10} />
-          <div className="muted" style={{ fontSize: 12, fontWeight: 700, marginTop: 8 }}>
+        <div style={{ textAlign: 'center', width: GAUGE_SIZE }}>
+          <RingGauge
+            value={report.confidence.score}
+            size={GAUGE_SIZE}
+            thickness={GAUGE_THICKNESS}
+          />
+          <div style={{ fontSize: 17, fontWeight: 700, marginTop: 10 }}>
             {report.confidence.band}
           </div>
         </div>
         {report.confidence.factors.map(([label, val]) => (
-          <div key={label} style={{ textAlign: 'center' }}>
-            <RingGauge value={val} size={72} thickness={7} />
-            <div className="muted" style={{ fontSize: 11.5, marginTop: 6, maxWidth: 96 }}>
-              {label}
-            </div>
+          <div key={label} style={{ textAlign: 'center', width: GAUGE_SIZE }}>
+            <RingGauge value={val} size={GAUGE_SIZE} thickness={GAUGE_THICKNESS} />
+            <div style={{ fontSize: 15, fontWeight: 600, marginTop: 10 }}>{label}</div>
           </div>
         ))}
       </div>
