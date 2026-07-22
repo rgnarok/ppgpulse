@@ -14,6 +14,13 @@ export async function createKpi(prisma: PrismaClient, input: CreateKpiInput) {
   return prisma.kpi.create({ data: input });
 }
 
+/** Pulls the first whole number out of a KPI's free-text target (e.g. "2 / day /
+ * consultant" -> 2, "≥ 5/day" -> 5). Returns null when no digits are present. */
+export function parseNumericTarget(target: string): number | null {
+  const m = target.match(/\d+/);
+  return m ? Number(m[0]) : null;
+}
+
 export async function updateKpi(prisma: PrismaClient, id: string, input: UpdateKpiInput) {
   const current = await prisma.kpi.findUnique({ where: { id } });
   if (!current) throw new NotFoundError('KPI not found', 'kpi_not_found');
@@ -21,7 +28,15 @@ export async function updateKpi(prisma: PrismaClient, id: string, input: UpdateK
     const clash = await prisma.kpi.findUnique({ where: { kpiNo: input.kpiNo } });
     if (clash) throw new ConflictError('A KPI with this KPI No. already exists', 'duplicate_kpi');
   }
-  return prisma.kpi.update({ where: { id }, data: input });
+  // For a KPI wired to a tracked metric (currently just "Interviews per Day"), the
+  // free-text Target field and the numeric target that actually drives the calendar
+  // must stay in sync — otherwise editing "2 / day" here leaves the calendar computing
+  // against a stale numericTarget, which is confusing (looks like the edit didn't take).
+  // Re-derive numericTarget from the new target text whenever this is a tracked KPI.
+  const numericTarget = current.trackedMetric
+    ? (parseNumericTarget(input.target) ?? current.numericTarget)
+    : current.numericTarget;
+  return prisma.kpi.update({ where: { id }, data: { ...input, numericTarget } });
 }
 
 export async function deleteKpi(prisma: PrismaClient, id: string) {

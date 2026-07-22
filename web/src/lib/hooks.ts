@@ -208,7 +208,10 @@ export function useUpdateKpi() {
   return useApiMutation(
     ({ id, input }: { id: string; input: KpiInput }) =>
       api<KpiRow>(`/kpis/${id}`, { method: 'PATCH', body: input }),
-    [['kpis']],
+    // A tracked KPI's numeric target can change here too (derived from the target
+    // text server-side) — invalidate the calendar/targets views too so an open
+    // Interviews legend or KPI tracking page picks up the new number right away.
+    [['kpis'], ['kpi-calendar'], ['kpi-targets']],
   );
 }
 
