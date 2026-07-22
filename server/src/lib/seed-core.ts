@@ -126,11 +126,34 @@ async function seedRoles(prisma: PrismaClient, roles: SeedRole[]): Promise<Map<s
   return roleIdByKey;
 }
 
+/** Upsert the KPI scorecard master list on `kpiNo` — reference/config data (like
+ * roles), not per-tenant demo content, so it's safe to run on every boot alongside
+ * the production baseline as well as the full demo seed. */
+async function seedKpis(prisma: PrismaClient, kpis: SeedKpi[]): Promise<number> {
+  for (const k of kpis) {
+    const payload = {
+      symbol: k.symbol,
+      title: k.title,
+      target: k.target,
+      description: k.description,
+      periodicity: k.periodicity,
+      whyItMatters: k.whyItMatters ?? null,
+    };
+    await prisma.kpi.upsert({
+      where: { kpiNo: k.kpiNo },
+      update: payload,
+      create: { kpiNo: k.kpiNo, ...payload },
+    });
+  }
+  return kpis.length;
+}
+
 /**
  * Production baseline: ensure every role and every super_admin account exists,
  * WITHOUT loading the demo dataset. Safe to run on every boot — it upserts
  * roles + admins but never re-creates demo users/consultants/requirements, so
- * accounts an admin deletes in the UI stay deleted across restarts.
+ * accounts an admin deletes in the UI stay deleted across restarts. The KPI
+ * scorecard master list IS included here (not demo content — see seedKpis).
  */
 export async function seedBaseline(
   prisma: PrismaClient,
@@ -140,6 +163,7 @@ export async function seedBaseline(
   admins: number;
   consultantsBackfilled: number;
   clientsBackfilled: number;
+  kpis: number;
 }> {
   // The bootstrap super_admin password is self-healing: on every boot we (re)set
   // it to SUPER_ADMIN_PASSWORD (if provided on the host) or the built-in default,
@@ -204,11 +228,14 @@ export async function seedBaseline(
     });
   }
 
+  const kpiCount = await seedKpis(prisma, data.kpis ?? []);
+
   return {
     roles: await prisma.role.count(),
     admins: admins.length,
     consultantsBackfilled: missingConsultants.length,
     clientsBackfilled: newClientNames.length,
+    kpis: kpiCount,
   };
 }
 
@@ -355,21 +382,7 @@ export async function seedDatabase(prisma: PrismaClient, data: SeedData): Promis
   }
 
   // --- KPIs (scorecard master list) ---
-  for (const k of data.kpis ?? []) {
-    const payload = {
-      symbol: k.symbol,
-      title: k.title,
-      target: k.target,
-      description: k.description,
-      periodicity: k.periodicity,
-      whyItMatters: k.whyItMatters ?? null,
-    };
-    await prisma.kpi.upsert({
-      where: { kpiNo: k.kpiNo },
-      update: payload,
-      create: { kpiNo: k.kpiNo, ...payload },
-    });
-  }
+  await seedKpis(prisma, data.kpis ?? []);
 
   return {
     roles: await prisma.role.count(),
