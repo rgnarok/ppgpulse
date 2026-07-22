@@ -54,7 +54,7 @@ with `Closed` for the "Total Closures" tile and the closed side of any status sp
 
 ## 2. RBAC
 
-Sections: `home, interviews, hdis, myteam, profile, users, roles, hierarchy, auditlog, dhruva`
+Sections: `home, interviews, hdis, myteam, profile, users, roles, hierarchy, auditlog, dhruva, kpis`
 Capabilities per section: `view, add, edit, delete` (+ `export` where relevant).
 
 Default role → permission matrix:
@@ -71,6 +71,7 @@ Default role → permission matrix:
 | hierarchy   | view, edit         | view, edit                  | —                 |
 | auditlog    | view               | —                            | —                 |
 | dhruva      | view               | —                            | —                 |
+| kpis        | view,add,edit,delete | —                          | —                 |
 
 Special rules (must be enforced server-side + tested):
 - `scope`: `super_admin`/`hr_manager` = `org`; `consultant` = `team`. `team` = the
@@ -130,6 +131,10 @@ POST /users/:id/overrides                 -> grant override
 GET/POST/PATCH/DELETE /roles              -> role builder (system/protected guarded)
 GET  /hierarchy                           -> org tree
 PATCH /users/:id/manager                  -> reporting line (cycle-guard)
+GET/POST/PATCH/DELETE /kpis               -> People Group KPI scorecard master list
+                                             (kpiNo, symbol, title, target, description,
+                                             periodicity, whyItMatters) — perm kpis.*
+                                             (super_admin only)
 ```
 
 Every endpoint: zod-validate input, authorize (role/override + scope), return typed DTO,

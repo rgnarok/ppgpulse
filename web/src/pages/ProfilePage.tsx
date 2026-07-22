@@ -13,6 +13,7 @@ const SECTIONS = [
   'hierarchy',
   'auditlog',
   'dhruva',
+  'kpis',
 ];
 const CAPS = ['view', 'add', 'edit', 'delete'];
 

@@ -19,6 +19,7 @@ const SECTIONS = [
   'hierarchy',
   'auditlog',
   'dhruva',
+  'kpis',
 ];
 const CAPS = ['view', 'add', 'edit', 'delete'];
 
@@ -33,6 +34,7 @@ const SECTION_LABELS: Record<string, string> = {
   hierarchy: 'Team Hierarchy',
   auditlog: 'Activity Log',
   dhruva: 'Dhruva',
+  kpis: 'KPIs',
 };
 
 // Sections a new "user" gets by default — the admin can toggle any of them.

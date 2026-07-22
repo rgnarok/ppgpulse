@@ -21,6 +21,7 @@ import hdisRoutes from './modules/hdis/routes.js';
 import interviewsRoutes from './modules/interviews/routes.js';
 import clientsRoutes from './modules/clients/routes.js';
 import auditRoutes from './modules/audit/routes.js';
+import kpisRoutes from './modules/kpis/routes.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -113,6 +114,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(interviewsRoutes, { prefix: '/api' });
   await app.register(clientsRoutes, { prefix: '/api' });
   await app.register(auditRoutes, { prefix: '/api' });
+  await app.register(kpisRoutes, { prefix: '/api' });
 
   // In production (and e2e), serve the built web SPA from the same origin.
   // Try a few candidate locations so it works from Docker, native runtimes, or dev.

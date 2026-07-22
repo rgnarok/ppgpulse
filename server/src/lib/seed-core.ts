@@ -54,6 +54,15 @@ export interface SeedHdis {
   pipeline?: { r0: number; r1: number; r2: number; r3: number; r4: number; r5: number };
   stage?: string;
 }
+export interface SeedKpi {
+  kpiNo: number;
+  symbol: string;
+  title: string;
+  target: string;
+  description: string;
+  periodicity: string;
+  whyItMatters?: string | null;
+}
 export interface SeedData {
   devPassword: string;
   roles: SeedRole[];
@@ -61,6 +70,7 @@ export interface SeedData {
   consultants: SeedConsultant[];
   requirements: SeedRequirement[];
   hdis: SeedHdis[];
+  kpis?: SeedKpi[];
 }
 
 export interface SeedCounts {
@@ -69,6 +79,7 @@ export interface SeedCounts {
   consultants: number;
   requirements: number;
   hdis: number;
+  kpis: number;
 }
 
 function stageForStatus(status: string): string {
@@ -343,11 +354,29 @@ export async function seedDatabase(prisma: PrismaClient, data: SeedData): Promis
     });
   }
 
+  // --- KPIs (scorecard master list) ---
+  for (const k of data.kpis ?? []) {
+    const payload = {
+      symbol: k.symbol,
+      title: k.title,
+      target: k.target,
+      description: k.description,
+      periodicity: k.periodicity,
+      whyItMatters: k.whyItMatters ?? null,
+    };
+    await prisma.kpi.upsert({
+      where: { kpiNo: k.kpiNo },
+      update: payload,
+      create: { kpiNo: k.kpiNo, ...payload },
+    });
+  }
+
   return {
     roles: await prisma.role.count(),
     users: await prisma.user.count(),
     consultants: await prisma.consultant.count(),
     requirements: await prisma.requirement.count(),
     hdis: await prisma.hdis.count(),
+    kpis: await prisma.kpi.count(),
   };
 }

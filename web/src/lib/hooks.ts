@@ -159,6 +159,55 @@ export function useDeleteClient() {
   );
 }
 
+export const KPI_PERIODICITY_OPTIONS = ['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Incidental'];
+
+export interface KpiRow {
+  id: string;
+  kpiNo: number;
+  symbol: string;
+  title: string;
+  target: string;
+  description: string;
+  periodicity: string;
+  whyItMatters: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface KpiInput {
+  kpiNo: number;
+  symbol: string;
+  title: string;
+  target: string;
+  description: string;
+  periodicity: string;
+  whyItMatters?: string;
+}
+
+/** The KPI scorecard master list — super-admin CRUD, viewed at /admin/kpis. */
+export function useKpis() {
+  return useQuery({ queryKey: ['kpis'], queryFn: () => api<KpiRow[]>('/kpis') });
+}
+
+export function useCreateKpi() {
+  return useApiMutation(
+    (input: KpiInput) => api<KpiRow>('/kpis', { method: 'POST', body: input }),
+    [['kpis']],
+  );
+}
+
+export function useUpdateKpi() {
+  return useApiMutation(
+    ({ id, input }: { id: string; input: KpiInput }) =>
+      api<KpiRow>(`/kpis/${id}`, { method: 'PATCH', body: input }),
+    [['kpis']],
+  );
+}
+
+export function useDeleteKpi() {
+  return useApiMutation((id: string) => api<void>(`/kpis/${id}`, { method: 'DELETE' }), [['kpis']]);
+}
+
 export function useUsers() {
   return useQuery({ queryKey: ['users'], queryFn: () => api<UserRow[]>('/users') });
 }

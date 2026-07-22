@@ -46,6 +46,12 @@
     ],
     "dhruva": [
      "view"
+    ],
+    "kpis": [
+     "view",
+     "add",
+     "edit",
+     "delete"
     ]
    }
   },
@@ -5694,6 +5700,134 @@
     "r5": 0
    },
    "stage": "Active"
+  }
+ ],
+ "kpis": [
+  {
+   "kpiNo": 1,
+   "symbol": "🗂️",
+   "title": "Trello-based Day Planning",
+   "target": "100%",
+   "description": "Every VAYUZer is expected to plan their day with clarity and discipline using Trello. This practice is a key attribute under our Plan Well value.",
+   "periodicity": "Daily",
+   "whyItMatters": "Ensures transparency, better task tracking, and organized execution of People Group responsibilities"
+  },
+  {
+   "kpiNo": 2,
+   "symbol": "⏱️",
+   "title": "Speed of Profile Submission (Fresh Sourcing)",
+   "target": "≥ 5 profiles within 2 hours",
+   "description": "Share ≥ 5 relevant candidate profiles within 2 hours of receiving a new requirement from the Hiring Manager / Business Team.",
+   "periodicity": "Incidental",
+   "whyItMatters": null
+  },
+  {
+   "kpiNo": 3,
+   "symbol": "⏱️",
+   "title": "Speed of Profile Submission (Post 1st Batch)",
+   "target": "≥ 5 profiles within 2 hours",
+   "description": "Share ≥ 5 relevant candidate profiles within 2 hours of receiving clarity from the end client on 1st batch submission.",
+   "periodicity": "Incidental",
+   "whyItMatters": null
+  },
+  {
+   "kpiNo": 4,
+   "symbol": "➕",
+   "title": "Total Profiles Shared",
+   "target": "≥ 12 / day",
+   "description": "Daily submission of quality candidate profiles for assigned requirements.",
+   "periodicity": "Daily",
+   "whyItMatters": null
+  },
+  {
+   "kpiNo": 5,
+   "symbol": "🔁",
+   "title": "Shortlisting Ratio by Hiring Manager or The Client",
+   "target": "≥ 60%",
+   "description": "Shortlisting Ratio = (Profiles Shortlisted by The Client / Profiles Shared by People Consultant) × 100",
+   "periodicity": "Incidental",
+   "whyItMatters": null
+  },
+  {
+   "kpiNo": 6,
+   "symbol": "➗",
+   "title": "Onboarding Ratio",
+   "target": "≥ 5%",
+   "description": "Onboarding Ratio = (# Onboarded / Profiles Shared by People Consultant) × 100",
+   "periodicity": "Incidental",
+   "whyItMatters": null
+  },
+  {
+   "kpiNo": 7,
+   "symbol": "🙋",
+   "title": "Minimum Onboarding per Month",
+   "target": "≥ 2",
+   "description": "Drive the hiring process end-to-end to ensure at least 2 successful candidate onboardings per month.",
+   "periodicity": "Monthly",
+   "whyItMatters": "Ensures shared ownership and balanced contribution."
+  },
+  {
+   "kpiNo": 8,
+   "symbol": "📊",
+   "title": "Hiring Display Information System (HDIS) Updates",
+   "target": "100% adherence to daily updates in HDIS (no pending/backlog entries)",
+   "description": "Maintain complete and accurate daily updates in the Hiring Display Information System for all assigned requirements, candidates, and hiring stages.",
+   "periodicity": "Daily",
+   "whyItMatters": "Drives accountability and sharpens closure strategy."
+  },
+  {
+   "kpiNo": 9,
+   "symbol": "📘",
+   "title": "Pariksha – Knowledge & Competency Assessment Score",
+   "target": "≥ 80%",
+   "description": "Ensure participation in the monthly Pariksha conducted by the Line Manager to assess domain knowledge, recruitment process understanding, sourcing strategies, and tool competency.",
+   "periodicity": "Monthly",
+   "whyItMatters": "Promotes continuous learning and keeps the team updated with domain knowledge"
+  },
+  {
+   "kpiNo": 10,
+   "symbol": "✅",
+   "title": "Attendance & Timeliness",
+   "target": "≥ 95% working days present & on time",
+   "description": "Maintain consistent attendance and punctuality as per VAYUZ's working schedule. - Minimum 95% monthly attendance (excluding approved leaves). - Zero cases of unplanned absenteeism without prior intimation. - Punctual login/start of work adherence (95%+ compliance)",
+   "periodicity": "Monthly",
+   "whyItMatters": "Builds accountability and consistency."
+  },
+  {
+   "kpiNo": 11,
+   "symbol": "📖",
+   "title": "Knowledge Contribution",
+   "target": "≥ 2 /month",
+   "description": "Contribute actively to the Knowledge Base Repository of VAYUZ by creating and sharing high-quality insights, case studies, white papers, or thought-leadership content on digital assets of VAYUZ (Website, VAYUZ Social).",
+   "periodicity": "Monthly",
+   "whyItMatters": "Encourages innovation, thought leadership, and contribution beyond daily responsibilities"
+  },
+  {
+   "kpiNo": 12,
+   "symbol": "🗓️",
+   "title": "Event Ownership & SOP Development",
+   "target": "≥ 3 / Quarter",
+   "description": "- 100% documentation & SOP submission (covering objectives, flow, responsibilities, budget, challenges, learnings, feedback). - Event Satisfaction Score ≥ 80% (measured via VAYUZ Social).",
+   "periodicity": "Quarterly",
+   "whyItMatters": "Builds a culture of creativity, communication, and motivation among employees"
+  },
+  {
+   "kpiNo": 13,
+   "symbol": "❌",
+   "title": "Process Adherence & Delivery Discipline (Flags & Notices System)",
+   "target": "0",
+   "description": "Adhere to all defined processes, delivery commitments, and quality benchmarks set at VAYUZ. Ensure zero escalation through Yellow Flags, Red Flags, or Red Notices by demonstrating discipline, accountability, and alignment with VAYUZ values.",
+   "periodicity": "Incidental",
+   "whyItMatters": "Builds discipline, accountability, and trust while ensuring smooth delivery and zero escalations."
+  },
+  {
+   "kpiNo": 14,
+   "symbol": "👥",
+   "title": "Team Target Achievement",
+   "target": "≥ 80%",
+   "description": "Drive, monitor, and ensure that all team members achieve their defined daily targets (maintaining minimum team strength, profiles shared, shortlisting ratio, HDIS updates, attendance, etc.).",
+   "periodicity": "Incidental",
+   "whyItMatters": "Strengthens the People Group through fresh talent, creating balance between experience and learning."
   }
  ]
 }

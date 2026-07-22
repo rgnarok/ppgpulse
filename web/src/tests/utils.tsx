@@ -28,6 +28,7 @@ export const superAdminMe: Me = {
     hierarchy: ['view', 'edit'],
     auditlog: ['view'],
     dhruva: ['view'],
+    kpis: ['view', 'add', 'edit', 'delete'],
   },
   consultant: null,
 };

@@ -13,6 +13,8 @@ export const SECTIONS = [
   'auditlog',
   // Super-admin-only org-wide operations dashboard (RAPYD/priority/funnel/top clients).
   'dhruva',
+  // Super-admin-only KPI scorecard master list (CRUD).
+  'kpis',
 ] as const;
 export type Section = (typeof SECTIONS)[number];
 export type Capability = 'view' | 'add' | 'edit' | 'delete' | 'export';

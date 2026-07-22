@@ -29,6 +29,8 @@ const roles: Record<string, RbacRole> = {
       hierarchy: ['view', 'edit'],
       // Dhruva (org-wide operations dashboard) is super-admin-only.
       dhruva: ['view'],
+      // KPI scorecard master list is super-admin-only, full CRUD.
+      kpis: ['view', 'add', 'edit', 'delete'],
     },
   },
   hr_manager: {
@@ -95,13 +97,16 @@ describe('rbac matrix (SPEC §2)', () => {
     expect(can(u, 'roles', 'edit')).toBe(true);
     expect(can(u, 'hierarchy', 'edit')).toBe(true);
     expect(can(u, 'dhruva', 'view')).toBe(true);
+    expect(can(u, 'kpis', 'add')).toBe(true);
+    expect(can(u, 'kpis', 'delete')).toBe(true);
   });
 
-  it('hr_manager mirrors super_admin permissions (guards handled separately), but not dhruva', () => {
+  it('hr_manager mirrors super_admin permissions (guards handled separately), but not dhruva/kpis', () => {
     const u = user('hr_manager');
     expect(can(u, 'hdis', 'delete')).toBe(true);
     expect(can(u, 'users', 'edit')).toBe(true);
     expect(can(u, 'dhruva', 'view')).toBe(false);
+    expect(can(u, 'kpis', 'view')).toBe(false);
   });
 
   it('consultant can view + add hdis (own JDs), but not blanket-edit or admin sections', () => {
@@ -114,6 +119,7 @@ describe('rbac matrix (SPEC §2)', () => {
     expect(can(u, 'hierarchy', 'view')).toBe(false);
     expect(can(u, 'interviews', 'edit')).toBe(true);
     expect(can(u, 'dhruva', 'view')).toBe(false);
+    expect(can(u, 'kpis', 'view')).toBe(false);
   });
 });
 

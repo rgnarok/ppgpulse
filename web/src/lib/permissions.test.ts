@@ -75,4 +75,23 @@ describe('visibleNav', () => {
     });
     expect(visibleNav(admin).some((n) => n.key === 'dhruva')).toBe(true);
   });
+
+  it('shows KPIs only for a user with kpis:view (super_admin by default)', () => {
+    const consultant = makeMe();
+    expect(visibleNav(consultant).some((n) => n.key === 'kpis')).toBe(false);
+
+    const hrManager = makeMe({
+      role: { key: 'hr_manager', label: 'HR Manager', sub: 'Admin', scope: 'org' },
+      scope: 'org',
+      permissions: { home: ['view'], hdis: ['view', 'add', 'edit', 'delete'] },
+    });
+    expect(visibleNav(hrManager).some((n) => n.key === 'kpis')).toBe(false);
+
+    const admin = makeMe({
+      role: { key: 'super_admin', label: 'Super Admin', sub: 'Co-Founder', scope: 'org' },
+      scope: 'org',
+      permissions: { home: ['view'], kpis: ['view', 'add', 'edit', 'delete'] },
+    });
+    expect(visibleNav(admin).some((n) => n.key === 'kpis')).toBe(true);
+  });
 });

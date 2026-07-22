@@ -105,6 +105,14 @@ export const NAV_ITEMS: NavItem[] = [
     icon: '☰',
     group: 'Admin',
   },
+  {
+    key: 'kpis',
+    label: 'KPIs',
+    path: '/admin/kpis',
+    section: 'kpis',
+    icon: '🎯',
+    group: 'Admin',
+  },
 ];
 
 /** Nav items the user may view. */

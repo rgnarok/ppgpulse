@@ -236,6 +236,28 @@ model AuditLog {
   @@index([section, at])
 }
 
+/// KPI master list — the People Group's scorecard definitions (Trello planning,
+/// profile-submission speed, HDIS discipline, etc). Super-admin managed; consultants
+/// are measured against these but don't edit them.
+model Kpi {
+  id             String   @id @default(cuid())
+  /// Display order / sheet row number — not a database identity, just the "KPI_no"
+  /// column from the source scorecard so the table can be sorted the way HR expects.
+  kpiNo          Int      @unique
+  symbol         String // short emoji/glyph shown next to the title
+  title          String
+  target         String // free text — thresholds vary in shape ("≥ 5 / day", "0", "100%")
+  description    String
+  /// 'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Incidental' — kept as free text
+  /// (validated at the API layer) rather than a DB enum so new cadences don't need a migration.
+  periodicity    String
+  whyItMatters   String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([kpiNo])
+}
+
 model Interview {
   id             String           @id @default(cuid())
   date           String // ISO YYYY-MM-DD
