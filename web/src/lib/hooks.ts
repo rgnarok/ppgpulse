@@ -54,6 +54,8 @@ export interface DhruvaFilterParams {
   ppg?: string;
   from?: string;
   to?: string;
+  month?: string;
+  fy?: string;
 }
 
 /** The Dhruva org-wide operations dashboard (super-admin only). Only the `funnel` +

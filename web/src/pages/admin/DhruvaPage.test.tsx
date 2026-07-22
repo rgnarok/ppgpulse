@@ -98,7 +98,9 @@ describe('Dhruva dashboard', () => {
     expect(screen.getAllByText('Uncategorised').length).toBeGreaterThan(0);
 
     expect(screen.getByText('Recruitment Lifecycle Funnel · R0 → R5')).toBeInTheDocument();
-    expect(screen.getByText('Profiles Shared')).toBeInTheDocument();
+    // The funnel card fetches its own (period-scoped) query, separate from the
+    // headline tiles' unscoped one — give it its own await.
+    expect(await screen.findByText('Profiles Shared')).toBeInTheDocument();
     expect(screen.getByText('Offer & Onboarded')).toBeInTheDocument();
 
     const rosterHeading = await screen.findByText('PPG Team Roster');
@@ -150,5 +152,35 @@ describe('Dhruva dashboard', () => {
     const p1Tile = await screen.findByText('P1 — Live');
     await userEvent.click(p1Tile.closest('[role="button"]')!);
     expect(await screen.findByText('HDIS PAGE')).toBeInTheDocument();
+  });
+
+  it('clicking the RADC number on the RAPYD Active tile jumps to the HDIS list filtered by type', async () => {
+    mockFetch(routes());
+    renderApp(
+      <Routes>
+        <Route path="/admin/dhruva" element={<DhruvaPage />} />
+        <Route path="/hdis" element={<div>HDIS PAGE</div>} />
+      </Routes>,
+      { route: '/admin/dhruva' },
+    );
+    await screen.findByText('66');
+    const radcNumber = screen.getByText('39'); // rapyd.radc from the mocked dashboard
+    await userEvent.click(radcNumber.closest('[role="button"]')!);
+    expect(await screen.findByText('HDIS PAGE')).toBeInTheDocument();
+  });
+
+  it('defaults the period filter to the current month', async () => {
+    mockFetch(routes());
+    renderApp(
+      <Routes>
+        <Route path="/admin/dhruva" element={<DhruvaPage />} />
+      </Routes>,
+      { route: '/admin/dhruva' },
+    );
+    await screen.findByText('66');
+    const monthInput = screen.getByLabelText('Month') as HTMLInputElement;
+    const now = new Date();
+    const expected = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    expect(monthInput.value).toBe(expected);
   });
 });

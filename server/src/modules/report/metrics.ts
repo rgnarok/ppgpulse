@@ -183,6 +183,35 @@ export function closureCats(reqs: ReqLite[]): { radc: number; radf: number } {
   return { radc, radf };
 }
 
+export interface HdisTypeStatusLite {
+  type: string;
+  status: string;
+}
+
+/** Whether an HDIS record's status counts as still-open work (not yet resolved) —
+ * mirrors isClosed()'s bucketing but at the bare-status level for whole-record tiles. */
+export function isLiveHdisStatus(status: string): boolean {
+  return status !== 'Fulfilled' && status !== 'Closed';
+}
+
+/** Dhruva's "RAPYD Active" tile: live RADC (contract) + RADF (full-time) records only.
+ * Internal records can be live too, but they aren't RAPYD placements, so they're
+ * excluded from both the total and the split — total is always exactly radc + radf. */
+export function rapydActiveCounts(rows: HdisTypeStatusLite[]): {
+  total: number;
+  radc: number;
+  radf: number;
+} {
+  let radc = 0;
+  let radf = 0;
+  for (const h of rows) {
+    if (!isLiveHdisStatus(h.status)) continue;
+    if (h.type === 'RADC') radc++;
+    else if (h.type === 'RADF') radf++;
+  }
+  return { total: radc + radf, radc, radf };
+}
+
 export interface PipelineSums {
   r0: number;
   r1: number;

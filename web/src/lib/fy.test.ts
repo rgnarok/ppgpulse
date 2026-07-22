@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fyOfMonth, fyLabel, fyMonths, fiscalYearsFor } from './fy';
+import { fyOfMonth, fyLabel, fyMonths, fiscalYearsFor, currentMonth } from './fy';
 
 describe('fy helpers', () => {
   it('assigns Apr-Dec months to the same-year FY, Jan-Mar to the prior year', () => {
@@ -27,5 +27,10 @@ describe('fy helpers', () => {
 
   it('derives distinct fiscal years from a list of months, newest first', () => {
     expect(fiscalYearsFor(['2026-06', '2027-02', '2025-05'])).toEqual(['2026', '2025']);
+  });
+
+  it('formats "now" as a YYYY-MM month string', () => {
+    expect(currentMonth(new Date('2026-07-22T09:00:00Z'))).toBe('2026-07');
+    expect(currentMonth(new Date('2026-01-05T09:00:00Z'))).toBe('2026-01');
   });
 });

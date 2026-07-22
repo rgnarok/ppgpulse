@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { AppShell } from '../../components/AppShell';
 import { Card, SectionTitle, Empty, KpiCard } from '../../components/ui';
 import { useClients, useConsultants, useDhruva, type DhruvaFilterParams } from '../../lib/hooks';
+import { currentMonth, recentFiscalYears, fyLabel } from '../../lib/fy';
 import { TeamRosterTable } from '../MyTeamPage';
 
 const PRIORITY_OPTIONS = ['P1', 'P2', 'P3', 'NA'];
@@ -10,7 +11,10 @@ function priorityLabel(p: string): string {
   return p === 'NA' ? 'Uncategorised' : p;
 }
 
-const EMPTY_FILTERS: DhruvaFilterParams = {};
+/** Only the period fields — priority/client/ppg live in the funnel's own filter row. */
+function defaultPeriodFilters(): DhruvaFilterParams {
+  return { month: currentMonth() };
+}
 
 function RapydTiles({
   data,
@@ -21,6 +25,8 @@ function RapydTiles({
     interviewsToday: { total: number; radc: number; radf: number };
   };
 }) {
+  const navigate = useNavigate();
+  const goToType = (type: string) => () => navigate(`/hdis?type=${type}&status=Active`);
   return (
     <div className="grid g-3" style={{ marginBottom: 16 }}>
       <div className="skc">
@@ -30,18 +36,18 @@ function RapydTiles({
         <div className="skc-num">{data.rapyd.total}</div>
         <div className="skc-sub">live contract + full-time positions</div>
         <div className="skc-split">
-          <div className="skc-split-item">
-            <div className="skc-split-val" style={{ color: 'var(--violet)' }}>
-              {data.rapyd.radc}
-            </div>
-            <div className="skc-split-cap">RADC</div>
-          </div>
-          <div className="skc-split-item">
-            <div className="skc-split-val" style={{ color: 'var(--sky)' }}>
-              {data.rapyd.radf}
-            </div>
-            <div className="skc-split-cap">RADF</div>
-          </div>
+          <SplitItem
+            onClick={goToType('RADC')}
+            value={data.rapyd.radc}
+            label="RADC"
+            color="var(--violet)"
+          />
+          <SplitItem
+            onClick={goToType('RADF')}
+            value={data.rapyd.radf}
+            label="RADF"
+            color="var(--sky)"
+          />
         </div>
       </div>
       <div className="skc">
@@ -72,6 +78,42 @@ function RapydTiles({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** A clickable RADC/RADF (or similar) split-tile number — keeps the existing
+ * .skc-split-item flex/border-left CSS by staying a direct flex child, just with
+ * click/keyboard handlers layered on. Jumps into the HDIS list pre-filtered by type. */
+function SplitItem({
+  onClick,
+  value,
+  label,
+  color,
+}: {
+  onClick: () => void;
+  value: number;
+  label: string;
+  color: string;
+}) {
+  return (
+    <div
+      className="skc-split-item"
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      style={{ cursor: 'pointer' }}
+    >
+      <div className="skc-split-val" style={{ color }}>
+        {value}
+      </div>
+      <div className="skc-split-cap">{label}</div>
     </div>
   );
 }
@@ -164,7 +206,9 @@ function FunnelCard({
   ppgNames: string[];
 }) {
   const { data, isLoading } = useDhruva(filters);
-  const hasFilters = Object.values(filters).some(Boolean);
+  // Only the funnel-specific filters (priority/client/PPG) count here — the period
+  // (month/FY/custom range) has its own reset in the page-level PeriodFilterBar above.
+  const hasFunnelFilters = !!(filters.priority || filters.client || filters.ppg);
 
   return (
     <Card>
@@ -225,37 +269,11 @@ function FunnelCard({
             ))}
           </select>
         </div>
-        <div className="field">
-          <label htmlFor="dh-from">From</label>
-          <input
-            id="dh-from"
-            type="date"
-            value={filters.from ?? ''}
-            onChange={(e) => onChange({ from: e.target.value || undefined })}
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="dh-to">To</label>
-          <input
-            id="dh-to"
-            type="date"
-            value={filters.to ?? ''}
-            onChange={(e) => onChange({ to: e.target.value || undefined })}
-          />
-        </div>
         <button
           type="button"
           className="btn btn-gho"
-          disabled={!hasFilters}
-          onClick={() =>
-            onChange({
-              priority: undefined,
-              client: undefined,
-              ppg: undefined,
-              from: undefined,
-              to: undefined,
-            })
-          }
+          disabled={!hasFunnelFilters}
+          onClick={() => onChange({ priority: undefined, client: undefined, ppg: undefined })}
         >
           Reset
         </button>
@@ -297,11 +315,87 @@ function FunnelCard({
   );
 }
 
+/** Page-level period control — Month / FY / custom From-To, defaulting to the current
+ * month. Drives the funnel below (FunnelCard runs its own filtered query off `filters`);
+ * the headline tiles intentionally stay unscoped (always the whole live dataset). */
+function PeriodFilterBar({
+  filters,
+  onChange,
+}: {
+  filters: DhruvaFilterParams;
+  onChange: (patch: Partial<DhruvaFilterParams>) => void;
+}) {
+  const fys = useMemo(() => recentFiscalYears(), []);
+  const isDefault = filters.month === currentMonth() && !filters.fy && !filters.from && !filters.to;
+  return (
+    <div className="card pad" style={{ marginBottom: 16 }}>
+      <div className="filterbar">
+        <div className="field">
+          <label htmlFor="dh-fy">FY</label>
+          <select
+            id="dh-fy"
+            value={filters.fy ?? ''}
+            onChange={(e) => onChange({ fy: e.target.value || undefined })}
+          >
+            <option value="">All</option>
+            {fys.map((fy) => (
+              <option key={fy} value={fy}>
+                {fyLabel(fy)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor="dh-month">Month</label>
+          <input
+            id="dh-month"
+            type="month"
+            value={filters.month ?? ''}
+            onChange={(e) =>
+              onChange({ month: e.target.value || undefined, from: undefined, to: undefined })
+            }
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="dh-pf-from">From</label>
+          <input
+            id="dh-pf-from"
+            type="date"
+            value={filters.from ?? ''}
+            onChange={(e) => onChange({ from: e.target.value || undefined, month: undefined })}
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="dh-pf-to">To</label>
+          <input
+            id="dh-pf-to"
+            type="date"
+            value={filters.to ?? ''}
+            onChange={(e) => onChange({ to: e.target.value || undefined, month: undefined })}
+          />
+        </div>
+        <button
+          type="button"
+          className="btn btn-gho"
+          disabled={isDefault}
+          onClick={() =>
+            onChange({ month: currentMonth(), fy: undefined, from: undefined, to: undefined })
+          }
+        >
+          Reset
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function DhruvaPage() {
-  const [filters, setFilters] = useState<DhruvaFilterParams>(EMPTY_FILTERS);
+  // Priority/Client/PPG (funnel-only) plus the period (Month/FY/custom range) that
+  // now drives the funnel — defaults to the current month instead of opening unscoped.
+  const [filters, setFilters] = useState<DhruvaFilterParams>(defaultPeriodFilters);
   // Headline tiles always reflect the whole live dataset — fetched once, unaffected by
-  // the funnel filters below (FunnelCard runs its own filtered query).
-  const { data, isLoading } = useDhruva(EMPTY_FILTERS);
+  // the period/funnel filters below (FunnelCard runs its own filtered query).
+  const { data, isLoading } = useDhruva({});
   const { data: clientRows = [] } = useClients();
   const { data: consultants = [] } = useConsultants();
   const clientNames = useMemo(() => clientRows.map((c) => c.name), [clientRows]);
@@ -316,6 +410,7 @@ export default function DhruvaPage() {
 
   return (
     <AppShell title="Dhruva" subtitle="Org-wide operations dashboard — RAPYD, funnel & team">
+      <PeriodFilterBar filters={filters} onChange={patchFilters} />
       {isLoading || !data ? (
         <Card>Loading…</Card>
       ) : data.rapyd.total === 0 && data.activeClients === 0 ? (

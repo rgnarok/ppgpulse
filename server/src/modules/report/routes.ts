@@ -21,12 +21,10 @@ const overviewQuery = periodQuery.extend({
   consultantId: z.string().optional(),
 });
 
-const dhruvaQuery = z.object({
+const dhruvaQuery = periodQuery.extend({
   priority: z.string().optional(),
   client: z.string().optional(),
   ppg: z.string().optional(),
-  from: z.string().optional(),
-  to: z.string().optional(),
 });
 
 export default async function reportRoutes(app: FastifyInstance) {

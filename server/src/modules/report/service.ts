@@ -13,6 +13,7 @@ import {
   loadBucket,
   kpiBand,
   orgFunnel,
+  rapydActiveCounts,
   type ReqLite,
 } from './metrics.js';
 
@@ -370,8 +371,13 @@ export interface DhruvaFilters {
   priority?: string;
   client?: string;
   ppg?: string;
+  /** Period narrowing — same precedence as the rest of the report module
+   * (explicit from/to > month > fy > current fiscal year default), resolved via
+   * resolvePeriod() and applied to the funnel's reqDate. */
   from?: string;
   to?: string;
+  month?: string;
+  fy?: string;
 }
 
 /** GET /report/dhruva — super-admin-only org-wide operations dashboard: RAPYD Active
@@ -389,15 +395,14 @@ export async function dhruvaDashboard(
     include: { owners: true, pipeline: true },
   });
 
-  const rapyd = { total: 0, radc: 0, radf: 0 };
+  // "RAPYD Active" is specifically RADC (live contract) + RADF (full-time) positions —
+  // Internal records are live requirements too, but aren't RAPYD placements, so they're
+  // excluded here (they still count toward Active Clients and Priority below).
+  const rapyd = rapydActiveCounts(rows);
   const priority = { p1: 0, p2: 0, p3: 0, uncategorised: 0 };
   const clientAgg = new Map<string, { radc: number; radf: number }>();
   for (const h of rows) {
     if (!isLiveStatus(h.status)) continue;
-    rapyd.total++;
-    if (h.type === 'RADC') rapyd.radc++;
-    else if (h.type === 'RADF') rapyd.radf++;
-
     if (h.priority === 'P1') priority.p1++;
     else if (h.priority === 'P2') priority.p2++;
     else if (h.priority === 'P3') priority.p3++;
@@ -429,13 +434,20 @@ export async function dhruvaDashboard(
     radf: rankClients((v) => v.radf),
   };
 
-  // Funnel — filterable by priority/client/PPG owner/date range.
+  // Funnel — filterable by priority/client/PPG owner, and a resolved period
+  // (explicit dates, a month, or a fiscal year — same precedence as the rest of the
+  // report module) applied to reqDate.
+  const period = resolvePeriod({
+    from: filters.from,
+    to: filters.to,
+    month: filters.month,
+    fy: filters.fy,
+  });
   const funnelRows = rows.filter((h) => {
     if (filters.priority && h.priority !== filters.priority) return false;
     if (filters.client && h.client !== filters.client) return false;
     if (filters.ppg && !h.owners.some((o) => o.consultantOrName === filters.ppg)) return false;
-    if (filters.from && h.reqDate < filters.from) return false;
-    if (filters.to && h.reqDate > filters.to) return false;
+    if (!inPeriod(h.reqDate, period)) return false;
     return true;
   });
   const sums = funnelRows.reduce(

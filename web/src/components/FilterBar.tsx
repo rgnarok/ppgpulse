@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import type { ScopedConsultant } from '../lib/types';
 import type { PeriodParams } from '../lib/hooks';
-import { currentFy, recentFiscalYears, fyLabel } from '../lib/fy';
+import { currentFy, currentMonth, recentFiscalYears, fyLabel } from '../lib/fy';
 
 export interface FilterState extends PeriodParams {
   consultantId: string; // '' = team overview
@@ -83,7 +83,7 @@ export function FilterBar({
         <button
           type="button"
           className="btn btn-gho"
-          onClick={() => onChange({ consultantId: '', fy: currentFy() })}
+          onClick={() => onChange({ consultantId: '', fy: currentFy(), month: currentMonth() })}
         >
           Reset
         </button>

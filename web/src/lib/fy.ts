@@ -53,3 +53,9 @@ export function recentFiscalYears(count = 4, now: Date = new Date()): string[] {
   const cur = Number(currentFy(now));
   return Array.from({ length: count }, (_, i) => String(cur - i));
 }
+
+/** The current calendar month as YYYY-MM — used to default period filters to "this
+ * month" instead of opening on an unscoped, all-time view. */
+export function currentMonth(now: Date = new Date()): string {
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}

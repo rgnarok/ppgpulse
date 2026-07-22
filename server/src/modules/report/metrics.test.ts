@@ -10,6 +10,7 @@ import {
   loadBucket,
   kpiBand,
   orgFunnel,
+  rapydActiveCounts,
   type ReqLite,
 } from './metrics.js';
 
@@ -208,5 +209,38 @@ describe('closureCats', () => {
       req({ status: 'Active', type: 'RADC' }), // not closed — excluded
     ];
     expect(closureCats(reqs)).toEqual({ radc: 2, radf: 1 });
+  });
+});
+
+describe('rapydActiveCounts', () => {
+  it('total is always exactly radc + radf — Internal (and other non-RAPYD) live records are excluded', () => {
+    const rows = [
+      { type: 'RADC', status: 'Active' },
+      { type: 'RADC', status: 'On Hold' },
+      { type: 'RADF', status: 'Active' },
+      { type: 'Internal', status: 'Active' }, // live, but not a RAPYD placement
+      { type: 'Internal', status: 'Active' },
+      { type: 'RADC', status: 'Closed' }, // not live — excluded
+      { type: 'RADF', status: 'Fulfilled' }, // not live — excluded
+    ];
+    expect(rapydActiveCounts(rows)).toEqual({ total: 3, radc: 2, radf: 1 });
+  });
+
+  it('reproduces the reported bug: 40 RADC + 73 RADF must total 113, not 118', () => {
+    const rows = [
+      ...Array.from({ length: 40 }, () => ({ type: 'RADC', status: 'Active' })),
+      ...Array.from({ length: 73 }, () => ({ type: 'RADF', status: 'Active' })),
+      ...Array.from({ length: 5 }, () => ({ type: 'Internal', status: 'Active' })),
+    ];
+    expect(rapydActiveCounts(rows)).toEqual({ total: 113, radc: 40, radf: 73 });
+  });
+
+  it('returns all zeros for an empty or fully-closed dataset', () => {
+    expect(rapydActiveCounts([])).toEqual({ total: 0, radc: 0, radf: 0 });
+    expect(rapydActiveCounts([{ type: 'RADC', status: 'Closed' }])).toEqual({
+      total: 0,
+      radc: 0,
+      radf: 0,
+    });
   });
 });

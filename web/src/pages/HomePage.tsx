@@ -7,7 +7,7 @@ import { FilterBar, type FilterState } from '../components/FilterBar';
 import { useAuth } from '../lib/auth';
 import { useConsultants, useOverview, useInterviewMonth } from '../lib/hooks';
 import { formatMonth } from '../lib/format';
-import { currentFy } from '../lib/fy';
+import { currentFy, currentMonth } from '../lib/fy';
 import type { ScopedConsultant } from '../lib/types';
 
 /** Everything the Overview endpoint takes, including the optional single-consultant
@@ -21,12 +21,6 @@ function period(state: FilterState) {
     fy: state.fy,
     consultantId: state.consultantId || undefined,
   };
-}
-
-/** Current calendar month as YYYY-MM. */
-function currentMonth(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
 function InterviewsThisMonth({ state }: { state: FilterState }) {
@@ -228,11 +222,14 @@ function OverviewView({
 export default function HomePage() {
   const { data: consultants = [] } = useConsultants();
   const [params, setParams] = useSearchParams();
-  // Defaults to the fiscal year currently in progress — matches the "keep the latest
-  // fiscal year active" expectation instead of opening on a stale historical window.
+  // Defaults to the fiscal year AND calendar month currently in progress — matches
+  // the "keep the latest period active" expectation instead of opening on a stale
+  // historical (or all-time) window. A user picking a custom range/month via the
+  // filter bar still overrides this, same as before.
   const [state, setState] = useState<FilterState>({
     consultantId: params.get('consultant') ?? '',
     fy: params.get('fy') ?? currentFy(),
+    month: params.get('month') ?? currentMonth(),
   });
 
   function updateState(next: FilterState) {
@@ -240,6 +237,7 @@ export default function HomePage() {
     const p = new URLSearchParams();
     if (next.consultantId) p.set('consultant', next.consultantId);
     if (next.fy) p.set('fy', next.fy);
+    if (next.month) p.set('month', next.month);
     setParams(p, { replace: true });
   }
 
