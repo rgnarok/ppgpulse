@@ -14,8 +14,11 @@ import {
   useApiMutation,
   useClients,
   useHdisList,
+  useKpis,
+  useKpiCalendar,
   type InterviewRow,
   type InterviewScopeFilter,
+  type DayColor,
 } from '../lib/hooks';
 import { formatDate, formatMonth } from '../lib/format';
 
@@ -71,6 +74,42 @@ function cellClass(date: string, count: number | undefined, selected: string, to
     .join(' ');
 }
 
+// Interviews/day KPI target-achievement coloring — overlaid on the month calendar.
+const KPI_COLOR_BG: Record<DayColor, string> = {
+  green: 'rgba(34,197,94,.22)',
+  amber: 'rgba(234,179,8,.24)',
+  red: 'rgba(239,68,68,.20)',
+  none: 'transparent',
+};
+const KPI_COLOR_BORDER: Record<DayColor, string> = {
+  green: 'rgba(34,197,94,.6)',
+  amber: 'rgba(234,179,8,.65)',
+  red: 'rgba(239,68,68,.55)',
+  none: 'transparent',
+};
+function kpiCellStyle(color: DayColor | undefined) {
+  if (!color || color === 'none') return undefined;
+  return { background: KPI_COLOR_BG[color], border: `2px solid ${KPI_COLOR_BORDER[color]}` };
+}
+
+function Legend({ color, label }: { color: DayColor; label: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <span
+        style={{
+          width: 12,
+          height: 12,
+          borderRadius: 4,
+          background: KPI_COLOR_BG[color],
+          border: `1.5px solid ${color === 'none' ? 'var(--border, #e5e7eb)' : KPI_COLOR_BORDER[color]}`,
+          display: 'inline-block',
+        }}
+      />
+      <span className="muted">{label}</span>
+    </div>
+  );
+}
+
 function statusTone(status: string | null): string {
   switch (status) {
     case 'Selected':
@@ -124,6 +163,24 @@ export default function InterviewsPage() {
   const month = anchor.slice(0, 7);
   const { data: monthData } = useInterviewMonth(month, filter);
   const mCounts = monthData?.counts ?? {};
+
+  // Interviews/day KPI target-achievement overlay — only fetched for users who can
+  // see the KPI section (currently super_admin), and only when a KPI is wired to
+  // 'interviews_per_day'. Silently absent for everyone else; the calendar still
+  // works exactly as before without it.
+  const canTrackKpi = can(me, 'kpis', 'view');
+  const { data: kpis = [] } = useKpis({ enabled: canTrackKpi });
+  const trackedKpi = kpis.find((k) => k.trackedMetric === 'interviews_per_day') ?? null;
+  const { data: kpiCal } = useKpiCalendar(
+    canTrackKpi ? (trackedKpi?.id ?? null) : null,
+    month,
+    me?.scope === 'org' && teamFilter ? teamFilter : undefined,
+  );
+  const colorByDate = useMemo(() => {
+    const map: Record<string, DayColor> = {};
+    for (const d of kpiCal?.days ?? []) map[d.date] = d.color;
+    return map;
+  }, [kpiCal]);
 
   function goToday() {
     setAnchor(today);
@@ -250,6 +307,7 @@ export default function InterviewsPage() {
                   <div
                     key={date}
                     className={cellClass(date, mCounts[date], selected, today)}
+                    style={kpiCellStyle(colorByDate[date])}
                     onClick={() => setSelected(date)}
                   >
                     <div className="cn">{Number(date.slice(-2))}</div>
@@ -258,6 +316,28 @@ export default function InterviewsPage() {
                 ),
               )}
         </div>
+
+        {viewMode === 'month' && canTrackKpi && trackedKpi && (
+          <div
+            style={{
+              display: 'flex',
+              gap: 16,
+              marginTop: 14,
+              flexWrap: 'wrap',
+              fontSize: 12,
+              alignItems: 'center',
+            }}
+          >
+            <span className="muted">
+              {trackedKpi.symbol} {trackedKpi.title} ({trackedKpi.target}
+              {kpiCal ? ` · team target ${kpiCal.totalTarget}/day` : ''}):
+            </span>
+            <Legend color="green" label="At/above target" />
+            <Legend color="amber" label="80%+ of target" />
+            <Legend color="red" label="Below 80%" />
+            <Legend color="none" label="No data" />
+          </div>
+        )}
       </Card>
 
       <div style={{ marginTop: 16 }}>

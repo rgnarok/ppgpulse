@@ -323,6 +323,61 @@ describe('Interviews — calendar (month) view', () => {
   });
 });
 
+describe('Interviews — KPI target-color overlay', () => {
+  it('shows the interviews/day legend for a super_admin once the tracked KPI loads', async () => {
+    const user = userEvent.setup({ delay: null });
+    mockFetch([
+      jsonRoute('/api/me', superAdminMe),
+      jsonRoute(`/api/interviews/day/${TODAY}`, emptyDay(TODAY)),
+      jsonRoute('/api/interviews', monthCounts),
+      jsonRoute('/api/consultants', consultants),
+      jsonRoute('/api/kpis', [
+        {
+          id: 'kpi15',
+          kpiNo: 15,
+          symbol: '🎯',
+          title: 'Interviews per Day',
+          target: '4 / day / consultant',
+          description: '',
+          periodicity: 'Daily',
+          whyItMatters: null,
+          trackedMetric: 'interviews_per_day',
+          numericTarget: 4,
+          createdAt: '',
+          updatedAt: '',
+        },
+      ]),
+      jsonRoute('/api/kpis/kpi15/calendar', {
+        month: '2026-06',
+        totalTarget: 8,
+        consultantCount: 2,
+        days: [{ date: '2026-06-10', actual: 8, target: 8, pct: 1, color: 'green' }],
+      }),
+    ]);
+    renderApp(<InterviewsPage />);
+    await screen.findByText(TODAY_LABEL);
+    await user.click(screen.getByText('Calendar view'));
+    expect(await screen.findByText(/Interviews per Day/)).toBeInTheDocument();
+    expect(screen.getByText('At/above target')).toBeInTheDocument();
+  });
+
+  it('does not fetch or show the KPI legend for a consultant (no kpis permission)', async () => {
+    const user = userEvent.setup({ delay: null });
+    const { calls } = mockFetch([
+      jsonRoute('/api/me', consultantMe),
+      jsonRoute(`/api/interviews/day/${TODAY}`, emptyDay(TODAY)),
+      jsonRoute('/api/interviews', monthCounts),
+      jsonRoute('/api/consultants', consultants),
+    ]);
+    renderApp(<InterviewsPage />);
+    await screen.findByText(TODAY_LABEL);
+    await user.click(screen.getByText('Calendar view'));
+    await screen.findByText(formatMonth('2026-06'));
+    expect(screen.queryByText('At/above target')).not.toBeInTheDocument();
+    expect(calls.some((c) => c.url.includes('/api/kpis'))).toBe(false);
+  });
+});
+
 describe('Interviews — role-scoped filters', () => {
   it('shows a team filter for org-scope users', async () => {
     mockFetch([

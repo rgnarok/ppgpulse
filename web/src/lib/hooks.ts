@@ -187,8 +187,12 @@ export interface KpiInput {
 }
 
 /** The KPI scorecard master list — super-admin CRUD, viewed at /admin/kpis. */
-export function useKpis() {
-  return useQuery({ queryKey: ['kpis'], queryFn: () => api<KpiRow[]>('/kpis') });
+export function useKpis(opts: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: ['kpis'],
+    queryFn: () => api<KpiRow[]>('/kpis'),
+    enabled: opts.enabled ?? true,
+  });
 }
 
 export function useCreateKpi() {
