@@ -105,6 +105,8 @@ model Consultant {
   insights            Int           @default(0)
   user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   requirements        Requirement[]
+  kpiTargets          KpiConsultantTarget[]
+  logs                ConsultantLog[]
 }
 
 model Requirement {
@@ -252,10 +254,53 @@ model Kpi {
   /// (validated at the API layer) rather than a DB enum so new cadences don't need a migration.
   periodicity    String
   whyItMatters   String?
+  /// Links this KPI to a computed data source instead of manual entry, e.g.
+  /// 'interviews_per_day' (counted live from the Interview table). Null for KPIs
+  /// that aren't wired to an automated metric yet.
+  trackedMetric  String?
+  /// Default per-consultant daily target for the tracked metric (e.g. 4 interviews/day).
+  /// Individual consultants can override this via KpiConsultantTarget.
+  numericTarget  Int?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  targets        KpiConsultantTarget[]
 
   @@index([kpiNo])
+}
+
+/// Per-consultant override of a tracked KPI's numeric target (e.g. a senior consultant's
+/// interviews/day target might be 5 instead of the KPI-wide default of 4).
+model KpiConsultantTarget {
+  id           String     @id @default(cuid())
+  kpiId        String
+  consultantId String
+  target       Int
+  updatedAt    DateTime   @updatedAt
+  kpi          Kpi        @relation(fields: [kpiId], references: [id], onDelete: Cascade)
+  consultant   Consultant @relation(fields: [consultantId], references: [id], onDelete: Cascade)
+
+  @@unique([kpiId, consultantId])
+  @@index([kpiId])
+}
+
+/// Per-day self-logged activity for a consultant — events hosted/participated, insights,
+/// and free-text remarks. Powers the "My activity" calendar on the consultant's own
+/// Profile page (distinct from Consultant.eventsHosted/etc, which are lifetime totals).
+model ConsultantLog {
+  id                 String     @id @default(cuid())
+  consultantId       String
+  date               String // ISO YYYY-MM-DD
+  eventsHosted       Int        @default(0)
+  eventsParticipated Int        @default(0)
+  insights           Int        @default(0)
+  remarks            String?
+  createdBy          String
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  consultant         Consultant @relation(fields: [consultantId], references: [id], onDelete: Cascade)
+
+  @@index([consultantId, date])
+  @@index([date])
 }
 
 model Interview {

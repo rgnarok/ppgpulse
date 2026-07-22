@@ -133,8 +133,27 @@ GET  /hierarchy                           -> org tree
 PATCH /users/:id/manager                  -> reporting line (cycle-guard)
 GET/POST/PATCH/DELETE /kpis               -> People Group KPI scorecard master list
                                              (kpiNo, symbol, title, target, description,
-                                             periodicity, whyItMatters) — perm kpis.*
-                                             (super_admin only)
+                                             periodicity, whyItMatters, trackedMetric,
+                                             numericTarget) — perm kpis.* (super_admin only)
+GET  /kpis/:id/targets                    -> per-consultant effective daily target
+                                             (override if set, else the KPI's numericTarget)
+PUT  /kpis/:id/targets/:consultantId      -> set an individual's target override
+DELETE /kpis/:id/targets/:consultantId    -> revert an individual to the KPI's default
+PATCH /kpis/:id/default-target            -> set the KPI-wide default daily target
+GET  /kpis/:id/calendar?month             -> day-by-day actual-vs-target for a KPI wired to
+                                             a tracked metric (currently 'interviews_per_day')
+                                             — green (>=100%), amber (>=80%), red (<80%),
+                                             or uncolored where no interviews were logged
+
+# Consultant activity log — self-service "My activity" calendar on the Profile page
+# (events hosted/participated, insights, remarks) for consultants & HR managers.
+# Own-entries-only; perm profile.view/profile.edit.
+GET  /consultant-log?month                -> per-day entry counts for the caller
+GET  /consultant-log/day/:date            -> the caller's entries for that date
+POST /consultant-log                      -> add entry {date, eventsHosted,
+                                             eventsParticipated, insights, remarks}
+PATCH /consultant-log/:id                 -> edit (own entries only)
+DELETE /consultant-log/:id                -> delete (own entries only)
 ```
 
 Every endpoint: zod-validate input, authorize (role/override + scope), return typed DTO,

@@ -16,6 +16,7 @@ import ClientsPage from './pages/admin/ClientsPage';
 import AuditLogPage from './pages/admin/AuditLogPage';
 import DhruvaPage from './pages/admin/DhruvaPage';
 import KpisPage from './pages/admin/KpisPage';
+import KpiTrackingPage from './pages/admin/KpiTrackingPage';
 
 function FullPageMessage({ children }: { children: ReactNode }) {
   return (
@@ -160,6 +161,14 @@ export default function App() {
         element={
           <Protected section="kpis">
             <KpisPage />
+          </Protected>
+        }
+      />
+      <Route
+        path="/admin/kpis/:id/tracking"
+        element={
+          <Protected section="kpis">
+            <KpiTrackingPage />
           </Protected>
         }
       />

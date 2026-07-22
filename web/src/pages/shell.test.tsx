@@ -28,11 +28,19 @@ describe('App shell + RBAC nav (T7.3)', () => {
 
 describe('Profile access grid (T11.2)', () => {
   it('renders the access grid from /me', async () => {
-    mockFetch([jsonRoute('/api/me', consultantMe)]);
+    mockFetch([
+      jsonRoute('/api/me', consultantMe),
+      jsonRoute('/api/consultant-log/day', []),
+      jsonRoute('/api/consultant-log', { month: '2026-07', counts: {}, total: 0 }),
+    ]);
     renderApp(<ProfilePage />);
     await screen.findByText('abha@vayuz.com');
     // consultant profile shows personal stats
-    expect(screen.getByText('Insights')).toBeInTheDocument();
+    expect(
+      within(screen.getByText('Your stats').closest('.card')!).getByText('Insights'),
+    ).toBeInTheDocument();
+    // my-activity calendar section is present
+    expect(screen.getByText(/My activity/)).toBeInTheDocument();
     // access grid has section rows
     expect(screen.getByText('hierarchy')).toBeInTheDocument();
   });

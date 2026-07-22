@@ -62,6 +62,8 @@ export interface SeedKpi {
   description: string;
   periodicity: string;
   whyItMatters?: string | null;
+  trackedMetric?: string | null;
+  numericTarget?: number | null;
 }
 export interface SeedData {
   devPassword: string;
@@ -138,6 +140,8 @@ async function seedKpis(prisma: PrismaClient, kpis: SeedKpi[]): Promise<number> 
       description: k.description,
       periodicity: k.periodicity,
       whyItMatters: k.whyItMatters ?? null,
+      trackedMetric: k.trackedMetric ?? null,
+      numericTarget: k.numericTarget ?? null,
     };
     await prisma.kpi.upsert({
       where: { kpiNo: k.kpiNo },

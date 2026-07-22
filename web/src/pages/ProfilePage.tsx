@@ -1,6 +1,7 @@
 import { AppShell } from '../components/AppShell';
 import { Card, SectionTitle } from '../components/ui';
 import { useAuth } from '../lib/auth';
+import ProfileActivityLog from './ProfileActivityLog';
 
 const SECTIONS = [
   'home',
@@ -54,6 +55,12 @@ export default function ProfilePage() {
           </Card>
         )}
       </div>
+      {me.consultant && (
+        <div style={{ marginBottom: 16 }}>
+          <ProfileActivityLog />
+        </div>
+      )}
+
       <Card pad={false}>
         <div style={{ padding: '16px 20px 0' }}>
           <SectionTitle>Access summary</SectionTitle>

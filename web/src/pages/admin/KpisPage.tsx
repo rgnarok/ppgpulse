@@ -1,4 +1,5 @@
 import { useState, type CSSProperties } from 'react';
+import { Link } from 'react-router-dom';
 import { AppShell } from '../../components/AppShell';
 import { Card, SectionTitle, Empty, Btn, Pill } from '../../components/ui';
 import {
@@ -66,6 +67,11 @@ export default function KpisPage() {
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: 10 }}>
+                        {k.trackedMetric && (
+                          <Link className="lnk" to={`/admin/kpis/${k.id}/tracking`}>
+                            Track
+                          </Link>
+                        )}
                         <button
                           className="lnk"
                           onClick={() => setModal({ mode: 'edit', initial: k })}

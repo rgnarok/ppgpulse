@@ -170,6 +170,8 @@ export interface KpiRow {
   description: string;
   periodicity: string;
   whyItMatters: string | null;
+  trackedMetric: string | null;
+  numericTarget: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -206,6 +208,137 @@ export function useUpdateKpi() {
 
 export function useDeleteKpi() {
   return useApiMutation((id: string) => api<void>(`/kpis/${id}`, { method: 'DELETE' }), [['kpis']]);
+}
+
+// ---- KPI tracking: per-consultant targets + the "interviews/day" calendar ----
+
+export interface KpiTargetRow {
+  consultantId: string;
+  name: string;
+  team: string;
+  isActive: boolean;
+  target: number;
+  isOverride: boolean;
+}
+
+export function useKpiTargets(kpiId: string | null) {
+  return useQuery({
+    queryKey: ['kpi-targets', kpiId],
+    queryFn: () => api<KpiTargetRow[]>(`/kpis/${kpiId}/targets`),
+    enabled: !!kpiId,
+  });
+}
+
+export function useSetKpiTarget(kpiId: string) {
+  return useApiMutation(
+    ({ consultantId, target }: { consultantId: string; target: number }) =>
+      api(`/kpis/${kpiId}/targets/${consultantId}`, { method: 'PUT', body: { target } }),
+    [
+      ['kpi-targets', kpiId],
+      ['kpi-calendar', kpiId],
+    ],
+  );
+}
+
+export function useClearKpiTarget(kpiId: string) {
+  return useApiMutation(
+    (consultantId: string) => api(`/kpis/${kpiId}/targets/${consultantId}`, { method: 'DELETE' }),
+    [
+      ['kpi-targets', kpiId],
+      ['kpi-calendar', kpiId],
+    ],
+  );
+}
+
+export function useSetKpiDefaultTarget(kpiId: string) {
+  return useApiMutation(
+    (target: number) =>
+      api<KpiRow>(`/kpis/${kpiId}/default-target`, { method: 'PATCH', body: { target } }),
+    [['kpis'], ['kpi-targets', kpiId], ['kpi-calendar', kpiId]],
+  );
+}
+
+export type DayColor = 'green' | 'amber' | 'red' | 'none';
+export interface KpiCalendarDay {
+  date: string;
+  actual: number;
+  target: number;
+  pct: number | null;
+  color: DayColor;
+}
+export interface KpiCalendarResponse {
+  month: string;
+  totalTarget: number;
+  consultantCount: number;
+  days: KpiCalendarDay[];
+}
+
+export function useKpiCalendar(kpiId: string | null, month: string, team?: string) {
+  return useQuery({
+    queryKey: ['kpi-calendar', kpiId, month, team],
+    queryFn: () => api<KpiCalendarResponse>(`/kpis/${kpiId}/calendar${qs({ month, team })}`),
+    enabled: !!kpiId,
+  });
+}
+
+// ---- Consultant activity log (own profile calendar: events/insights/remarks) ----
+
+export interface ConsultantLogRow {
+  id: string;
+  consultantId: string;
+  date: string;
+  eventsHosted: number;
+  eventsParticipated: number;
+  insights: number;
+  remarks: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface ConsultantLogInput {
+  date: string;
+  eventsHosted: number;
+  eventsParticipated: number;
+  insights: number;
+  remarks?: string;
+}
+
+export function useConsultantLogMonth(month: string) {
+  return useQuery({
+    queryKey: ['consultant-log', month],
+    queryFn: () => api<MonthCounts>(`/consultant-log${qs({ month })}`),
+  });
+}
+
+export function useConsultantLogDay(date: string | null) {
+  return useQuery({
+    queryKey: ['consultant-log-day', date],
+    queryFn: () => api<ConsultantLogRow[]>(`/consultant-log/day/${date}`),
+    enabled: !!date,
+  });
+}
+
+export function useCreateConsultantLog() {
+  return useApiMutation(
+    (input: ConsultantLogInput) =>
+      api<ConsultantLogRow>('/consultant-log', { method: 'POST', body: input }),
+    [['consultant-log'], ['consultant-log-day']],
+  );
+}
+
+export function useUpdateConsultantLog() {
+  return useApiMutation(
+    ({ id, input }: { id: string; input: Partial<ConsultantLogInput> }) =>
+      api<ConsultantLogRow>(`/consultant-log/${id}`, { method: 'PATCH', body: input }),
+    [['consultant-log'], ['consultant-log-day']],
+  );
+}
+
+export function useDeleteConsultantLog() {
+  return useApiMutation(
+    (id: string) => api<void>(`/consultant-log/${id}`, { method: 'DELETE' }),
+    [['consultant-log'], ['consultant-log-day']],
+  );
 }
 
 export function useUsers() {
