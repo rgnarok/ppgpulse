@@ -19,25 +19,12 @@ function ConfidenceBanner({ report }: { report: ConsultantReport }) {
   const c = report.consultant;
   return (
     <Card>
+      <SectionTitle color="var(--violet)">Overall Confidence — {c.name}</SectionTitle>
       <div
         style={{
           display: 'flex',
           alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: 8,
-        }}
-      >
-        <SectionTitle color="var(--violet)">Overall Confidence — {c.name}</SectionTitle>
-        <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)' }}>
-          {c.role} · KPI {report.kpi.label} · {report.kpi.val}/4
-        </div>
-      </div>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          gap: 36,
+          justifyContent: 'space-evenly',
           flexWrap: 'wrap',
           marginTop: 24,
         }}
