@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { AppShell } from '../../components/AppShell';
 import { Card, SectionTitle, Empty, KpiCard } from '../../components/ui';
 import { useClients, useConsultants, useDhruva, type DhruvaFilterParams } from '../../lib/hooks';
-import type { DhruvaTopClient } from '../../lib/types';
 import { TeamRosterTable } from '../MyTeamPage';
 
 const PRIORITY_OPTIONS = ['P1', 'P2', 'P3', 'NA'];
@@ -298,43 +297,6 @@ function FunnelCard({
   );
 }
 
-function TopClientsList({ title, items }: { title: string; items: DhruvaTopClient[] }) {
-  return (
-    <div>
-      <div className="muted" style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>
-        {title}
-      </div>
-      {items.length === 0 ? (
-        <p className="muted" style={{ fontSize: 13 }}>
-          No deployments yet.
-        </p>
-      ) : (
-        items.map((c, i) => (
-          <div
-            key={c.client}
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              padding: '8px 0',
-              borderBottom: i < items.length - 1 ? '1px solid var(--border)' : undefined,
-            }}
-          >
-            <span>
-              <span className="mono muted" style={{ marginRight: 8 }}>
-                {i + 1}
-              </span>
-              {c.client}
-            </span>
-            <span className="mono" style={{ fontWeight: 700 }}>
-              {c.deployed}
-            </span>
-          </div>
-        ))
-      )}
-    </div>
-  );
-}
-
 export default function DhruvaPage() {
   const [filters, setFilters] = useState<DhruvaFilterParams>(EMPTY_FILTERS);
   // Headline tiles always reflect the whole live dataset — fetched once, unaffected by
@@ -372,16 +334,6 @@ export default function DhruvaPage() {
               ppgNames={ppgNames}
             />
           </div>
-          <Card>
-            <SectionTitle color="var(--gold)">Top Clients · RADC &amp; RADF</SectionTitle>
-            <p className="muted" style={{ fontSize: 12, margin: '2px 0 12px' }}>
-              Top 5 clients per motion, ranked by people deployed.
-            </p>
-            <div className="grid g-2">
-              <TopClientsList title="RADC" items={data.topClients.radc} />
-              <TopClientsList title="RADF" items={data.topClients.radf} />
-            </div>
-          </Card>
           <div style={{ marginTop: 16 }}>
             <TeamRosterTable />
           </div>

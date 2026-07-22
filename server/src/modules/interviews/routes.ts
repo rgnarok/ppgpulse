@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { assertCan } from '../rbac/index.js';
 import { logActivity } from '../audit/service.js';
+import { formatDate } from '../../lib/format.js';
 import {
   monthQuerySchema,
   dayQuerySchema,
@@ -43,7 +44,7 @@ export default async function interviewsRoutes(app: FastifyInstance) {
       request.currentUser,
       'interviews',
       'create',
-      `Scheduled interview for ${created.candidate} on ${created.date}`,
+      `Scheduled interview for ${created.candidate} on ${formatDate(created.date)}`,
       created.id,
     );
     return reply.status(201).send(created);

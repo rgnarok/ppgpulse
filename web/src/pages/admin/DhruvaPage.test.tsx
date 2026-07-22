@@ -101,10 +101,6 @@ describe('Dhruva dashboard', () => {
     expect(screen.getByText('Profiles Shared')).toBeInTheDocument();
     expect(screen.getByText('Offer & Onboarded')).toBeInTheDocument();
 
-    expect(screen.getByText('Top Clients · RADC & RADF')).toBeInTheDocument();
-    expect(screen.getByText('Religare')).toBeInTheDocument();
-    expect(screen.getByText('Abakkus')).toBeInTheDocument();
-
     const rosterHeading = await screen.findByText('PPG Team Roster');
     expect(rosterHeading).toBeInTheDocument();
     // "Abha Sharma" also appears as an option in the funnel's PPG filter select, so
