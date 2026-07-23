@@ -422,12 +422,25 @@ export async function dhruvaDashboard(
   user: CurrentUser,
   filters: DhruvaFilters,
 ) {
-  const directory = await loadDirectory(prisma);
-  const names = scopeNames(user, directory);
-  const rows = await prisma.hdis.findMany({
-    where: { owners: { some: { consultantOrName: { in: [...names] } } } },
-    include: { owners: true, pipeline: true },
-  });
+  // Dhruva is an org-wide dashboard (RBAC-gated to org-scope roles only — see
+  // seed.json's role grants), so it should see every HDIS record, not just ones
+  // whose owner name happens to match a current user account. Narrowing by
+  // scopeNames() here (as team/own-scoped views elsewhere in this module do) was a
+  // bug: any record with a legacy/free-text owner name that doesn't match a live
+  // user account (or no owners at all) was silently dropped from every Dhruva
+  // number — mirrors the same org-scope bypass hdis/service.ts's visibilityWhere()
+  // already uses for the HDIS list, so this dashboard's totals reconcile with it.
+  const rows =
+    user.role.scope === 'org'
+      ? await prisma.hdis.findMany({ include: { owners: true, pipeline: true } })
+      : await (async () => {
+          const directory = await loadDirectory(prisma);
+          const names = scopeNames(user, directory);
+          return prisma.hdis.findMany({
+            where: { owners: { some: { consultantOrName: { in: [...names] } } } },
+            include: { owners: true, pipeline: true },
+          });
+        })();
 
   // "RAPYD Active" is specifically RADC (live contract) + RADF (full-time) positions —
   // Internal records are live requirements too, but aren't RAPYD placements, so they're

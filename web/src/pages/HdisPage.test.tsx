@@ -118,7 +118,7 @@ describe('HDIS list (T10.1)', () => {
     expect(screen.getByText('+ Add record')).toBeInTheDocument();
   });
 
-  it('shows Total Requirements split by RADC/RADF, unaffected by the active filters', async () => {
+  it('shows Total Requirements split by RADC/RADF/Internal, unaffected by the active filters', async () => {
     const radf: HdisRecord = {
       ...record,
       jdId: 'TST_RF_20260603',
@@ -126,7 +126,14 @@ describe('HDIS list (T10.1)', () => {
       type: 'RADF',
       client: 'Acme Corp',
     };
-    mockFetch(routesFor(superAdminMe, [record, record2, radf]));
+    const internal: HdisRecord = {
+      ...record,
+      jdId: 'TST_INT_20260604',
+      title: 'Internal Recruiter',
+      type: 'Internal',
+      client: 'Acme Corp',
+    };
+    mockFetch(routesFor(superAdminMe, [record, record2, radf, internal]));
     renderApp(
       <Routes>
         <Route path="/hdis" element={<HdisPage />} />
@@ -135,14 +142,15 @@ describe('HDIS list (T10.1)', () => {
     );
     await screen.findByText('QA Engineer');
     const totalCard = screen.getByText(/Total Requirements/).closest('.skc') as HTMLElement;
-    expect(within(totalCard).getByText('3')).toBeInTheDocument();
+    expect(within(totalCard).getByText('4')).toBeInTheDocument();
     expect(within(totalCard).getByText('2')).toBeInTheDocument(); // RADC
-    expect(within(totalCard).getByText('1')).toBeInTheDocument(); // RADF
+    expect(within(totalCard).getAllByText('1').length).toBe(2); // RADF and Internal both 1
+    expect(within(totalCard).getByText('Internal')).toBeInTheDocument();
 
     // Narrowing the list filter doesn't change the headline card — it always
     // reflects the full dataset.
     await userEvent.selectOptions(screen.getByLabelText('Client'), 'Acme Corp');
-    expect(within(totalCard).getByText('3')).toBeInTheDocument();
+    expect(within(totalCard).getByText('4')).toBeInTheDocument();
   });
 
   it('hides Add for a genuinely view-only user', async () => {

@@ -53,12 +53,15 @@ function distinctSorted(values: (string | null | undefined)[]): string[] {
   return [...new Set(values.filter((v): v is string => !!v))].sort((a, b) => a.localeCompare(b));
 }
 
-/** Total count plus a RADC/RADF split — powers the two headline stat cards. */
+/** Total count plus a RADC/RADF/Internal split — powers the two headline stat cards.
+ * Includes Internal so the three numbers always reconcile with the total (radc + radf
+ * + internal === total), matching Dhruva's Total Live Requirements tile. */
 function typeBreakdown(records: HdisRecord[]) {
   return {
     total: records.length,
     radc: records.filter((r) => r.type === 'RADC').length,
     radf: records.filter((r) => r.type === 'RADF').length,
+    internal: records.filter((r) => r.type === 'Internal').length,
   };
 }
 
@@ -210,6 +213,7 @@ function HdisList() {
           splits={[
             { value: totalStats.radc, label: 'RADC', color: 'var(--violet)' },
             { value: totalStats.radf, label: 'RADF', color: 'var(--sky)' },
+            { value: totalStats.internal, label: 'Internal', color: 'var(--gold)' },
           ]}
         />
         <SplitStatCard
@@ -220,6 +224,7 @@ function HdisList() {
           splits={[
             { value: todayStats.radc, label: 'RADC', color: 'var(--violet)' },
             { value: todayStats.radf, label: 'RADF', color: 'var(--sky)' },
+            { value: todayStats.internal, label: 'Internal', color: 'var(--gold)' },
           ]}
         />
       </div>
