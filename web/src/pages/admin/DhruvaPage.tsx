@@ -33,7 +33,7 @@ function RapydTiles({
   };
 }) {
   const navigate = useNavigate();
-  const goToType = (type: string) => () => navigate(`/hdis?type=${type}&status=Active`);
+  const goToType = (type: string) => () => navigate(`/hdis?type=${type}&status=live`);
   return (
     <div className="grid g-4" style={{ marginBottom: 16 }}>
       <div className="skc">
@@ -182,7 +182,10 @@ function PriorityTiles({
   const total = priority.p1 + priority.p2 + priority.p3 + priority.uncategorised || 1;
   const pct = (n: number) => `${Math.round((n / total) * 100)}% of live`;
   // Only Active (not On Hold) — these tiles are meant as a "what needs attention right
-  // now" jump-off point, and an On Hold requirement isn't actionable today.
+  // now" jump-off point, and an On Hold requirement isn't actionable today. (Unlike
+  // RAPYD Active/Total Live Requirements above, whose click-through uses the 'live'
+  // sentinel so the filtered list count matches the tile number exactly — priority
+  // tiles deliberately keep this narrower, actionability-focused scope instead.)
   const goTo = (p: string) => () => navigate(`/hdis?priority=${p}&status=Active`);
   return (
     <div className="grid g-4" style={{ marginBottom: 16 }}>

@@ -575,6 +575,37 @@ describe('HDIS filters', () => {
     expect(screen.getByText('Business Analyst')).toBeInTheDocument();
   });
 
+  it("narrows the list by the 'live' status filter (Active + On Hold, matching tile counts)", async () => {
+    const onHoldRecord: HdisRecord = {
+      ...record,
+      jdId: 'TST_ONHOLD_20260604',
+      title: 'On Hold Engineer',
+      status: 'On Hold',
+      statusReason: 'Hold By client',
+    };
+    const closedRecord: HdisRecord = {
+      ...record,
+      jdId: 'TST_CLOSED_20260605',
+      title: 'Closed Engineer',
+      status: 'Closed',
+    };
+    mockFetch(routesFor(superAdminMe, [record, onHoldRecord, closedRecord]));
+    renderApp(
+      <Routes>
+        <Route path="/hdis" element={<HdisPage />} />
+      </Routes>,
+      { route: '/hdis?status=live' },
+    );
+    // 'live' (Active + On Hold) should include record + onHoldRecord but not
+    // closedRecord — this is the sentinel tile click-throughs use so the filtered
+    // count on this page matches the tile number shown on Dhruva.
+    await screen.findByText('QA Engineer');
+    expect(screen.getByText('On Hold Engineer')).toBeInTheDocument();
+    expect(screen.queryByText('Closed Engineer')).not.toBeInTheDocument();
+    expect(screen.getByText('Showing 2 of 3 records')).toBeInTheDocument();
+    expect(screen.getByLabelText('Status')).toHaveValue('live');
+  });
+
   it('narrows the list by free-text search', async () => {
     mockFetch(routesFor(superAdminMe, [record, record2]));
     renderApp(

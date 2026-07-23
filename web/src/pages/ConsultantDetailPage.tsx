@@ -137,6 +137,9 @@ function PriorityTiles({ report }: { report: ConsultantReport }) {
   const priority = report.priority;
   const total = priority.p1 + priority.p2 + priority.p3 + priority.uncategorised || 1;
   const pct = (n: number) => `${Math.round((n / total) * 100)}% of live`;
+  // Only Active (not On Hold) — mirrors Dhruva's priority tiles: a deliberately
+  // narrower, actionability-focused scope than the "live" (Active + On Hold) count
+  // shown on the tile itself.
   const goTo = (p: string) => () =>
     navigate(
       `/hdis?priority=${p}&owner=${encodeURIComponent(report.consultant.name)}&status=Active`,

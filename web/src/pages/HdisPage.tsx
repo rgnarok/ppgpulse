@@ -24,6 +24,17 @@ import type { HdisRecord } from '../lib/types';
 
 const TYPE_OPTIONS = ['RADC', 'RADF', 'Internal'];
 const STATUS_OPTIONS = ['Active', 'On Hold', 'Fulfilled', 'Closed'];
+/** A record is "live" for tile-counting purposes (RAPYD Active, Total Live
+ * Requirements, Priority tiles, etc. — see isLiveHdisStatus/isLiveStatus server-side)
+ * once it hasn't reached Fulfilled or Closed — that includes both Active AND On Hold.
+ * The list's status filter is otherwise a literal equality match, so a synthetic
+ * 'live' sentinel value lets tile click-throughs land on a filtered list whose count
+ * actually matches the tile's number, instead of narrowing to literal status=Active
+ * and silently dropping On Hold records. */
+const LIVE_STATUS_FILTER = 'live';
+function isLiveStatusValue(status: string): boolean {
+  return status !== 'Fulfilled' && status !== 'Closed';
+}
 /** P1/P2/P3 = live priority tiers shown on the Dhruva dashboard; "NA" (displayed as
  * "Uncategorised") is the default for records nobody has triaged yet. */
 const PRIORITY_OPTIONS = ['P1', 'P2', 'P3', 'NA'];
@@ -165,7 +176,9 @@ function HdisList() {
       if (filters.owner && !r.owners.includes(filters.owner)) return false;
       if (filters.type && r.type !== filters.type) return false;
       if (filters.priority && r.priority !== filters.priority) return false;
-      if (filters.status && r.status !== filters.status) return false;
+      if (filters.status === LIVE_STATUS_FILTER) {
+        if (!isLiveStatusValue(r.status)) return false;
+      } else if (filters.status && r.status !== filters.status) return false;
       if (needle) {
         const hay = `${r.title} ${r.client} ${r.jdId}`.toLowerCase();
         if (!hay.includes(needle)) return false;
@@ -321,6 +334,7 @@ function HdisList() {
               onChange={(e) => set({ status: e.target.value })}
             >
               <option value="">All statuses</option>
+              <option value={LIVE_STATUS_FILTER}>Active + On Hold (live)</option>
               {STATUS_OPTIONS.map((s) => (
                 <option key={s} value={s}>
                   {s}
