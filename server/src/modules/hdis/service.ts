@@ -4,13 +4,21 @@ import { getStorage, ALLOWED_UPLOAD_MIME } from '../../lib/storage.js';
 import { getConfig } from '../../config.js';
 import { ensureClient } from '../clients/service.js';
 import { loadDirectory, scopeNames, can, type CurrentUser } from '../rbac/index.js';
+import { computeAging } from './aging.js';
 import type { CreateHdisInput, UpdateHdisInput, PipelineInput } from './schema.js';
 
 const detailInclude = {
   owners: true,
   pipeline: true,
   attachments: { orderBy: { at: 'desc' } },
+  stageEvents: true,
 } as const satisfies Prisma.HdisInclude;
+
+/** Matches isClosed() in report/metrics.ts, at the whole-record level (no per-owner
+ * onboard split needed here — pipeline.r5 already IS the onboard count). */
+function isClosedRecord(status: string, r5: number): boolean {
+  return status === 'Closed' || status === 'Fulfilled' || r5 > 0;
+}
 
 type HdisDetail = Prisma.HdisGetPayload<{ include: typeof detailInclude }>;
 
@@ -57,6 +65,12 @@ export function toHdisDto(h: HdisDetail) {
       size: a.size,
       at: a.at.toISOString(),
     })),
+    aging: computeAging(
+      h.reqDate,
+      h.stageEvents.map((e) => ({ stage: e.stage, at: e.at })),
+      new Date(),
+      isClosedRecord(h.status, h.pipeline?.r5 ?? 0),
+    ),
     createdAt: h.createdAt.toISOString(),
     updatedAt: h.updatedAt.toISOString(),
   };
@@ -266,6 +280,14 @@ export async function setPipeline(
 
   const nextStatus = statusForStage(input.stage);
 
+  // "Profile aging" input: the first time each stage's headcount goes from 0 to
+  // positive. Recorded once per jdId+stage (unique constraint), inside this same
+  // transaction, so it can never drift from the pipeline numbers it's derived from.
+  const newlyReached = stages.filter((s) => {
+    const before = prev ? (prev[s as keyof typeof prev] as number) : 0;
+    return before === 0 && (input[s] as number) > 0;
+  });
+
   const updated = await prisma.$transaction(async (tx) => {
     await tx.hdisPipeline.upsert({
       where: { jdId },
@@ -280,6 +302,13 @@ export async function setPipeline(
       },
       create: { jdId, ...input },
     });
+    for (const s of newlyReached) {
+      await tx.hdisStageEvent.upsert({
+        where: { jdId_stage: { jdId, stage: s.toUpperCase() } },
+        update: {}, // already recorded — keep the original (earliest) timestamp
+        create: { jdId, stage: s.toUpperCase() },
+      });
+    }
     if (current.status !== nextStatus) {
       await tx.hdis.update({ where: { jdId }, data: { status: nextStatus } });
     }

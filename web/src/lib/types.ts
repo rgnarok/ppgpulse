@@ -81,8 +81,21 @@ export interface ConsultantReport {
   kpi: { val: number; label: string };
   funnel: { code: string; label: string; actual: number; target: number }[];
   closureSplit: { radc: number; radf: number };
+  /** Live (not yet closed) requirement priority split for this consultant, same
+   * bucketing as Dhruva's org-wide tiles. */
+  priority: { p1: number; p2: number; p3: number; uncategorised: number };
+  /** Profile aging — how long this person's requirements take to move through
+   * R0->R5. `overall` is the average total days across every requirement in the
+   * selected period; `byTransition` breaks that down per stage-to-stage hop. */
+  aging: {
+    overall: number | null;
+    byTransition: Record<AgingTransition, number | null>;
+  };
   requirements: RequirementRow[];
 }
+
+export type AgingStage = 'R0' | 'R1' | 'R2' | 'R3' | 'R4' | 'R5';
+export type AgingTransition = 'R0->R1' | 'R1->R2' | 'R2->R3' | 'R3->R4' | 'R4->R5';
 
 export interface RequirementRow {
   id: string;
@@ -136,12 +149,23 @@ export interface DhruvaTopClient {
 /** GET /report/dhruva — super-admin-only org-wide operations dashboard. */
 export interface DhruvaDashboard {
   rapyd: { total: number; radc: number; radf: number };
+  /** Total live requirement segregation — RAPYD Active (radc+radf) plus Internal, since
+   * radc+radf alone doesn't equal the total live requirement count. */
+  segregation: { total: number; radc: number; radf: number; internal: number };
   activeClients: number;
   interviewsToday: { total: number; radc: number; radf: number };
   priority: { p1: number; p2: number; p3: number; uncategorised: number };
   funnel: DhruvaFunnelStage[];
   funnelTotal: number;
   topClients: { radc: DhruvaTopClient[]; radf: DhruvaTopClient[] };
+  /** Org-wide RADC+RADF closures within the selected period vs. an editable target. */
+  closureTarget: {
+    kpiId: string | null;
+    target: number;
+    actual: number;
+    radc: number;
+    radf: number;
+  };
 }
 
 export interface HdisRecord {
@@ -168,6 +192,11 @@ export interface HdisRecord {
     stage: string;
   } | null;
   attachments: { id: string; fileName: string; contentType: string; size: number; at: string }[];
+  /** How long this requirement has taken to move through R0->R5 — see aging.ts. */
+  aging: {
+    totalDays: number;
+    transitions: Record<AgingTransition, number | null>;
+  };
   createdAt: string;
   updatedAt: string;
 }

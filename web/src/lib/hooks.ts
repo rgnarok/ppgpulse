@@ -263,7 +263,9 @@ export function useSetKpiDefaultTarget(kpiId: string) {
   return useApiMutation(
     (target: number) =>
       api<KpiRow>(`/kpis/${kpiId}/default-target`, { method: 'PATCH', body: { target } }),
-    [['kpis'], ['kpi-targets', kpiId], ['kpi-calendar', kpiId]],
+    // Also invalidates 'dhruva' — the Closure Target section reads a KPI's
+    // numericTarget via /report/dhruva, and needs to refresh when it's edited here.
+    [['kpis'], ['kpi-targets', kpiId], ['kpi-calendar', kpiId], ['dhruva']],
   );
 }
 

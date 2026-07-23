@@ -38,6 +38,10 @@ const record: HdisRecord = {
   owners: ['Abha Sharma'],
   pipeline: { r0: 0, r1: 0, r2: 0, r3: 0, r4: 0, r5: 0, stage: 'R0 · Sourcing' },
   attachments: [],
+  aging: {
+    totalDays: 0,
+    transitions: { 'R0->R1': null, 'R1->R2': null, 'R2->R3': null, 'R3->R4': null, 'R4->R5': null },
+  },
   createdAt: '2026-06-01T00:00:00.000Z',
   updatedAt: '2026-06-01T00:00:00.000Z',
 };
@@ -222,6 +226,21 @@ describe('HDIS detail + pipeline recorder (T10.3)', () => {
     await screen.findByText('Activity log');
     expect(screen.queryByText('Record pipeline activity')).not.toBeInTheDocument();
     expect(screen.queryByText('Log update')).not.toBeInTheDocument();
+  });
+
+  it('shows the Profile Aging card with total days and per-transition breakdown', async () => {
+    mockFetch(routesFor(outsiderMe));
+    renderApp(
+      <Routes>
+        <Route path="/hdis/:jdId" element={<HdisPage />} />
+      </Routes>,
+      { route: '/hdis/TST_QA_20260601' },
+    );
+    expect(await screen.findByText('Profile Aging')).toBeInTheDocument();
+    expect(screen.getAllByText('0').length).toBeGreaterThan(0); // record.aging.totalDays (0 also appears in pipeline)
+    expect(screen.getByText('R0 → R1')).toBeInTheDocument();
+    // Every transition is null in the fixture — rendered as an em dash.
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
   });
 
   it('an owner without blanket edit rights still gets the recorder for their own record', async () => {

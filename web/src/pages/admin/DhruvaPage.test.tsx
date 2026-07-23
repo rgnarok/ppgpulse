@@ -12,6 +12,7 @@ const dashboard: DhruvaDashboard = {
   // Every number here is deliberately distinct so screen.getByText(...) assertions
   // below can't collide with an unrelated tile showing the same value.
   rapyd: { total: 66, radc: 39, radf: 27 },
+  segregation: { total: 74, radc: 39, radf: 27, internal: 8 },
   activeClients: 29,
   interviewsToday: { total: 5, radc: 2, radf: 3 },
   priority: { p1: 3, p2: 13, p3: 19, uncategorised: 31 },
@@ -31,6 +32,7 @@ const dashboard: DhruvaDashboard = {
     ],
     radf: [{ client: 'Abakkus', deployed: 1 }],
   },
+  closureTarget: { kpiId: 'kpi-closure', target: 10, actual: 8, radc: 5, radf: 3 },
 };
 
 // Deliberately a different client than any in `dashboard.topClients` so the client
@@ -87,9 +89,12 @@ describe('Dhruva dashboard', () => {
     );
 
     expect(await screen.findByText('66')).toBeInTheDocument();
-    expect(screen.getByText('39')).toBeInTheDocument();
-    expect(screen.getByText('27')).toBeInTheDocument();
+    // '39' and '27' (rapyd.radc/radf) are deliberately mirrored on the Total Live
+    // Requirements tile too (segregation.radc/radf), so both now render twice.
+    expect(screen.getAllByText('39').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('27').length).toBeGreaterThan(0);
     expect(screen.getByText('29')).toBeInTheDocument();
+    expect(screen.getByText('74')).toBeInTheDocument(); // segregation.total
 
     expect(screen.getByText('P1 — Live')).toBeInTheDocument();
     expect(screen.getByText('P2 — Live')).toBeInTheDocument();
@@ -114,6 +119,7 @@ describe('Dhruva dashboard', () => {
   it('shows an empty state when there is no live HDIS data yet', async () => {
     const empty: DhruvaDashboard = {
       rapyd: { total: 0, radc: 0, radf: 0 },
+      segregation: { total: 0, radc: 0, radf: 0, internal: 0 },
       activeClients: 0,
       interviewsToday: { total: 0, radc: 0, radf: 0 },
       priority: { p1: 0, p2: 0, p3: 0, uncategorised: 0 },
@@ -124,6 +130,7 @@ describe('Dhruva dashboard', () => {
       })),
       funnelTotal: 0,
       topClients: { radc: [], radf: [] },
+      closureTarget: { kpiId: null, target: 0, actual: 0, radc: 0, radf: 0 },
     };
     mockFetch([
       jsonRoute('/api/me', superAdminMe),
@@ -163,10 +170,33 @@ describe('Dhruva dashboard', () => {
       </Routes>,
       { route: '/admin/dhruva' },
     );
-    await screen.findByText('66');
-    const radcNumber = screen.getByText('39'); // rapyd.radc from the mocked dashboard
+    const rapydHeading = await screen.findByText((_, el) => el?.textContent === '● RAPYD Active');
+    // Scope to the RAPYD Active tile itself — Total Live Requirements shows the same
+    // RADC/RADF numbers alongside Internal, so a page-wide '39' lookup is ambiguous.
+    const rapydTile = rapydHeading.closest('.skc') as HTMLElement;
+    const radcNumber = within(rapydTile).getByText('39'); // rapyd.radc from the mocked dashboard
     await userEvent.click(radcNumber.closest('[role="button"]')!);
     expect(await screen.findByText('HDIS PAGE')).toBeInTheDocument();
+  });
+
+  it('shows the Closure Target section with actual vs. target and the RADC/RADF split', async () => {
+    mockFetch(routes());
+    renderApp(
+      <Routes>
+        <Route path="/admin/dhruva" element={<DhruvaPage />} />
+      </Routes>,
+      { route: '/admin/dhruva' },
+    );
+    const closureHeading = await screen.findByText('Closure Target');
+    const closureSection = closureHeading.closest('div')!.parentElement!
+      .parentElement as HTMLElement;
+    expect(within(closureSection).getByText('8')).toBeInTheDocument(); // closureTarget.actual
+    expect(within(closureSection).getByText('10 target')).toBeInTheDocument();
+    expect(
+      within(closureSection).getByText(
+        (_, el) => el?.textContent === 'RADC 5 + RADF 3 closed this period',
+      ),
+    ).toBeInTheDocument();
   });
 
   it('defaults the period filter to the current month', async () => {

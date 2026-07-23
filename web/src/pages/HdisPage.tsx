@@ -652,6 +652,46 @@ function HdisFormModal({
   );
 }
 
+const AGING_TRANSITION_LABELS: {
+  key: 'R0->R1' | 'R1->R2' | 'R2->R3' | 'R3->R4' | 'R4->R5';
+  label: string;
+}[] = [
+  { key: 'R0->R1', label: 'R0 → R1' },
+  { key: 'R1->R2', label: 'R1 → R2' },
+  { key: 'R2->R3', label: 'R2 → R3' },
+  { key: 'R3->R4', label: 'R3 → R4' },
+  { key: 'R4->R5', label: 'R4 → R5' },
+];
+
+/** How long this requirement has taken to move through the pipeline — total days
+ * (reqDate -> now, frozen at the last stage reached once closed/fulfilled) plus a
+ * per-transition breakdown (R0->R1, R1->R2, etc.), sourced from HdisStageEvent rows
+ * recorded automatically whenever the pipeline counts are edited (see PipelineRecorder). */
+function ProfileAgingCard({ rec }: { rec: HdisRecord }) {
+  return (
+    <Card>
+      <SectionTitle color="var(--teal)">Profile Aging</SectionTitle>
+      <div style={{ marginTop: 12, display: 'flex', alignItems: 'baseline', gap: 8 }}>
+        <span style={{ fontSize: 28, fontWeight: 700, color: 'var(--teal)' }}>
+          {rec.aging.totalDays}
+        </span>
+        <span className="skc-sub">total days since raised</span>
+      </div>
+      <div className="grid" style={{ marginTop: 14, gridTemplateColumns: 'repeat(5, 1fr)' }}>
+        {AGING_TRANSITION_LABELS.map(({ key, label }) => {
+          const v = rec.aging.transitions[key];
+          return (
+            <div className="mini" key={key}>
+              <div className="l">{label}</div>
+              <div className="v">{v === null ? '—' : `${v}d`}</div>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
 function HdisDetail({ jdId }: { jdId: string }) {
   const { me } = useAuth();
   const navigate = useNavigate();
@@ -748,6 +788,10 @@ function HdisDetail({ jdId }: { jdId: string }) {
           </Card>
         </div>
       )}
+
+      <div style={{ marginBottom: 16 }}>
+        <ProfileAgingCard rec={rec} />
+      </div>
 
       <Attachments rec={rec} editable={editable} />
 

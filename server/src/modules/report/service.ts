@@ -16,6 +16,7 @@ import {
   rapydActiveCounts,
   type ReqLite,
 } from './metrics.js';
+import { computeAging, average, TRANSITIONS, type Transition } from '../hdis/aging.js';
 
 export interface ScopedConsultant {
   id: string;
@@ -64,6 +65,7 @@ interface HdisReqRow {
   reqDate: string;
   status: string;
   statusReason: string | null;
+  priority: string;
   jdLink: string | null;
   ownerName: string;
   createdAt: Date;
@@ -74,13 +76,14 @@ interface HdisReqRow {
   l2: number;
   l3: number;
   onboard: number;
+  stageEvents: { stage: string; at: Date }[];
 }
 
 async function hdisReqRowsFor(prisma: PrismaClient, names: string[]): Promise<HdisReqRow[]> {
   if (!names.length) return [];
   const owners = await prisma.hdisOwner.findMany({
     where: { consultantOrName: { in: names } },
-    include: { hdis: { include: { pipeline: true } } },
+    include: { hdis: { include: { pipeline: true, stageEvents: true } } },
   });
   return owners.map((o) => {
     const h = o.hdis;
@@ -93,6 +96,7 @@ async function hdisReqRowsFor(prisma: PrismaClient, names: string[]): Promise<Hd
       reqDate: h.reqDate,
       status: h.status,
       statusReason: h.statusReason,
+      priority: h.priority,
       jdLink: h.jdLink,
       ownerName: o.consultantOrName,
       createdAt: h.createdAt,
@@ -103,6 +107,7 @@ async function hdisReqRowsFor(prisma: PrismaClient, names: string[]): Promise<Hd
       l2: p?.r3 ?? 0,
       l3: p?.r4 ?? 0,
       onboard: p?.r5 ?? 0,
+      stageEvents: h.stageEvents.map((e) => ({ stage: e.stage, at: e.at })),
     };
   });
 }
@@ -274,6 +279,33 @@ export async function consultantReport(
   const list = rows.map(toReqLite);
   const st = personStats(list);
 
+  // Priority split — live (not yet closed) requirements owned by this person, same
+  // "P1/P2/P3/Uncategorised" bucketing as the org-wide Dhruva tiles, scoped to one
+  // consultant and the same period as the rest of this page.
+  const priority = { p1: 0, p2: 0, p3: 0, uncategorised: 0 };
+  for (const r of rows) {
+    if (isClosed(toReqLite(r))) continue;
+    if (r.priority === 'P1') priority.p1++;
+    else if (r.priority === 'P2') priority.p2++;
+    else if (r.priority === 'P3') priority.p3++;
+    else priority.uncategorised++;
+  }
+
+  // Profile aging — how long this person's requirements take to move through
+  // R0->R5 (see aging.ts). `overall` is the average total days across every
+  // requirement in this period; `byTransition` breaks that down per stage-to-stage
+  // hop, powering the individual dashboard's stage filter.
+  const now = new Date();
+  const agings = rows.map((r) =>
+    computeAging(r.reqDate, r.stageEvents, now, isClosed(toReqLite(r))),
+  );
+  const aging = {
+    overall: average(agings.map((a) => a.totalDays)),
+    byTransition: Object.fromEntries(
+      TRANSITIONS.map((t) => [t, average(agings.map((a) => a.transitions[t]))]),
+    ) as Record<Transition, number | null>,
+  };
+
   return {
     period,
     consultant: {
@@ -291,6 +323,8 @@ export async function consultantReport(
     kpi: kpiRating(st),
     funnel: funnel(st),
     closureSplit: closureCats(list),
+    priority,
+    aging,
     requirements: rows.map((r) => ({
       id: r.jdId,
       code: r.jdId,
@@ -401,15 +435,27 @@ export async function dhruvaDashboard(
   const rapyd = rapydActiveCounts(rows);
   const priority = { p1: 0, p2: 0, p3: 0, uncategorised: 0 };
   const clientAgg = new Map<string, { radc: number; radf: number }>();
+  let internalLive = 0;
   for (const h of rows) {
     if (!isLiveStatus(h.status)) continue;
     if (h.priority === 'P1') priority.p1++;
     else if (h.priority === 'P2') priority.p2++;
     else if (h.priority === 'P3') priority.p3++;
     else priority.uncategorised++;
+    if (h.type === 'Internal') internalLive++;
   }
   const activeClients = new Set(rows.filter((h) => isLiveStatus(h.status)).map((h) => h.client))
     .size;
+
+  // Total live requirement segregation — RAPYD Active (RADC+RADF) alone doesn't equal
+  // total live requirements because Internal-type records are live too; break out all
+  // three so the totals reconcile (radc + radf + internal === total).
+  const segregation = {
+    total: rapyd.radc + rapyd.radf + internalLive,
+    radc: rapyd.radc,
+    radf: rapyd.radf,
+    internal: internalLive,
+  };
 
   // Top Clients — people deployed (R5/onboard) per client, split RADC/RADF — counts
   // across the whole dataset (closed records included; a past deployment still counts
@@ -474,13 +520,43 @@ export async function dhruvaDashboard(
     else if (iv.type === 'RAPYD(F)') interviewsToday.radf++;
   }
 
+  // Closure Target — org-wide RADC+RADF closures within the resolved period vs. a
+  // single editable target (reuses the Kpi.numericTarget field via a dedicated
+  // 'closures_period' tracked KPI, edited the same way as any other KPI default target).
+  const closureKpi = await prisma.kpi.findFirst({ where: { trackedMetric: 'closures_period' } });
+  const closureActual = closureCats(
+    funnelRows.map((h) => ({
+      ownerName: '',
+      reqDate: h.reqDate,
+      status: h.status,
+      statusReason: null,
+      profiles: 0,
+      shortlist: 0,
+      l1: 0,
+      l2: 0,
+      l3: 0,
+      onboard: h.pipeline?.r5 ?? 0,
+      jdId: h.jdId,
+      type: h.type,
+    })),
+  );
+  const closureTarget = {
+    kpiId: closureKpi?.id ?? null,
+    target: closureKpi?.numericTarget ?? 0,
+    actual: closureActual.radc + closureActual.radf,
+    radc: closureActual.radc,
+    radf: closureActual.radf,
+  };
+
   return {
     rapyd,
+    segregation,
     activeClients,
     interviewsToday,
     priority,
     funnel: orgFunnel(sums),
     funnelTotal: funnelRows.length,
     topClients,
+    closureTarget,
   };
 }

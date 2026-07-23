@@ -106,6 +106,139 @@ function KpiTilesRow({ report }: { report: ConsultantReport }) {
   );
 }
 
+/** Wraps a KpiCard so the whole tile is a keyboard-accessible click target — used to
+ * jump into the HDIS list pre-filtered to this consultant + priority (mirrors Dhruva's
+ * ClickableTile). */
+function ClickableTile({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      style={{ cursor: 'pointer' }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** P1/P2/P3/Uncategorised — this consultant's live (not yet closed) requirement
+ * priority split, same bucketing as Dhruva's org-wide tiles but scoped to one person
+ * and the page's period filter. Each tile jumps into the HDIS list pre-filtered to
+ * this person + that priority. */
+function PriorityTiles({ report }: { report: ConsultantReport }) {
+  const navigate = useNavigate();
+  const priority = report.priority;
+  const total = priority.p1 + priority.p2 + priority.p3 + priority.uncategorised || 1;
+  const pct = (n: number) => `${Math.round((n / total) * 100)}% of live`;
+  const goTo = (p: string) => () =>
+    navigate(
+      `/hdis?priority=${p}&owner=${encodeURIComponent(report.consultant.name)}&status=Active`,
+    );
+  return (
+    <div className="grid g-4" style={{ marginBottom: 16 }}>
+      <ClickableTile onClick={goTo('P1')}>
+        <KpiCard
+          tone="sand"
+          icon="●"
+          label="P1 — Assigned"
+          value={priority.p1}
+          sub={pct(priority.p1)}
+        />
+      </ClickableTile>
+      <ClickableTile onClick={goTo('P2')}>
+        <KpiCard
+          tone="gold"
+          icon="●"
+          label="P2 — Assigned"
+          value={priority.p2}
+          sub={pct(priority.p2)}
+        />
+      </ClickableTile>
+      <ClickableTile onClick={goTo('P3')}>
+        <KpiCard
+          tone="sky"
+          icon="●"
+          label="P3 — Assigned"
+          value={priority.p3}
+          sub={pct(priority.p3)}
+        />
+      </ClickableTile>
+      <ClickableTile onClick={goTo('NA')}>
+        <KpiCard
+          tone="blue"
+          icon="○"
+          label="Uncategorised"
+          value={priority.uncategorised}
+          sub={pct(priority.uncategorised)}
+        />
+      </ClickableTile>
+    </div>
+  );
+}
+
+const AGING_FILTER_OPTIONS: { value: string; label: string }[] = [
+  { value: 'overall', label: 'Overall (R0 → R5)' },
+  { value: 'R0->R1', label: 'R0 → R1' },
+  { value: 'R1->R2', label: 'R1 → R2' },
+  { value: 'R2->R3', label: 'R2 → R3' },
+  { value: 'R3->R4', label: 'R3 → R4' },
+  { value: 'R4->R5', label: 'R4 → R5' },
+];
+
+/** Average Profile Aging — how long this person's requirements take to move through
+ * the pipeline, with a filter to switch between the overall R0->R5 average and any
+ * single stage-to-stage transition (e.g. "how long does R1 -> R2 typically take for
+ * the profiles this person has worked"). */
+function AgingCard({ report }: { report: ConsultantReport }) {
+  const [stage, setStage] = useState('overall');
+  const value =
+    stage === 'overall'
+      ? report.aging.overall
+      : report.aging.byTransition[stage as keyof typeof report.aging.byTransition];
+  return (
+    <Card>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 12,
+        }}
+      >
+        <SectionTitle color="var(--teal)">Average Profile Aging</SectionTitle>
+        <div className="field" style={{ margin: 0 }}>
+          <label htmlFor="cd-aging-stage" style={{ display: 'none' }}>
+            Stage
+          </label>
+          <select id="cd-aging-stage" value={stage} onChange={(e) => setStage(e.target.value)}>
+            {AGING_FILTER_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div style={{ marginTop: 16, display: 'flex', alignItems: 'baseline', gap: 8 }}>
+        <span style={{ fontSize: 32, fontWeight: 700, color: 'var(--teal)' }}>
+          {value === null ? '—' : value}
+        </span>
+        <span className="skc-sub">
+          {value === null ? 'no data for this stage yet' : 'avg. days'}
+        </span>
+      </div>
+    </Card>
+  );
+}
+
 const STATUS_ORDER = ['Active', 'On Hold', 'Fulfilled', 'Closed'];
 
 /** Same status-reason breakdown rule used server-side (metrics.ts's statusReasonMix),
@@ -330,6 +463,10 @@ export default function ConsultantDetailPage() {
         <>
           <ConfidenceBanner report={report} />
           <KpiTilesRow report={report} />
+          <PriorityTiles report={report} />
+          <div style={{ marginBottom: 16 }}>
+            <AgingCard report={report} />
+          </div>
           <ChartsRow report={report} />
           <RequirementsTable report={report} />
         </>

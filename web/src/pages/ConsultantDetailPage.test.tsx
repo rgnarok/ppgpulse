@@ -41,6 +41,17 @@ const report: ConsultantReport = {
     { code: 'R5', label: 'Onboard', actual: 0, target: 27 },
   ],
   closureSplit: { radc: 0, radf: 0 },
+  priority: { p1: 4, p2: 6, p3: 9, uncategorised: 8 },
+  aging: {
+    overall: 12.5,
+    byTransition: {
+      'R0->R1': 3,
+      'R1->R2': 4.5,
+      'R2->R3': null,
+      'R3->R4': null,
+      'R4->R5': null,
+    },
+  },
   requirements: [
     {
       id: 'r1',

@@ -97,12 +97,21 @@ GET  /me                    -> current user + effective permissions + scope
 GET  /consultants?scope           -> consultants visible to caller (scoped)
 GET  /report/overview?from&to&month&fy   -> tiles + chart series (scoped, sourced live
                                              from Hdis/HdisOwner/HdisPipeline)
-GET  /report/consultant/:id?from&to&month&fy -> confidence, funnel, kpi, requirements
+GET  /report/consultant/:id?from&to&month&fy -> confidence, funnel, kpi, requirements,
+                                     plus (scoped to the same period as the rest of
+                                     this page): `priority` (this consultant's live
+                                     P1/P2/P3/Uncategorised split) and `aging` (average
+                                     Profile Aging — `overall` R0->R5 average days, plus
+                                     `byTransition` per-stage-hop averages, computed from
+                                     HdisStageEvent rows — see hdis/aging.ts)
 GET  /requirements/:id            -> requirement (HDIS jdId) detail + co-owners on same jd
 GET  /report/dhruva?priority&client&ppg&from&to&month&fy -> super-admin-only org-wide
                                      dashboard: RAPYD Active split (RADC+RADF live
                                      records only — total is always radc+radf; Internal
-                                     records don't count), Active Clients, Interviews
+                                     records don't count), `segregation` (total live
+                                     requirement count = radc+radf+internal, so the
+                                     RAPYD Active split and the org's whole live
+                                     workload reconcile), Active Clients, Interviews
                                      Today split, Priority (P1/P2/P3/Uncategorised)
                                      tiles — these headline numbers always reflect the
                                      whole live dataset. The R0-R5 funnel with drop-off %
@@ -111,16 +120,27 @@ GET  /report/dhruva?priority&client&ppg&from&to&month&fy -> super-admin-only org
                                      fiscal year — same precedence/resolvePeriod() as the
                                      rest of this module; defaults to the current month
                                      on the Dhruva page). Also returns Top Clients by
-                                     people deployed (RADC/RADF, top 5 each).
+                                     people deployed (RADC/RADF, top 5 each), and
+                                     `closureTarget` — org-wide RADC+RADF closures within
+                                     the resolved period vs. an editable target (backed
+                                     by the "Closure Target" KPI's numericTarget, edited
+                                     via the existing PATCH /kpis/:id/default-target).
                                      perm dhruva.view (super_admin only)
 
 # HDIS
 GET  /hdis?month&status&q                 -> list (monthly)
 POST /hdis                                -> create (perm hdis.add)
-GET  /hdis/:jdId                          -> detail (record + pipeline + attachments + activity)
+GET  /hdis/:jdId                          -> detail (record + pipeline + attachments +
+                                              activity + `aging` — Profile Aging: total
+                                              days since reqDate, frozen at the last
+                                              stage reached once closed/fulfilled, plus
+                                              a per-transition R0->R1...R4->R5 breakdown)
 PATCH/hdis/:jdId                          -> edit (perm hdis.edit)
 DELETE /hdis/:jdId                        -> delete (perm hdis.delete)
-PUT  /hdis/:jdId/pipeline                 -> {r0..r5, stage} update -> logs activity
+PUT  /hdis/:jdId/pipeline                 -> {r0..r5, stage} update -> logs activity;
+                                              also records an HdisStageEvent the first
+                                              time each stage's headcount goes from 0 to
+                                              positive (the raw data Profile Aging reads)
 POST /hdis/:jdId/attachments              -> multipart PDF/DOC upload -> StorageService
 POST /hdis/:jdId/link                     -> {jdLink} set/clear
 GET  /hdis/:jdId/activity                 -> activity log
@@ -151,6 +171,11 @@ GET  /kpis/:id/calendar?month             -> day-by-day actual-vs-target for a K
                                              a tracked metric (currently 'interviews_per_day')
                                              — green (>=100%), amber (>=80%), red (<80%),
                                              or uncolored where no interviews were logged
+# Two KPIs are wired to computed data sources via `trackedMetric` (seed.json #15/#16):
+# 'interviews_per_day' (Interviews per Day — powers the calendar above) and
+# 'closures_period' (Closure Target — read/edited by Dhruva's Closure Target section;
+# PATCH /kpis/:id/default-target is reused as its (only) target-editing endpoint,
+# since it's a single org-wide number rather than per-consultant).
 
 # Consultant activity log — self-service "My activity" calendar on the Profile page
 # (events hosted/participated, insights, remarks) for consultants & HR managers.

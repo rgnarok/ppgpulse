@@ -2,7 +2,13 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppShell } from '../../components/AppShell';
 import { Card, SectionTitle, Empty, KpiCard } from '../../components/ui';
-import { useClients, useConsultants, useDhruva, type DhruvaFilterParams } from '../../lib/hooks';
+import {
+  useClients,
+  useConsultants,
+  useDhruva,
+  useSetKpiDefaultTarget,
+  type DhruvaFilterParams,
+} from '../../lib/hooks';
 import { currentMonth, recentFiscalYears, fyLabel } from '../../lib/fy';
 import { TeamRosterTable } from '../MyTeamPage';
 
@@ -21,6 +27,7 @@ function RapydTiles({
 }: {
   data: {
     rapyd: { total: number; radc: number; radf: number };
+    segregation: { total: number; radc: number; radf: number; internal: number };
     activeClients: number;
     interviewsToday: { total: number; radc: number; radf: number };
   };
@@ -28,7 +35,7 @@ function RapydTiles({
   const navigate = useNavigate();
   const goToType = (type: string) => () => navigate(`/hdis?type=${type}&status=Active`);
   return (
-    <div className="grid g-3" style={{ marginBottom: 16 }}>
+    <div className="grid g-4" style={{ marginBottom: 16 }}>
       <div className="skc">
         <div className="skc-head">
           <span className="dot" />● RAPYD Active
@@ -47,6 +54,33 @@ function RapydTiles({
             value={data.rapyd.radf}
             label="RADF"
             color="var(--sky)"
+          />
+        </div>
+      </div>
+      <div className="skc">
+        <div className="skc-head">
+          <span className="dot" />◆ Total Live Requirements
+        </div>
+        <div className="skc-num">{data.segregation.total}</div>
+        <div className="skc-sub">RADC + RADF + Internal — full segregation</div>
+        <div className="skc-split">
+          <SplitItem
+            onClick={goToType('RADC')}
+            value={data.segregation.radc}
+            label="RADC"
+            color="var(--violet)"
+          />
+          <SplitItem
+            onClick={goToType('RADF')}
+            value={data.segregation.radf}
+            label="RADF"
+            color="var(--sky)"
+          />
+          <SplitItem
+            onClick={goToType('Internal')}
+            value={data.segregation.internal}
+            label="Internal"
+            color="var(--gold)"
           />
         </div>
       </div>
@@ -282,36 +316,141 @@ function FunnelCard({
       {isLoading || !data ? (
         <div className="empty">Loading…</div>
       ) : (
-        <div className="funnel" style={{ marginTop: 16 }}>
-          {data.funnel.map((f, i) => {
-            const max = Math.max(1, data.funnel[0].count);
-            const kept = f.dropoffPct === null ? 100 : 100 - f.dropoffPct;
-            return (
-              <div className="fn-row" key={f.code}>
-                <div className="fn-side">
-                  <b>{f.code}</b>
-                  {f.label}
+        <>
+          <div className="funnel" style={{ marginTop: 16 }}>
+            {data.funnel.map((f, i) => {
+              const max = Math.max(1, data.funnel[0].count);
+              const kept = f.dropoffPct === null ? 100 : 100 - f.dropoffPct;
+              return (
+                <div className="fn-row" key={f.code}>
+                  <div className="fn-side">
+                    <b>{f.code}</b>
+                    {f.label}
+                  </div>
+                  <div className="fn-val">{f.count}</div>
+                  <div className="fn-track">
+                    <div className="fn-ghost" style={{ width: '100%' }} />
+                    <div
+                      className="fn-bar"
+                      style={{
+                        width: `${Math.min(100, (f.count / max) * 100)}%`,
+                        background: conversionTone(f.dropoffPct),
+                      }}
+                    />
+                  </div>
+                  <div className="fn-pct" style={{ color: conversionTone(f.dropoffPct) }}>
+                    {i === 0 ? '—' : `${kept}%`}
+                  </div>
                 </div>
-                <div className="fn-val">{f.count}</div>
-                <div className="fn-track">
-                  <div className="fn-ghost" style={{ width: '100%' }} />
-                  <div
-                    className="fn-bar"
-                    style={{
-                      width: `${Math.min(100, (f.count / max) * 100)}%`,
-                      background: conversionTone(f.dropoffPct),
-                    }}
-                  />
-                </div>
-                <div className="fn-pct" style={{ color: conversionTone(f.dropoffPct) }}>
-                  {i === 0 ? '—' : `${kept}%`}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+          <ClosureTargetSection closureTarget={data.closureTarget} />
+        </>
       )}
     </Card>
+  );
+}
+
+/** Closure Target — org-wide RADC+RADF closures within the funnel's selected period vs.
+ * an editable target (backed by the 'Closure Target' KPI's numericTarget). Colored like
+ * the KPI-tracking calendar: green at/above target, amber close, red well short. */
+function ClosureTargetSection({
+  closureTarget,
+}: {
+  closureTarget: {
+    kpiId: string | null;
+    target: number;
+    actual: number;
+    radc: number;
+    radf: number;
+  };
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(String(closureTarget.target));
+  const setTarget = useSetKpiDefaultTarget(closureTarget.kpiId ?? '');
+
+  const pct = closureTarget.target > 0 ? closureTarget.actual / closureTarget.target : null;
+  const tone =
+    pct === null
+      ? 'var(--muted)'
+      : pct >= 1
+        ? 'var(--green)'
+        : pct >= 0.6
+          ? 'var(--amber)'
+          : 'var(--red)';
+
+  function save() {
+    const n = Number(draft);
+    if (!closureTarget.kpiId || !Number.isFinite(n) || n < 0) {
+      setEditing(false);
+      return;
+    }
+    setTarget.mutate(n, { onSuccess: () => setEditing(false) });
+  }
+
+  return (
+    <div
+      style={{
+        marginTop: 20,
+        paddingTop: 16,
+        borderTop: '1px solid var(--border)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: 12,
+      }}
+    >
+      <div>
+        <SectionTitle color="var(--green)">Closure Target</SectionTitle>
+        <div className="skc-sub" style={{ marginTop: 2 }}>
+          RADC {closureTarget.radc} + RADF {closureTarget.radf} closed this period
+        </div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: 22, fontWeight: 700, color: tone }}>{closureTarget.actual}</span>
+        <span className="skc-sub">of</span>
+        {editing ? (
+          <>
+            <input
+              type="number"
+              min={0}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              style={{ width: 72 }}
+              autoFocus
+            />
+            <button type="button" className="btn btn-pri btn-sm" onClick={save}>
+              Save
+            </button>
+            <button
+              type="button"
+              className="btn btn-gho btn-sm"
+              onClick={() => {
+                setDraft(String(closureTarget.target));
+                setEditing(false);
+              }}
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="btn btn-gho btn-sm"
+            disabled={!closureTarget.kpiId}
+            onClick={() => {
+              setDraft(String(closureTarget.target));
+              setEditing(true);
+            }}
+            title={closureTarget.kpiId ? 'Edit target' : 'Closure Target KPI not found'}
+          >
+            {closureTarget.target} target
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 

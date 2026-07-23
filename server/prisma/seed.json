@@ -5839,6 +5839,17 @@
       "whyItMatters": "A steady daily interview volume is the single biggest lever on pipeline health — it directly drives shortlists, offers, and closures.",
       "trackedMetric": "interviews_per_day",
       "numericTarget": 4
+    },
+    {
+      "kpiNo": 16,
+      "symbol": "✅",
+      "title": "Closure Target",
+      "target": "10 / period",
+      "description": "Org-wide RADC + RADF closures (Fulfilled/Closed/onboarded) expected within the selected Dhruva reporting period.",
+      "periodicity": "Monthly",
+      "whyItMatters": "Closures are the ultimate measure of delivery output — tracking them against a target keeps the whole team focused on getting requirements to placement, not just moving them through the pipeline.",
+      "trackedMetric": "closures_period",
+      "numericTarget": 10
     }
   ]
 }
