@@ -584,6 +584,80 @@ describe('HDIS priority', () => {
   });
 });
 
+describe('HDIS positions', () => {
+  it('shows the actual openings count as "Positions" on the detail page', async () => {
+    const twoOpenings: HdisRecord = { ...record, openings: 2 };
+    mockFetch([
+      jsonRoute('/api/me', superAdminMe),
+      jsonRoute('/api/hdis/TST_QA_20260601/activity', []),
+      jsonRoute('/api/hdis/TST_QA_20260601', twoOpenings),
+      jsonRoute('/api/hdis', [twoOpenings]),
+      jsonRoute('/api/clients', clients),
+      jsonRoute('/api/consultants', consultants),
+    ]);
+    renderApp(
+      <Routes>
+        <Route path="/hdis/:jdId" element={<HdisPage />} />
+      </Routes>,
+      { route: '/hdis/TST_QA_20260601' },
+    );
+    expect(await screen.findByText('Positions')).toBeInTheDocument();
+    expect(screen.queryByText('Openings')).not.toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
+  });
+
+  it('defaults Positions to 1 on create and submits the chosen count', async () => {
+    const { calls } = mockFetch([
+      ...routesFor(superAdminMe),
+      jsonRoute('/api/hdis', record, { method: 'POST' }),
+    ]);
+    renderApp(
+      <Routes>
+        <Route path="/hdis" element={<HdisPage />} />
+      </Routes>,
+      { route: '/hdis?fy=&month=' },
+    );
+    await screen.findByText('QA Engineer');
+    await userEvent.click(screen.getByText('+ Add record'));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByLabelText('Positions')).toHaveValue(1);
+    await userEvent.clear(within(dialog).getByLabelText('Positions'));
+    await userEvent.type(within(dialog).getByLabelText('Positions'), '4');
+    await userEvent.type(screen.getByPlaceholderText('VAY_XX_20260601'), 'NEW_JD_20260702');
+    await userEvent.click(screen.getByText('Save record'));
+
+    const posted = calls.find((c) => c.url.endsWith('/api/hdis') && c.method === 'POST');
+    expect(posted).toBeTruthy();
+    expect((posted!.body as { openings: number }).openings).toBe(4);
+  });
+
+  it('pre-fills Positions on edit and PATCHes the updated count', async () => {
+    const { calls } = mockFetch([
+      ...routesFor(superAdminMe),
+      jsonRoute('/api/hdis/TST_QA_20260601', record, { method: 'PATCH' }),
+    ]);
+    renderApp(
+      <Routes>
+        <Route path="/hdis" element={<HdisPage />} />
+      </Routes>,
+      { route: '/hdis?fy=&month=' },
+    );
+    await screen.findByText('QA Engineer');
+    await userEvent.click(screen.getByText('Edit'));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByLabelText('Positions')).toHaveValue(1);
+    await userEvent.clear(within(dialog).getByLabelText('Positions'));
+    await userEvent.type(within(dialog).getByLabelText('Positions'), '3');
+    await userEvent.click(screen.getByText('Save changes'));
+
+    const patch = calls.find(
+      (c) => c.url.includes('/api/hdis/TST_QA_20260601') && c.method === 'PATCH',
+    );
+    expect(patch).toBeTruthy();
+    expect((patch!.body as { openings: number }).openings).toBe(3);
+  });
+});
+
 describe('HDIS filters', () => {
   it('narrows the list by client and supports Reset', async () => {
     mockFetch(routesFor(superAdminMe, [record, record2]));

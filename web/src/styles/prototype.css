@@ -60,6 +60,7 @@ button{font-family:inherit}
 .tbl td{padding:12px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle}
 .tbl tr:last-child td{border-bottom:0}
 .tbl.hover tbody tr{cursor:pointer;transition:.1s}.tbl.hover tbody tr:hover{background:#FafBff}
+.tbl.plain th{text-transform:none}
 .tbl-wrap{overflow-x:auto}
 .btn{display:inline-flex;align-items:center;gap:7px;border:none;border-radius:10px;padding:10px 16px;font-weight:600;font-size:13px;cursor:pointer;transition:.14s}
 .btn-pri{background:var(--primary);color:#fff}.btn-pri:hover{background:var(--primary-d)}

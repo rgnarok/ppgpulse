@@ -506,6 +506,10 @@ function HdisFormModal({
     remarks: initial?.remarks ?? '',
     reqDate: initial?.reqDate ?? '2026-06-01',
     jdLink: initial?.jdLink ?? '',
+    // How many openings this JD covers — shown as "Positions" everywhere in the UI.
+    // Kept as a string like the rest of the form fields; converted back to a number
+    // (defaulting to 1 for anything blank/invalid) on submit.
+    openings: String(initial?.openings ?? 1),
   }));
   // Consultants adding a record for their own JD start out as its owner (still
   // removable/extendable). Org-scope roles routinely add records on behalf of the
@@ -526,6 +530,7 @@ function HdisFormModal({
     }));
 
   function submit() {
+    const openings = Number(form.openings) || 1;
     if (mode === 'edit') {
       update.mutate(
         {
@@ -538,6 +543,7 @@ function HdisFormModal({
           remarks: form.remarks.trim() || null,
           reqDate: form.reqDate,
           jdLink: form.jdLink || null,
+          openings,
           owners,
         },
         { onSuccess: onClose },
@@ -550,7 +556,7 @@ function HdisFormModal({
         statusReason: form.statusReason || null,
         remarks: form.remarks.trim() || null,
         jdLink: form.jdLink || null,
-        openings: 1,
+        openings,
         owners,
       },
       { onSuccess: onClose },
@@ -582,6 +588,16 @@ function HdisFormModal({
               type="date"
               value={form.reqDate}
               onChange={(e) => set('reqDate', e.target.value)}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="hdis-form-openings">Positions</label>
+            <input
+              id="hdis-form-openings"
+              type="number"
+              min={1}
+              value={form.openings}
+              onChange={(e) => set('openings', e.target.value)}
             />
           </div>
           <div className="field full">
@@ -796,7 +812,7 @@ function HdisDetail({ jdId }: { jdId: string }) {
             <div className="dv">{priorityLabel(rec.priority)}</div>
           </div>
           <div className="db-item">
-            <div className="dl">Openings</div>
+            <div className="dl">Positions</div>
             <div className="dv">{rec.openings}</div>
           </div>
           <div className="db-item">

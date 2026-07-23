@@ -341,32 +341,34 @@ function ChartsRow({ report }: { report: ConsultantReport }) {
 }
 
 function RequirementsTable({ report }: { report: ConsultantReport }) {
+  const navigate = useNavigate();
   return (
     <Card pad={false}>
       <div style={{ padding: '16px 20px 0' }}>
         <SectionTitle>Requirements ({report.requirements.length})</SectionTitle>
       </div>
       <div className="tbl-wrap">
-        <table className="tbl hover">
+        {/* "plain" drops the app-wide uppercase header styling — these headers are
+         * deliberately lowercase/snake_case instead of the usual Title Case. */}
+        <table className="tbl hover plain">
           <thead>
             <tr>
-              <th>Requirement (JD ID &amp; title)</th>
-              <th>Type</th>
-              <th>JD link</th>
-              <th>Positions</th>
-              <th>Date</th>
-              <th>R0 Profiles</th>
-              <th>R1 Shortlist</th>
-              <th>R2 L1</th>
-              <th>R3 L2</th>
-              <th>R4 L3</th>
-              <th>R5 Onboard</th>
-              <th>Status</th>
+              <th>requirement</th>
+              <th>type</th>
+              <th>positions</th>
+              <th>date</th>
+              <th>r0</th>
+              <th>r1</th>
+              <th>r2</th>
+              <th>r3</th>
+              <th>r4</th>
+              <th>r5</th>
+              <th>status</th>
             </tr>
           </thead>
           <tbody>
             {report.requirements.map((r) => (
-              <tr key={r.id}>
+              <tr key={r.id} onClick={() => r.jdId && navigate(`/hdis/${r.jdId}`)}>
                 <td>
                   <div className="mono" style={{ fontWeight: 700 }}>
                     {r.jdId ?? r.code}
@@ -377,16 +379,7 @@ function RequirementsTable({ report }: { report: ConsultantReport }) {
                   </div>
                 </td>
                 <td>{r.type ? <Pill>{r.type}</Pill> : <span className="muted">—</span>}</td>
-                <td>
-                  {r.jdLink ? (
-                    <a className="lnk" href={r.jdLink} target="_blank" rel="noreferrer">
-                      JD ↗
-                    </a>
-                  ) : (
-                    <span className="muted">—</span>
-                  )}
-                </td>
-                <td className="mono">1</td>
+                <td className="mono">{r.openings}</td>
                 <td className="muted">{formatDate(r.reqDate)}</td>
                 <td className="mono">{r.profiles}</td>
                 <td className="mono">{r.shortlist}</td>

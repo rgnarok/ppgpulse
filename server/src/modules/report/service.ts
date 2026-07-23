@@ -76,6 +76,7 @@ interface HdisReqRow {
   l2: number;
   l3: number;
   onboard: number;
+  openings: number;
   stageEvents: { stage: string; at: Date }[];
 }
 
@@ -107,6 +108,7 @@ async function hdisReqRowsFor(prisma: PrismaClient, names: string[]): Promise<Hd
       l2: p?.r3 ?? 0,
       l3: p?.r4 ?? 0,
       onboard: p?.r5 ?? 0,
+      openings: h.openings,
       stageEvents: h.stageEvents.map((e) => ({ stage: e.stage, at: e.at })),
     };
   });
@@ -340,6 +342,7 @@ export async function consultantReport(
       l2: r.l2,
       l3: r.l3,
       onboard: r.onboard,
+      openings: r.openings,
       type: r.type,
       jdLink: r.jdLink,
     })),

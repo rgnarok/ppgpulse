@@ -68,6 +68,7 @@ const report: ConsultantReport = {
       l2: 0,
       l3: 0,
       onboard: 0,
+      openings: 3,
       type: 'RADF',
       jdLink: 'https://jd.example.com/nav',
     },
@@ -95,7 +96,34 @@ describe('Consultant detail page', () => {
     expect(screen.getByText('NAV_SMSDFC_20261506')).toBeInTheDocument();
     expect(screen.getByText('Sr. MS Dynamics Functional Consultant')).toBeInTheDocument();
     expect(screen.getByText('RADF')).toBeInTheDocument();
-    expect(screen.getByText('JD ↗')).toBeInTheDocument();
+    // Positions is the requirement's actual openings count, not a hardcoded "1" —
+    // and the JD link column is gone (the row itself links to the HDIS record now).
+    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.queryByText('JD ↗')).not.toBeInTheDocument();
+    // Headers are deliberately lowercase/snake_case, not the app's usual Title Case,
+    // and the old "R2 L1"/"R3 L2"/"R4 L3"/"R5 Onboard" labels are gone in favor of
+    // bare R0–R5 to match the R-stage naming used everywhere else (Dhruva funnel etc).
+    expect(screen.getByText('requirement')).toBeInTheDocument();
+    expect(screen.getByText('positions')).toBeInTheDocument();
+    expect(screen.getByText('r2')).toBeInTheDocument();
+    expect(screen.queryByText('R2 L1', { exact: false })).not.toBeInTheDocument();
+  });
+
+  it('clicking a requirement row opens that JD in the HDIS detail page', async () => {
+    mockFetch([
+      jsonRoute('/api/me', superAdminMe),
+      jsonRoute('/api/report/consultant/c_suhani', report),
+    ]);
+    renderApp(
+      <Routes>
+        <Route path="/team/:consultantId" element={<ConsultantDetailPage />} />
+        <Route path="/hdis/:jdId" element={<div>HDIS DETAIL PAGE</div>} />
+      </Routes>,
+      { route: '/team/c_suhani' },
+    );
+    const row = (await screen.findByText('NAV_SMSDFC_20261506')).closest('tr') as HTMLElement;
+    await userEvent.click(row);
+    expect(await screen.findByText('HDIS DETAIL PAGE')).toBeInTheDocument();
   });
 
   it('"Back to team" link routes back to /team, not the home dashboard', async () => {

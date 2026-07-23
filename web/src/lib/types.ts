@@ -112,6 +112,7 @@ export interface RequirementRow {
   l2: number;
   l3: number;
   onboard: number;
+  openings: number;
   type: string | null;
   jdLink: string | null;
 }
