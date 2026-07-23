@@ -18,7 +18,7 @@ import {
   useSetHdisLink,
 } from '../lib/hooks';
 import { formatDate, formatMonth, formatDateTime, todayISO } from '../lib/format';
-import { fyOfMonth, fyLabel, fyMonths, fiscalYearsFor } from '../lib/fy';
+import { fyOfMonth, fyLabel, fyMonths, fiscalYearsFor, currentFy, currentMonth } from '../lib/fy';
 import { DEFAULT_PAGE_SIZE } from '../lib/pagination';
 import type { HdisRecord } from '../lib/types';
 
@@ -107,11 +107,22 @@ function filtersFromParams(params: URLSearchParams): HdisFilters {
   };
 }
 
+/** Fresh visits (no filters in the URL yet) default to the current fiscal year +
+ * current month, rather than opening on the whole all-time list — matches Dhruva's
+ * and Home's "defaults to now" convention. Anyone can hit Reset to see everything;
+ * an explicit URL (including a link with filters deliberately cleared) is always
+ * honored as-is instead of being overridden. */
+function defaultHdisFilters(): HdisFilters {
+  return { ...EMPTY_FILTERS, fy: currentFy(), month: currentMonth() };
+}
+
 function HdisList() {
   const { me } = useAuth();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const [filters, setFiltersState] = useState<HdisFilters>(() => filtersFromParams(params));
+  const [filters, setFiltersState] = useState<HdisFilters>(() =>
+    params.toString() ? filtersFromParams(params) : defaultHdisFilters(),
+  );
   const [page, setPageState] = useState(() => Number(params.get('page')) || 1);
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<HdisRecord | null>(null);
@@ -128,12 +139,20 @@ function HdisList() {
   const rowEditable = (r: HdisRecord) => canEditAll || isOwnerOf(r);
 
   const dataMonths = useMemo(() => distinctSorted(rows.map((r) => r.reqDate.slice(0, 7))), [rows]);
-  const fys = useMemo(() => fiscalYearsFor(dataMonths), [dataMonths]);
+  // Always offer the current fiscal year/month as pickable options even if no HDIS
+  // record has landed there yet — the list defaults to them on a fresh visit (see
+  // defaultHdisFilters above), and a data-only option list would otherwise render the
+  // select blank the moment a brand-new period has zero records so far.
+  const fys = useMemo(
+    () => distinctSorted([...fiscalYearsFor(dataMonths), currentFy()]).reverse(),
+    [dataMonths],
+  );
   // Month options are the fiscal year's Apr–Mar span, narrowed to months that actually
   // have records — matches the "Jun 2026" style used everywhere else on the platform.
   const monthsInFy = useMemo(() => {
     if (!filters.fy) return [];
     const dataSet = new Set(dataMonths);
+    if (filters.fy === currentFy()) dataSet.add(currentMonth());
     return fyMonths(filters.fy).filter((m) => dataSet.has(m));
   }, [filters.fy, dataMonths]);
   const clients = useMemo(() => distinctSorted(rows.map((r) => r.client)), [rows]);

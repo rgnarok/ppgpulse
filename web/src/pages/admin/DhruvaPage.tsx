@@ -26,7 +26,6 @@ function RapydTiles({
   data,
 }: {
   data: {
-    rapyd: { total: number; radc: number; radf: number };
     segregation: { total: number; radc: number; radf: number; internal: number };
     activeClients: number;
     interviewsToday: { total: number; radc: number; radf: number };
@@ -35,28 +34,7 @@ function RapydTiles({
   const navigate = useNavigate();
   const goToType = (type: string) => () => navigate(`/hdis?type=${type}&status=live`);
   return (
-    <div className="grid g-4" style={{ marginBottom: 16 }}>
-      <div className="skc">
-        <div className="skc-head">
-          <span className="dot" />● RAPYD Active
-        </div>
-        <div className="skc-num">{data.rapyd.total}</div>
-        <div className="skc-sub">live contract + full-time positions</div>
-        <div className="skc-split">
-          <SplitItem
-            onClick={goToType('RADC')}
-            value={data.rapyd.radc}
-            label="RADC"
-            color="var(--violet)"
-          />
-          <SplitItem
-            onClick={goToType('RADF')}
-            value={data.rapyd.radf}
-            label="RADF"
-            color="var(--sky)"
-          />
-        </div>
-      </div>
+    <div className="grid g-3" style={{ marginBottom: 16 }}>
       <div className="skc">
         <div className="skc-head">
           <span className="dot" />◆ Total Live Requirements

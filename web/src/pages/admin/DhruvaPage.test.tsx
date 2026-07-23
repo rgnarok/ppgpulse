@@ -79,7 +79,7 @@ function routes() {
 }
 
 describe('Dhruva dashboard', () => {
-  it('renders the RAPYD, priority, funnel, top-clients, and roster sections', async () => {
+  it('renders the Total Live Requirements, priority, funnel, top-clients, and roster sections', async () => {
     mockFetch(routes());
     renderApp(
       <Routes>
@@ -88,13 +88,13 @@ describe('Dhruva dashboard', () => {
       { route: '/admin/dhruva' },
     );
 
-    expect(await screen.findByText('66')).toBeInTheDocument();
-    // '39' and '27' (rapyd.radc/radf) are deliberately mirrored on the Total Live
-    // Requirements tile too (segregation.radc/radf), so both now render twice.
-    expect(screen.getAllByText('39').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('27').length).toBeGreaterThan(0);
+    // The RAPYD Active tile was removed (redundant with Total Live Requirements,
+    // which shows the same RADC/RADF split plus Internal) — segregation.total is
+    // now the load-complete anchor.
+    expect(await screen.findByText('74')).toBeInTheDocument(); // segregation.total
+    expect(screen.getByText('39')).toBeInTheDocument(); // segregation.radc
+    expect(screen.getByText('27')).toBeInTheDocument(); // segregation.radf
     expect(screen.getByText('29')).toBeInTheDocument();
-    expect(screen.getByText('74')).toBeInTheDocument(); // segregation.total
 
     expect(screen.getByText('P1 — Live')).toBeInTheDocument();
     expect(screen.getByText('P2 — Live')).toBeInTheDocument();
@@ -161,7 +161,7 @@ describe('Dhruva dashboard', () => {
     expect(await screen.findByText('HDIS PAGE')).toBeInTheDocument();
   });
 
-  it('clicking the RADC number on the RAPYD Active tile jumps to the HDIS list filtered by type', async () => {
+  it('clicking the RADC number on the Total Live Requirements tile jumps to the HDIS list filtered by type', async () => {
     mockFetch(routes());
     renderApp(
       <Routes>
@@ -170,11 +170,11 @@ describe('Dhruva dashboard', () => {
       </Routes>,
       { route: '/admin/dhruva' },
     );
-    const rapydHeading = await screen.findByText((_, el) => el?.textContent === '● RAPYD Active');
-    // Scope to the RAPYD Active tile itself — Total Live Requirements shows the same
-    // RADC/RADF numbers alongside Internal, so a page-wide '39' lookup is ambiguous.
-    const rapydTile = rapydHeading.closest('.skc') as HTMLElement;
-    const radcNumber = within(rapydTile).getByText('39'); // rapyd.radc from the mocked dashboard
+    const heading = await screen.findByText(
+      (_, el) => el?.textContent === '◆ Total Live Requirements',
+    );
+    const tile = heading.closest('.skc') as HTMLElement;
+    const radcNumber = within(tile).getByText('39'); // segregation.radc from the mocked dashboard
     await userEvent.click(radcNumber.closest('[role="button"]')!);
     expect(await screen.findByText('HDIS PAGE')).toBeInTheDocument();
   });
@@ -207,7 +207,7 @@ describe('Dhruva dashboard', () => {
       </Routes>,
       { route: '/admin/dhruva' },
     );
-    await screen.findByText('66');
+    await screen.findByText('74');
     const monthInput = screen.getByLabelText('Month') as HTMLInputElement;
     const now = new Date();
     const expected = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -222,7 +222,7 @@ describe('Dhruva dashboard', () => {
       </Routes>,
       { route: '/admin/dhruva' },
     );
-    await screen.findByText('66');
+    await screen.findByText('74');
     const now = new Date();
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 

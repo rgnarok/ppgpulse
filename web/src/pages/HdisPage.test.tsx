@@ -112,10 +112,36 @@ describe('HDIS list (T10.1)', () => {
       <Routes>
         <Route path="/hdis" element={<HdisPage />} />
       </Routes>,
-      { route: '/hdis' },
+      { route: '/hdis?fy=&month=' },
     );
     expect(await screen.findByText('QA Engineer')).toBeInTheDocument();
     expect(screen.getByText('+ Add record')).toBeInTheDocument();
+  });
+
+  it('defaults the FY and month filters to the current fiscal year and month on a fresh visit', async () => {
+    // record2's reqDate (2026-06) is very unlikely to be "this month" whenever the test
+    // suite happens to run, so a fresh /hdis visit (no URL params at all) should default
+    // to the current month/FY and hide it -- matching Dhruva's "defaults to now"
+    // convention -- while a deliberately-cleared URL (Reset) still shows everything.
+    const now = new Date();
+    const expectedMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const expectedFy = String(now.getMonth() + 1 >= 4 ? now.getFullYear() : now.getFullYear() - 1);
+
+    mockFetch(routesFor(superAdminMe, [record2]));
+    renderApp(
+      <Routes>
+        <Route path="/hdis" element={<HdisPage />} />
+      </Routes>,
+      { route: '/hdis' },
+    );
+    expect(await screen.findByText('No HDIS records match these filters')).toBeInTheDocument();
+    expect(screen.getByLabelText('Fiscal year')).toHaveValue(expectedFy);
+    expect(screen.getByLabelText('Month')).toHaveValue(expectedMonth);
+
+    await userEvent.click(screen.getByText('Reset'));
+    expect(await screen.findByText('Business Analyst')).toBeInTheDocument();
+    expect(screen.getByLabelText('Fiscal year')).toHaveValue('');
+    expect(screen.getByLabelText('Month')).toHaveValue('');
   });
 
   it('shows Total Requirements split by RADC/RADF/Internal, unaffected by the active filters', async () => {
@@ -138,7 +164,7 @@ describe('HDIS list (T10.1)', () => {
       <Routes>
         <Route path="/hdis" element={<HdisPage />} />
       </Routes>,
-      { route: '/hdis' },
+      { route: '/hdis?fy=&month=' },
     );
     await screen.findByText('QA Engineer');
     const totalCard = screen.getByText(/Total Requirements/).closest('.skc') as HTMLElement;
@@ -159,7 +185,7 @@ describe('HDIS list (T10.1)', () => {
       <Routes>
         <Route path="/hdis" element={<HdisPage />} />
       </Routes>,
-      { route: '/hdis' },
+      { route: '/hdis?fy=&month=' },
     );
     await screen.findByText('QA Engineer');
     expect(screen.queryByText('+ Add record')).not.toBeInTheDocument();
@@ -171,7 +197,7 @@ describe('HDIS list (T10.1)', () => {
       <Routes>
         <Route path="/hdis" element={<HdisPage />} />
       </Routes>,
-      { route: '/hdis' },
+      { route: '/hdis?fy=&month=' },
     );
     await screen.findByText('QA Engineer');
     expect(screen.getByText('+ Add record')).toBeInTheDocument();
@@ -189,7 +215,7 @@ describe('HDIS form PPG multiselect (T10.2)', () => {
       <Routes>
         <Route path="/hdis" element={<HdisPage />} />
       </Routes>,
-      { route: '/hdis' },
+      { route: '/hdis?fy=&month=' },
     );
     await screen.findByText('QA Engineer');
     await userEvent.click(screen.getByText('+ Add record'));
@@ -318,7 +344,7 @@ describe('HDIS edit flow', () => {
       <Routes>
         <Route path="/hdis" element={<HdisPage />} />
       </Routes>,
-      { route: '/hdis' },
+      { route: '/hdis?fy=&month=' },
     );
     await screen.findByText('QA Engineer');
     await userEvent.click(screen.getByText('Edit'));
@@ -360,7 +386,7 @@ describe('HDIS edit flow', () => {
       <Routes>
         <Route path="/hdis" element={<HdisPage />} />
       </Routes>,
-      { route: '/hdis' },
+      { route: '/hdis?fy=&month=' },
     );
     await screen.findByText('QA Engineer');
     expect(screen.queryByText('Edit')).not.toBeInTheDocument();
@@ -373,7 +399,7 @@ describe('HDIS edit flow', () => {
       <Routes>
         <Route path="/hdis" element={<HdisPage />} />
       </Routes>,
-      { route: '/hdis' },
+      { route: '/hdis?fy=&month=' },
     );
     await screen.findByText('QA Engineer');
     expect(screen.getByText('Edit')).toBeInTheDocument();
@@ -387,7 +413,7 @@ describe('HDIS status reason + remarks', () => {
       <Routes>
         <Route path="/hdis" element={<HdisPage />} />
       </Routes>,
-      { route: '/hdis' },
+      { route: '/hdis?fy=&month=' },
     );
     await screen.findByText('QA Engineer');
     await userEvent.click(screen.getByText('+ Add record'));
@@ -418,7 +444,7 @@ describe('HDIS status reason + remarks', () => {
       <Routes>
         <Route path="/hdis" element={<HdisPage />} />
       </Routes>,
-      { route: '/hdis' },
+      { route: '/hdis?fy=&month=' },
     );
     await screen.findByText('QA Engineer');
     await userEvent.click(screen.getByText('+ Add record'));
@@ -447,7 +473,7 @@ describe('HDIS status reason + remarks', () => {
       <Routes>
         <Route path="/hdis" element={<HdisPage />} />
       </Routes>,
-      { route: '/hdis' },
+      { route: '/hdis?fy=&month=' },
     );
     await screen.findByText('QA Engineer');
     await userEvent.click(screen.getByText('+ Add record'));
@@ -509,7 +535,7 @@ describe('HDIS priority', () => {
       <Routes>
         <Route path="/hdis" element={<HdisPage />} />
       </Routes>,
-      { route: '/hdis' },
+      { route: '/hdis?fy=&month=' },
     );
     await screen.findByText('QA Engineer');
     // "Uncategorised" also appears as an option in the Priority filter select, so
@@ -526,7 +552,7 @@ describe('HDIS priority', () => {
       <Routes>
         <Route path="/hdis" element={<HdisPage />} />
       </Routes>,
-      { route: '/hdis' },
+      { route: '/hdis?fy=&month=' },
     );
     await screen.findByText('QA Engineer');
     await userEvent.click(screen.getByText('+ Add record'));
@@ -547,7 +573,7 @@ describe('HDIS priority', () => {
       <Routes>
         <Route path="/hdis" element={<HdisPage />} />
       </Routes>,
-      { route: '/hdis' },
+      { route: '/hdis?fy=&month=' },
     );
     await screen.findByText('QA Engineer');
     expect(screen.getByText('Business Analyst')).toBeInTheDocument();
@@ -565,7 +591,7 @@ describe('HDIS filters', () => {
       <Routes>
         <Route path="/hdis" element={<HdisPage />} />
       </Routes>,
-      { route: '/hdis' },
+      { route: '/hdis?fy=&month=' },
     );
     await screen.findByText('QA Engineer');
     expect(screen.getByText('Business Analyst')).toBeInTheDocument();
@@ -620,7 +646,7 @@ describe('HDIS filters', () => {
       <Routes>
         <Route path="/hdis" element={<HdisPage />} />
       </Routes>,
-      { route: '/hdis' },
+      { route: '/hdis?fy=&month=' },
     );
     await screen.findByText('QA Engineer');
     await userEvent.type(screen.getByLabelText('Search'), 'analyst');
@@ -646,7 +672,7 @@ describe('HDIS filter state persists across a detail round trip', () => {
         <Route path="/hdis" element={<HdisPage />} />
         <Route path="/hdis/:jdId" element={<HdisPage />} />
       </Routes>,
-      { route: '/hdis' },
+      { route: '/hdis?fy=&month=' },
     );
     await screen.findByText('QA Engineer');
     await userEvent.selectOptions(screen.getByLabelText('Client'), 'Acme Corp');
@@ -670,7 +696,7 @@ describe('HDIS fiscal year + month filter', () => {
       <Routes>
         <Route path="/hdis" element={<HdisPage />} />
       </Routes>,
-      { route: '/hdis' },
+      { route: '/hdis?fy=&month=' },
     );
     await screen.findByText('QA Engineer');
     expect(screen.getByText('UX Designer')).toBeInTheDocument();
@@ -707,7 +733,7 @@ describe('HDIS list pagination', () => {
       <Routes>
         <Route path="/hdis" element={<HdisPage />} />
       </Routes>,
-      { route: '/hdis' },
+      { route: '/hdis?fy=&month=' },
     );
     expect(await screen.findByText('Row 0')).toBeInTheDocument();
     expect(screen.getByText('Row 19')).toBeInTheDocument();
@@ -727,7 +753,7 @@ describe('HDIS list pagination', () => {
       <Routes>
         <Route path="/hdis" element={<HdisPage />} />
       </Routes>,
-      { route: '/hdis' },
+      { route: '/hdis?fy=&month=' },
     );
     await screen.findByText('Row 0');
     await userEvent.click(screen.getByText('Next ›'));
@@ -747,7 +773,7 @@ describe('HDIS client master searchable select', () => {
       <Routes>
         <Route path="/hdis" element={<HdisPage />} />
       </Routes>,
-      { route: '/hdis' },
+      { route: '/hdis?fy=&month=' },
     );
     await screen.findByText('QA Engineer');
     await userEvent.click(screen.getByText('+ Add record'));
