@@ -457,7 +457,10 @@ export async function dhruvaDashboard(
     else priority.uncategorised++;
     if (h.type === 'Internal') internalLive++;
   }
-  const activeClients = new Set(rows.filter((h) => isLiveStatus(h.status)).map((h) => h.client))
+  // Deliberately literal status === 'Active' here (not isLiveStatus's broader
+  // Active-or-On-Hold "live" definition) — a client whose only requirement is On
+  // Hold isn't a client we're actively working for right now.
+  const activeClients = new Set(rows.filter((h) => h.status === 'Active').map((h) => h.client))
     .size;
 
   // Total live requirement segregation — RAPYD Active (RADC+RADF) alone doesn't equal

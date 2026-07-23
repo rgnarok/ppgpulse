@@ -89,7 +89,7 @@ function RapydTiles({
           <span className="dot" />○ Active Clients
         </div>
         <div className="skc-num">{data.activeClients}</div>
-        <div className="skc-sub">clients with live requirements</div>
+        <div className="skc-sub">clients with an active requirement</div>
       </div>
       <div className="skc">
         <div className="skc-head">
