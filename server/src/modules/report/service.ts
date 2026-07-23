@@ -399,15 +399,15 @@ function isLiveStatus(status: string): boolean {
 }
 
 export interface DhruvaFilters {
-  /** Narrows the funnel + its drop-off %s only — the headline tiles (RAPYD Active,
-   * Active Clients, Priority split) always reflect the whole live dataset, same as
-   * the "always full dataset" convention used by the HDIS list's headline cards. */
+  /** Narrows the funnel (and its drop-off %s) only — does not affect the headline
+   * tiles, which are scoped by period alone (see `from`/`to`/`month`/`fy` below). */
   priority?: string;
   client?: string;
   ppg?: string;
   /** Period narrowing — same precedence as the rest of the report module
    * (explicit from/to > month > fy > current fiscal year default), resolved via
-   * resolvePeriod() and applied to the funnel's reqDate. */
+   * resolvePeriod() and applied to reqDate. Scopes both the headline tiles and the
+   * funnel below. */
   from?: string;
   to?: string;
   month?: string;
@@ -416,7 +416,9 @@ export interface DhruvaFilters {
 
 /** GET /report/dhruva — super-admin-only org-wide operations dashboard: RAPYD Active
  * split, Active Clients, Interviews Today split, Priority (P1/P2/P3/Uncategorised)
- * tiles, the org-wide R0-R5 funnel (filterable), and Top Clients by people deployed. */
+ * tiles, the org-wide R0-R5 funnel, and Top Clients by people deployed — all scoped
+ * to the resolved period except Top Clients (all-time) and Interviews Today
+ * (always "today"). The funnel is additionally filterable by priority/client/PPG. */
 export async function dhruvaDashboard(
   prisma: PrismaClient,
   user: CurrentUser,
@@ -442,14 +444,28 @@ export async function dhruvaDashboard(
           });
         })();
 
+  // Period — explicit dates, a month, or a fiscal year (same precedence as the
+  // rest of the report module), applied to reqDate. Drives every headline tile
+  // below (RAPYD Active, Total Live Requirements, Priority, Active Clients) as well
+  // as the funnel, so picking "July" on the page actually scopes what you see —
+  // only Top Clients (people deployed, an all-time record) and Interviews Today
+  // (already "today" by definition) stay unscoped.
+  const period = resolvePeriod({
+    from: filters.from,
+    to: filters.to,
+    month: filters.month,
+    fy: filters.fy,
+  });
+  const periodRows = rows.filter((h) => inPeriod(h.reqDate, period));
+
   // "RAPYD Active" is specifically RADC (live contract) + RADF (full-time) positions —
   // Internal records are live requirements too, but aren't RAPYD placements, so they're
   // excluded here (they still count toward Active Clients and Priority below).
-  const rapyd = rapydActiveCounts(rows);
+  const rapyd = rapydActiveCounts(periodRows);
   const priority = { p1: 0, p2: 0, p3: 0, uncategorised: 0 };
   const clientAgg = new Map<string, { radc: number; radf: number }>();
   let internalLive = 0;
-  for (const h of rows) {
+  for (const h of periodRows) {
     if (!isLiveStatus(h.status)) continue;
     if (h.priority === 'P1') priority.p1++;
     else if (h.priority === 'P2') priority.p2++;
@@ -460,8 +476,9 @@ export async function dhruvaDashboard(
   // Deliberately literal status === 'Active' here (not isLiveStatus's broader
   // Active-or-On-Hold "live" definition) — a client whose only requirement is On
   // Hold isn't a client we're actively working for right now.
-  const activeClients = new Set(rows.filter((h) => h.status === 'Active').map((h) => h.client))
-    .size;
+  const activeClients = new Set(
+    periodRows.filter((h) => h.status === 'Active').map((h) => h.client),
+  ).size;
 
   // Total live requirement segregation — RAPYD Active (RADC+RADF) alone doesn't equal
   // total live requirements because Internal-type records are live too; break out all
@@ -475,7 +492,7 @@ export async function dhruvaDashboard(
 
   // Top Clients — people deployed (R5/onboard) per client, split RADC/RADF — counts
   // across the whole dataset (closed records included; a past deployment still counts
-  // as someone placed at that client), unaffected by the funnel filters below.
+  // as someone placed at that client), unaffected by the period/funnel filters.
   for (const h of rows) {
     if (h.type !== 'RADC' && h.type !== 'RADF') continue;
     const deployed = h.pipeline?.r5 ?? 0;
@@ -496,20 +513,12 @@ export async function dhruvaDashboard(
     radf: rankClients((v) => v.radf),
   };
 
-  // Funnel — filterable by priority/client/PPG owner, and a resolved period
-  // (explicit dates, a month, or a fiscal year — same precedence as the rest of the
-  // report module) applied to reqDate.
-  const period = resolvePeriod({
-    from: filters.from,
-    to: filters.to,
-    month: filters.month,
-    fy: filters.fy,
-  });
-  const funnelRows = rows.filter((h) => {
+  // Funnel — same period as above, additionally filterable by priority/client/PPG
+  // owner (funnel-only narrowing, doesn't affect the headline tiles above).
+  const funnelRows = periodRows.filter((h) => {
     if (filters.priority && h.priority !== filters.priority) return false;
     if (filters.client && h.client !== filters.client) return false;
     if (filters.ppg && !h.owners.some((o) => o.consultantOrName === filters.ppg)) return false;
-    if (!inPeriod(h.reqDate, period)) return false;
     return true;
   });
   const sums = funnelRows.reduce(

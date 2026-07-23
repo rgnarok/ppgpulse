@@ -535,9 +535,15 @@ export default function DhruvaPage() {
   // Priority/Client/PPG (funnel-only) plus the period (Month/FY/custom range) that
   // now drives the funnel — defaults to the current month instead of opening unscoped.
   const [filters, setFilters] = useState<DhruvaFilterParams>(defaultPeriodFilters);
-  // Headline tiles always reflect the whole live dataset — fetched once, unaffected by
-  // the period/funnel filters below (FunnelCard runs its own filtered query).
-  const { data, isLoading } = useDhruva({});
+  // Headline tiles (RAPYD Active, Total Live Requirements, Priority, Active Clients)
+  // are scoped to the page-level period filter (Month/FY/custom range) — only the
+  // period fields are passed here, not priority/client/ppg, since those stay
+  // funnel-only narrowing (FunnelCard runs its own separately-filtered query below).
+  const periodOnly = useMemo(
+    () => ({ month: filters.month, fy: filters.fy, from: filters.from, to: filters.to }),
+    [filters.month, filters.fy, filters.from, filters.to],
+  );
+  const { data, isLoading } = useDhruva(periodOnly);
   const { data: clientRows = [] } = useClients();
   const { data: consultants = [] } = useConsultants();
   const clientNames = useMemo(() => clientRows.map((c) => c.name), [clientRows]);

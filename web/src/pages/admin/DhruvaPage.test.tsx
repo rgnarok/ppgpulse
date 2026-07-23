@@ -213,4 +213,27 @@ describe('Dhruva dashboard', () => {
     const expected = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     expect(monthInput.value).toBe(expected);
   });
+
+  it('scopes the headline tiles (not just the funnel) to the period filter', async () => {
+    const { calls } = mockFetch(routes());
+    renderApp(
+      <Routes>
+        <Route path="/admin/dhruva" element={<DhruvaPage />} />
+      </Routes>,
+      { route: '/admin/dhruva' },
+    );
+    await screen.findByText('66');
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+    // The headline tiles' fetch must carry the current month — proving it's no
+    // longer the unscoped useDhruva({}) call it used to be. (React Query dedupes
+    // this against the funnel card's identical-at-this-point query, so there's
+    // just the one network call while no funnel-only filter is applied yet.)
+    const dhruvaCalls = calls.filter((c) => c.url.includes('/report/dhruva'));
+    expect(dhruvaCalls.length).toBeGreaterThanOrEqual(1);
+    for (const c of dhruvaCalls) {
+      expect(c.url).toContain(`month=${currentMonth}`);
+    }
+  });
 });

@@ -58,9 +58,10 @@ export interface DhruvaFilterParams {
   fy?: string;
 }
 
-/** The Dhruva org-wide operations dashboard (super-admin only). Only the `funnel` +
- * `funnelTotal` fields respond to the filter params — the headline tiles always
- * reflect the whole live dataset. */
+/** The Dhruva org-wide operations dashboard (super-admin only). The headline tiles
+ * (RAPYD Active, Total Live Requirements, Priority, Active Clients) and the funnel
+ * both respond to the period fields (month/fy/from/to); priority/client/ppg only
+ * narrow the funnel. Top Clients and Interviews Today are always unscoped. */
 export function useDhruva(filters: DhruvaFilterParams) {
   return useQuery({
     queryKey: ['dhruva', filters],
