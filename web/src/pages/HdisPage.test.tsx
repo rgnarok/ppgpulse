@@ -42,6 +42,10 @@ const record: HdisRecord = {
     totalDays: 0,
     transitions: { 'R0->R1': null, 'R1->R2': null, 'R2->R3': null, 'R3->R4': null, 'R4->R5': null },
   },
+  // Fixture represents an already-Active record, so its questionnaire is complete —
+  // matches what would actually be true for any record that reached Active.
+  detailsComplete: true,
+  requirementDetail: null,
   createdAt: '2026-06-01T00:00:00.000Z',
   updatedAt: '2026-06-01T00:00:00.000Z',
 };
@@ -407,6 +411,9 @@ describe('HDIS edit flow', () => {
 });
 
 describe('HDIS status reason + remarks', () => {
+  // Status (and its reason) is only settable on the Edit form now — a brand-new
+  // record is always born Pending server-side and has no Status field on create at
+  // all (see "HDIS Pending status" below for that flow).
   it('shows a status-reason select only for On Hold / Closed, with the right options', async () => {
     mockFetch(routesFor(superAdminMe));
     renderApp(
@@ -416,15 +423,11 @@ describe('HDIS status reason + remarks', () => {
       { route: '/hdis?fy=&month=' },
     );
     await screen.findByText('QA Engineer');
-    await userEvent.click(screen.getByText('+ Add record'));
+    await userEvent.click(screen.getByText('Edit'));
     expect(screen.queryByText('Status reason')).not.toBeInTheDocument();
 
     const dialog = screen.getByRole('dialog');
-    const statusSelect = within(dialog)
-      .getAllByRole('combobox')
-      .find((el) =>
-        Array.from((el as HTMLSelectElement).options).some((o) => o.value === 'On Hold'),
-      )!;
+    const statusSelect = within(dialog).getByLabelText('Status');
     await userEvent.selectOptions(statusSelect, 'On Hold');
     expect(screen.getByText('Status reason')).toBeInTheDocument();
     expect(screen.getByText('Hold By client')).toBeInTheDocument();
@@ -447,14 +450,10 @@ describe('HDIS status reason + remarks', () => {
       { route: '/hdis?fy=&month=' },
     );
     await screen.findByText('QA Engineer');
-    await userEvent.click(screen.getByText('+ Add record'));
+    await userEvent.click(screen.getByText('Edit'));
 
     const dialog = screen.getByRole('dialog');
-    const statusSelect = within(dialog)
-      .getAllByRole('combobox')
-      .find((el) =>
-        Array.from((el as HTMLSelectElement).options).some((o) => o.value === 'Fulfilled'),
-      )!;
+    const statusSelect = within(dialog).getByLabelText('Status');
     expect(within(statusSelect).getByRole('option', { name: 'Fulfilled' })).toBeInTheDocument();
 
     await userEvent.selectOptions(statusSelect, 'Fulfilled');
@@ -464,10 +463,10 @@ describe('HDIS status reason + remarks', () => {
     expect(screen.queryByText('Hold By client')).not.toBeInTheDocument();
   });
 
-  it('submits the chosen status reason and remarks on create', async () => {
+  it('submits the chosen status reason and remarks on edit', async () => {
     const { calls } = mockFetch([
       ...routesFor(superAdminMe),
-      jsonRoute('/api/hdis', record, { method: 'POST' }),
+      jsonRoute('/api/hdis/TST_QA_20260601', record, { method: 'PATCH' }),
     ]);
     renderApp(
       <Routes>
@@ -476,15 +475,10 @@ describe('HDIS status reason + remarks', () => {
       { route: '/hdis?fy=&month=' },
     );
     await screen.findByText('QA Engineer');
-    await userEvent.click(screen.getByText('+ Add record'));
+    await userEvent.click(screen.getByText('Edit'));
 
-    await userEvent.type(screen.getByPlaceholderText('VAY_XX_20260601'), 'NEW_JD_20260701');
     const dialog = screen.getByRole('dialog');
-    const statusSelect = within(dialog)
-      .getAllByRole('combobox')
-      .find((el) =>
-        Array.from((el as HTMLSelectElement).options).some((o) => o.value === 'On Hold'),
-      )!;
+    const statusSelect = within(dialog).getByLabelText('Status');
     await userEvent.selectOptions(statusSelect, 'On Hold');
     await userEvent.selectOptions(
       within(dialog).getByDisplayValue('Select a reason…'),
@@ -494,12 +488,51 @@ describe('HDIS status reason + remarks', () => {
       screen.getByPlaceholderText('Optional context for this record — shown on the detail page'),
       'Client paused hiring for Q3.',
     );
+    await userEvent.click(screen.getByText('Save changes'));
+
+    const patched = calls.find(
+      (c) => c.url.endsWith('/api/hdis/TST_QA_20260601') && c.method === 'PATCH',
+    );
+    expect(patched).toBeTruthy();
+    const body = patched!.body as { statusReason: string; remarks: string };
+    expect(body.statusReason).toBe('Hold By client');
+    expect(body.remarks).toBe('Client paused hiring for Q3.');
+  });
+
+  it('does not send status or statusReason on create — new records are always born Pending', async () => {
+    const { calls } = mockFetch([
+      ...routesFor(superAdminMe),
+      jsonRoute(
+        '/api/hdis',
+        { ...record, status: 'Pending', detailsComplete: false },
+        {
+          method: 'POST',
+        },
+      ),
+    ]);
+    renderApp(
+      <Routes>
+        <Route path="/hdis" element={<HdisPage />} />
+      </Routes>,
+      { route: '/hdis?fy=&month=' },
+    );
+    await screen.findByText('QA Engineer');
+    await userEvent.click(screen.getByText('+ Add record'));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).queryByText('Status')).not.toBeInTheDocument();
+
+    await userEvent.type(screen.getByPlaceholderText('VAY_XX_20260601'), 'NEW_JD_20260701');
+    await userEvent.type(
+      screen.getByPlaceholderText('Optional context for this record — shown on the detail page'),
+      'Client paused hiring for Q3.',
+    );
     await userEvent.click(screen.getByText('Save record'));
 
     const posted = calls.find((c) => c.url.endsWith('/api/hdis') && c.method === 'POST');
     expect(posted).toBeTruthy();
-    const body = posted!.body as { statusReason: string; remarks: string };
-    expect(body.statusReason).toBe('Hold By client');
+    const body = posted!.body as Record<string, unknown>;
+    expect(body.status).toBeUndefined();
+    expect(body.statusReason).toBeUndefined();
     expect(body.remarks).toBe('Client paused hiring for Q3.');
   });
 
@@ -856,5 +889,113 @@ describe('HDIS client master searchable select', () => {
     expect(await screen.findByText('Acme Corp')).toBeInTheDocument();
     await userEvent.click(screen.getByText('Acme Corp'));
     expect(screen.getByPlaceholderText('Start typing a client name…')).toHaveValue('Acme Corp');
+  });
+});
+
+const pendingRecord: HdisRecord = {
+  ...record,
+  jdId: 'TST_PEND_20260701',
+  title: 'Backend Engineer',
+  status: 'Pending',
+  detailsComplete: false,
+  requirementDetail: null,
+};
+
+describe('HDIS Pending status + requirement questionnaire', () => {
+  it('creating a record opens the requirement questionnaire automatically', async () => {
+    mockFetch([
+      ...routesFor(superAdminMe),
+      jsonRoute('/api/hdis', pendingRecord, { method: 'POST' }),
+    ]);
+    renderApp(
+      <Routes>
+        <Route path="/hdis" element={<HdisPage />} />
+      </Routes>,
+      { route: '/hdis?fy=&month=' },
+    );
+    await screen.findByText('QA Engineer');
+    await userEvent.click(screen.getByText('+ Add record'));
+    await userEvent.type(screen.getByPlaceholderText('VAY_XX_20260601'), 'TST_PEND_20260701');
+    await userEvent.click(screen.getByText('Save record'));
+
+    expect(await screen.findByText('Requirement details — TST_PEND_20260701')).toBeInTheDocument();
+    expect(screen.getByText(/no attachment yet/)).toBeInTheDocument();
+    expect(screen.getByText(/0\/22 required fields/)).toBeInTheDocument();
+  });
+
+  it('Active is disabled on the edit form until the questionnaire is complete', async () => {
+    mockFetch([
+      jsonRoute('/api/me', superAdminMe),
+      jsonRoute(`/api/hdis/${pendingRecord.jdId}/activity`, []),
+      jsonRoute(`/api/hdis/${pendingRecord.jdId}`, pendingRecord),
+      jsonRoute('/api/hdis', [pendingRecord]),
+      jsonRoute('/api/clients', clients),
+      jsonRoute('/api/consultants', consultants),
+    ]);
+    renderApp(
+      <Routes>
+        <Route path="/hdis" element={<HdisPage />} />
+      </Routes>,
+      { route: '/hdis?fy=&month=' },
+    );
+    await screen.findByText('Backend Engineer');
+    await userEvent.click(screen.getByText('Edit'));
+    const dialog = screen.getByRole('dialog');
+    const statusSelect = within(dialog).getByLabelText('Status') as HTMLSelectElement;
+    const activeOption = within(statusSelect).getByRole('option', {
+      name: 'Active',
+    }) as HTMLOptionElement;
+    expect(activeOption.disabled).toBe(true);
+    expect(
+      screen.getByText('Complete the requirement questionnaire to unlock Active.'),
+    ).toBeInTheDocument();
+  });
+
+  it('saving the questionnaire PUTs the entered values to /hdis/:jdId/details', async () => {
+    const { calls } = mockFetch([
+      jsonRoute('/api/me', superAdminMe),
+      jsonRoute(`/api/hdis/${pendingRecord.jdId}/activity`, []),
+      jsonRoute(`/api/hdis/${pendingRecord.jdId}`, pendingRecord),
+      jsonRoute('/api/hdis', [pendingRecord]),
+      jsonRoute('/api/clients', clients),
+      jsonRoute('/api/consultants', consultants),
+      jsonRoute(`/api/hdis/${pendingRecord.jdId}/details`, pendingRecord, { method: 'PUT' }),
+    ]);
+    renderApp(
+      <Routes>
+        <Route path="/hdis/:jdId" element={<HdisPage />} />
+      </Routes>,
+      { route: `/hdis/${pendingRecord.jdId}` },
+    );
+    await screen.findAllByText('Backend Engineer');
+    await userEvent.click(screen.getByText('Requirement details'));
+    await userEvent.type(screen.getByLabelText('BIG member name *'), 'Abha Sharma');
+    await userEvent.click(screen.getByText('Save draft'));
+
+    const put = calls.find(
+      (c) => c.url.endsWith(`/api/hdis/${pendingRecord.jdId}/details`) && c.method === 'PUT',
+    );
+    expect(put).toBeTruthy();
+    expect((put!.body as { bigMemberName: string }).bigMemberName).toBe('Abha Sharma');
+  });
+
+  it('shows a Pending banner on the detail page with a completion CTA', async () => {
+    mockFetch([
+      jsonRoute('/api/me', superAdminMe),
+      jsonRoute(`/api/hdis/${pendingRecord.jdId}/activity`, []),
+      jsonRoute(`/api/hdis/${pendingRecord.jdId}`, pendingRecord),
+      jsonRoute('/api/hdis', [pendingRecord]),
+      jsonRoute('/api/clients', clients),
+      jsonRoute('/api/consultants', consultants),
+    ]);
+    renderApp(
+      <Routes>
+        <Route path="/hdis/:jdId" element={<HdisPage />} />
+      </Routes>,
+      { route: `/hdis/${pendingRecord.jdId}` },
+    );
+    await screen.findAllByText('Backend Engineer');
+    expect(screen.getByText('Not active yet')).toBeInTheDocument();
+    expect(screen.getByText('Complete requirement details')).toBeInTheDocument();
   });
 });

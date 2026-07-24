@@ -16,14 +16,15 @@ import {
   useConsultants,
   useApiMutation,
   useSetHdisLink,
+  useSaveRequirementDetail,
 } from '../lib/hooks';
 import { formatDate, formatMonth, formatDateTime, todayISO } from '../lib/format';
 import { fyOfMonth, fyLabel, fyMonths, fiscalYearsFor, currentFy, currentMonth } from '../lib/fy';
 import { DEFAULT_PAGE_SIZE } from '../lib/pagination';
-import type { HdisRecord } from '../lib/types';
+import type { HdisRecord, RequirementDetail } from '../lib/types';
 
 const TYPE_OPTIONS = ['RADC', 'RADF', 'Internal'];
-const STATUS_OPTIONS = ['Active', 'On Hold', 'Fulfilled', 'Closed'];
+const STATUS_OPTIONS = ['Pending', 'Active', 'On Hold', 'Fulfilled', 'Closed'];
 /** A record is "live" for tile-counting purposes (RAPYD Active, Total Live
  * Requirements, Priority tiles, etc. — see isLiveHdisStatus/isLiveStatus server-side)
  * once it hasn't reached Fulfilled or Closed — that includes both Active AND On Hold.
@@ -33,7 +34,7 @@ const STATUS_OPTIONS = ['Active', 'On Hold', 'Fulfilled', 'Closed'];
  * and silently dropping On Hold records. */
 const LIVE_STATUS_FILTER = 'live';
 function isLiveStatusValue(status: string): boolean {
-  return status !== 'Fulfilled' && status !== 'Closed';
+  return status !== 'Fulfilled' && status !== 'Closed' && status !== 'Pending';
 }
 /** P1/P2/P3 = live priority tiers shown on the Dhruva dashboard; "NA" (displayed as
  * "Uncategorised") is the default for records nobody has triaged yet. */
@@ -126,6 +127,9 @@ function HdisList() {
   const [page, setPageState] = useState(() => Number(params.get('page')) || 1);
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<HdisRecord | null>(null);
+  // Right after a record is created it has no questionnaire yet, so the create flow
+  // always follows up with it — see HdisFormModal's onCreated prop.
+  const [detailsFor, setDetailsFor] = useState<HdisRecord | null>(null);
   // Filtering happens client-side across the full set — the dataset is small enough
   // (dozens to low hundreds of records) that this is instant and keeps every filter
   // (month/client/owner/type/status/search) trivially composable without round-trips.
@@ -463,8 +467,17 @@ function HdisList() {
         />
       </Card>
 
-      {showAdd && <HdisFormModal mode="create" onClose={() => setShowAdd(false)} />}
+      {showAdd && (
+        <HdisFormModal
+          mode="create"
+          onClose={() => setShowAdd(false)}
+          onCreated={(created) => setDetailsFor(created)}
+        />
+      )}
       {editing && <HdisFormModal mode="edit" initial={editing} onClose={() => setEditing(null)} />}
+      {detailsFor && (
+        <RequirementDetailModal record={detailsFor} onClose={() => setDetailsFor(null)} />
+      )}
     </AppShell>
   );
 }
@@ -473,10 +486,15 @@ function HdisFormModal({
   mode,
   initial,
   onClose,
+  onCreated,
 }: {
   mode: 'create' | 'edit';
   initial?: HdisRecord;
   onClose: () => void;
+  /** Create mode only: called with the newly created record right after a successful
+   * save, so the caller can immediately follow up with the requirement questionnaire
+   * — a fresh record can't be Active yet, so there's always a next step. */
+  onCreated?: (record: HdisRecord) => void;
 }) {
   const { me } = useAuth();
   const { data: clientRows = [] } = useClients();
@@ -550,16 +568,26 @@ function HdisFormModal({
       );
       return;
     }
+    // Status isn't settable at creation — every new record is born "Pending" on the
+    // server regardless (see createHdisSchema/createHdis) — so status/statusReason
+    // are deliberately left out of the create payload.
+    const { status: _status, statusReason: _statusReason, ...createFields } = form;
+    void _status;
+    void _statusReason;
     create.mutate(
       {
-        ...form,
-        statusReason: form.statusReason || null,
+        ...createFields,
         remarks: form.remarks.trim() || null,
         jdLink: form.jdLink || null,
         openings,
         owners,
       },
-      { onSuccess: onClose },
+      {
+        onSuccess: (created) => {
+          onClose();
+          onCreated?.(created);
+        },
+      },
     );
   }
 
@@ -622,14 +650,33 @@ function HdisFormModal({
               ))}
             </select>
           </div>
-          <div className="field">
-            <label>Status</label>
-            <select value={form.status} onChange={(e) => set('status', e.target.value)}>
-              {STATUS_OPTIONS.map((s) => (
-                <option key={s}>{s}</option>
-              ))}
-            </select>
-          </div>
+          {mode === 'edit' && (
+            <div className="field">
+              <label htmlFor="hdis-form-status">Status</label>
+              <select
+                id="hdis-form-status"
+                value={form.status}
+                onChange={(e) => set('status', e.target.value)}
+              >
+                {STATUS_OPTIONS.map((s) => (
+                  <option
+                    key={s}
+                    value={s}
+                    disabled={
+                      s === 'Active' && !initial?.detailsComplete && initial?.status !== 'Active'
+                    }
+                  >
+                    {s}
+                  </option>
+                ))}
+              </select>
+              {!initial?.detailsComplete && initial?.status !== 'Active' && (
+                <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                  Complete the requirement questionnaire to unlock Active.
+                </p>
+              )}
+            </div>
+          )}
           <div className="field">
             <label htmlFor="hdis-form-priority">Priority</label>
             <select
@@ -706,6 +753,390 @@ function HdisFormModal({
   );
 }
 
+type DetailFieldType = 'text' | 'textarea' | 'number' | 'radio' | 'yesno';
+
+interface DetailFieldConfig {
+  key: keyof RequirementDetail;
+  label: string;
+  required: boolean;
+  type: DetailFieldType;
+  options?: string[];
+}
+
+interface DetailSectionConfig {
+  title: string;
+  fields: DetailFieldConfig[];
+}
+
+/** The "BIG RAPYD Requirement Questionnaire", grouped into sections. Two questions
+ * from the original questionnaire are deliberately omitted here — "Client/Prospect
+ * Name" and "Total Number of Openings" already exist as the record's own Client and
+ * Positions fields, so asking again would just be a duplicate. The "Screenshot
+ * Attachment" question is satisfied by the record's existing Attachments card rather
+ * than a second upload control — see the note under the Commercial & closure section.
+ * This list's `required` flags must stay in sync with REQUIRED_DETAIL_FIELDS in
+ * server/src/modules/hdis/service.ts — that's the list the server actually gates on. */
+const DETAIL_SECTIONS: DetailSectionConfig[] = [
+  {
+    title: 'Requirement overview',
+    fields: [
+      { key: 'bigMemberName', label: 'BIG member name', required: true, type: 'text' },
+      {
+        key: 'requirementsReceived',
+        label: 'Number of requirements received',
+        required: true,
+        type: 'number',
+      },
+      { key: 'requirementName', label: 'Requirement(s) name', required: true, type: 'text' },
+      {
+        key: 'engagementType',
+        label: 'Requirement — Contractual/FTE',
+        required: true,
+        type: 'text',
+      },
+      {
+        key: 'clientType',
+        label: 'Client type',
+        required: true,
+        type: 'radio',
+        options: ['New', 'Existing'],
+      },
+      {
+        key: 'roleBackground',
+        label: 'Role(s) background — new or replacement?',
+        required: true,
+        type: 'text',
+      },
+    ],
+  },
+  {
+    title: 'Timeline & openings',
+    fields: [
+      {
+        key: 'positionOpenDuration',
+        label: "For how long the position has been open (at client's end)?",
+        required: true,
+        type: 'radio',
+        options: ['0-5 days', '6-10 days', '11-20 days', 'More than a month'],
+      },
+      {
+        key: 'hiringDeadline',
+        label: 'Expected hiring timeline / specific deadline',
+        required: true,
+        type: 'text',
+      },
+      {
+        key: 'interviewRoundsCount',
+        label: 'Total number of interview rounds',
+        required: true,
+        type: 'number',
+      },
+      {
+        key: 'interviewRoundsDefinition',
+        label:
+          'Define the interview rounds (e.g. Assessment, Technical, Managerial, Cultural/Fitment, Client, HR)',
+        required: true,
+        type: 'textarea',
+      },
+      {
+        key: 'positionsAlreadyFilled',
+        label: 'Number of positions already filled by the client',
+        required: true,
+        type: 'number',
+      },
+    ],
+  },
+  {
+    title: "Client's internal hiring effort",
+    fields: [
+      {
+        key: 'clientAttemptedInternalHiring',
+        label: 'Has the client attempted hiring for this role internally?',
+        required: true,
+        type: 'yesno',
+      },
+      {
+        key: 'internalHiringDuration',
+        label: 'Duration of internal hiring effort by client',
+        required: false,
+        type: 'text',
+      },
+      {
+        key: 'internalHiringChannels',
+        label: "Hiring channels used by client's internal hiring team",
+        required: false,
+        type: 'text',
+      },
+      {
+        key: 'internalHiringStageReached',
+        label: "Stage reached in client's internal hiring process",
+        required: false,
+        type: 'text',
+      },
+      {
+        key: 'internalHiringChallenges',
+        label: "Key challenges or constraints identified by client's internal team",
+        required: false,
+        type: 'text',
+      },
+      {
+        key: 'ctcBlockerGap',
+        label: 'If CTC is a blocker, specify the exact gap',
+        required: false,
+        type: 'text',
+      },
+      {
+        key: 'maxNoticePeriod',
+        label: 'Maximum notice period accepted (in days)',
+        required: false,
+        type: 'text',
+      },
+      {
+        key: 'targetCompaniesSuggested',
+        label: 'Any target companies for sourcing suggested by client?',
+        required: false,
+        type: 'text',
+      },
+    ],
+  },
+  {
+    title: 'Vendor & market info',
+    fields: [
+      {
+        key: 'vayuzExclusive',
+        label: 'Is VAYUZ working exclusively on this requirement?',
+        required: true,
+        type: 'yesno',
+      },
+      {
+        key: 'vendorCount',
+        label: 'If not, how many vendors are working on this requirement?',
+        required: true,
+        type: 'text',
+      },
+      {
+        key: 'vendorsSharingProfiles',
+        label: 'Have other vendors already started sharing profiles?',
+        required: true,
+        type: 'text',
+      },
+      {
+        key: 'vendorSubmissionDuration',
+        label: 'How long have vendors been submitting profiles?',
+        required: true,
+        type: 'text',
+      },
+      {
+        key: 'duplicateProfileTimeline',
+        label: 'Duplicate profiles acceptance timeline',
+        required: true,
+        type: 'text',
+      },
+    ],
+  },
+  {
+    title: 'Commercial & closure',
+    fields: [
+      {
+        key: 'commercialRates',
+        label: 'Commercial rates provided by client (for both Contract & FTE)',
+        required: true,
+        type: 'text',
+      },
+      {
+        key: 'clientPocDetails',
+        label: 'Client/Prospect POC — name, contact details',
+        required: true,
+        type: 'text',
+      },
+      {
+        key: 'additionalInsights',
+        label: 'Any additional important insights from client conversation (BIG)?',
+        required: true,
+        type: 'textarea',
+      },
+      {
+        key: 'closureConfidence',
+        label: 'Confidence level for closure of this role based on the above details (BIG)',
+        required: true,
+        type: 'radio',
+        options: ['High', 'Medium', 'Low'],
+      },
+      {
+        key: 'exceptionNotes',
+        label: "Exception (if any checklist parameter couldn't get fulfilled by the client)",
+        required: false,
+        type: 'textarea',
+      },
+      {
+        key: 'atsUsed',
+        label: 'Which ATS the client/prospect is using?',
+        required: true,
+        type: 'text',
+      },
+    ],
+  },
+];
+
+const REQUIRED_DETAIL_KEYS = DETAIL_SECTIONS.flatMap((sec) =>
+  sec.fields.filter((f) => f.required).map((f) => f.key),
+);
+
+type DetailFormState = Record<string, string>;
+
+function detailToForm(detail: RequirementDetail | null): DetailFormState {
+  const out: DetailFormState = {};
+  for (const sec of DETAIL_SECTIONS) {
+    for (const f of sec.fields) {
+      const v = detail?.[f.key];
+      if (v === null || v === undefined) out[f.key] = '';
+      else if (f.type === 'yesno') out[f.key] = v ? 'Yes' : 'No';
+      else out[f.key] = String(v);
+    }
+  }
+  return out;
+}
+
+function formToPayload(form: DetailFormState): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const sec of DETAIL_SECTIONS) {
+    for (const f of sec.fields) {
+      const raw = (form[f.key] ?? '').trim();
+      if (f.type === 'number') out[f.key] = raw === '' ? null : Number(raw);
+      else if (f.type === 'yesno') out[f.key] = raw === '' ? null : raw === 'Yes';
+      else out[f.key] = raw === '' ? null : raw;
+    }
+  }
+  return out;
+}
+
+/**
+ * The "BIG RAPYD Requirement Questionnaire" — the deeper intake details a requirement
+ * needs before it can go "Active" (see REQUIRED_DETAIL_FIELDS/isDetailComplete on the
+ * server). Opens automatically right after a record is created, and can be reopened
+ * any time from the detail page to finish or revise it. Saving always writes the full
+ * current form snapshot as a single "Save" action — there's no separate draft vs.
+ * final submit step, since completeness is just computed from whichever fields (and
+ * attachments) happen to be filled in at save time.
+ */
+function RequirementDetailModal({ record, onClose }: { record: HdisRecord; onClose: () => void }) {
+  const [form, setForm] = useState<DetailFormState>(() => detailToForm(record.requirementDetail));
+  const save = useSaveRequirementDetail(record.jdId);
+  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  const filledRequired = REQUIRED_DETAIL_KEYS.filter((k) => (form[k] ?? '').trim() !== '').length;
+  const allRequiredFilled = filledRequired === REQUIRED_DETAIL_KEYS.length;
+  const hasAttachment = record.attachments.length > 0;
+
+  function submit() {
+    save.mutate(formToPayload(form));
+  }
+
+  return (
+    <div role="dialog" onClick={onClose} style={overlay}>
+      <div
+        className="card pad"
+        style={{ width: 760, maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <SectionTitle>Requirement details — {record.jdId}</SectionTitle>
+        <p className="muted" style={{ marginTop: 6, fontSize: 13 }}>
+          This requirement stays "Pending" — not visible as active work — until this questionnaire
+          is complete. Fill in what you have now and save as a draft; come back any time to finish
+          it.
+        </p>
+        <div
+          className={`pill ${allRequiredFilled && hasAttachment ? 'p-green' : 'p-amber'}`}
+          style={{ marginTop: 10, display: 'inline-flex' }}
+        >
+          {filledRequired}/{REQUIRED_DETAIL_KEYS.length} required fields
+          {hasAttachment ? '' : ' · no attachment yet'}
+        </div>
+
+        {DETAIL_SECTIONS.map((sec) => (
+          <div key={sec.title} style={{ marginTop: 20 }}>
+            <div className="sec-t" style={{ marginBottom: 8 }}>
+              {sec.title}
+            </div>
+            <div className="form-grid">
+              {sec.fields.map((f) => (
+                <div className={f.type === 'textarea' ? 'field full' : 'field'} key={String(f.key)}>
+                  <label htmlFor={`detail-${String(f.key)}`}>
+                    {f.label}
+                    {f.required ? ' *' : ''}
+                  </label>
+                  {f.type === 'textarea' ? (
+                    <textarea
+                      id={`detail-${String(f.key)}`}
+                      value={form[f.key] ?? ''}
+                      onChange={(e) => set(f.key, e.target.value)}
+                      rows={2}
+                    />
+                  ) : f.type === 'number' ? (
+                    <input
+                      id={`detail-${String(f.key)}`}
+                      type="number"
+                      value={form[f.key] ?? ''}
+                      onChange={(e) => set(f.key, e.target.value)}
+                    />
+                  ) : f.type === 'radio' ? (
+                    <select
+                      id={`detail-${String(f.key)}`}
+                      value={form[f.key] ?? ''}
+                      onChange={(e) => set(f.key, e.target.value)}
+                    >
+                      <option value="">Select…</option>
+                      {(f.options ?? []).map((o) => (
+                        <option key={o}>{o}</option>
+                      ))}
+                    </select>
+                  ) : f.type === 'yesno' ? (
+                    <select
+                      id={`detail-${String(f.key)}`}
+                      value={form[f.key] ?? ''}
+                      onChange={(e) => set(f.key, e.target.value)}
+                    >
+                      <option value="">Select…</option>
+                      <option>Yes</option>
+                      <option>No</option>
+                    </select>
+                  ) : (
+                    <input
+                      id={`detail-${String(f.key)}`}
+                      value={form[f.key] ?? ''}
+                      onChange={(e) => set(f.key, e.target.value)}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        <p className="muted" style={{ marginTop: 16, fontSize: 12.5 }}>
+          The questionnaire's "Screenshot Attachment - Requirement Receiving Email from Client" is
+          covered by the Attachments card on this record's detail page — upload it there rather than
+          here.
+        </p>
+
+        {save.isError && (
+          <div className="pill p-red" style={{ marginTop: 12, display: 'block' }}>
+            Could not save the requirement details.
+          </div>
+        )}
+        <div style={{ marginTop: 16, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <Btn variant="gho" onClick={onClose}>
+            Close
+          </Btn>
+          <Btn onClick={submit} disabled={save.isPending}>
+            {allRequiredFilled ? 'Save details' : 'Save draft'}
+          </Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const AGING_TRANSITION_LABELS: {
   key: 'R0->R1' | 'R1->R2' | 'R2->R3' | 'R3->R4' | 'R4->R5';
   label: string;
@@ -757,6 +1188,7 @@ function HdisDetail({ jdId }: { jdId: string }) {
   const { data: rec, isLoading } = useHdisRecord(jdId);
   const { data: activity = [] } = useHdisActivity(jdId);
   const [editing, setEditing] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
   // Same rule as the list: blanket edit, or being personally listed as an owner of
   // this specific record.
   const editable = canEditAll || (!!me?.name && !!rec?.owners.includes(me.name));
@@ -782,7 +1214,14 @@ function HdisDetail({ jdId }: { jdId: string }) {
         <button className="lnk" onClick={() => navigate(backTo)}>
           ← Back to list
         </button>
-        {editable && <Btn onClick={() => setEditing(true)}>Edit record</Btn>}
+        <div style={{ display: 'flex', gap: 10 }}>
+          {editable && (
+            <Btn variant="gho" onClick={() => setShowDetails(true)}>
+              Requirement details
+            </Btn>
+          )}
+          {editable && <Btn onClick={() => setEditing(true)}>Edit record</Btn>}
+        </div>
       </div>
       <div className="dbanner" style={{ marginBottom: 16 }}>
         <div className="db-eyebrow">{rec.type}</div>
@@ -794,7 +1233,7 @@ function HdisDetail({ jdId }: { jdId: string }) {
           <div className="db-item">
             <div className="dl">Status</div>
             <div className="dv">
-              {rec.status}
+              <Pill>{rec.status}</Pill>
               {rec.statusReason && (
                 <span className="muted" style={{ fontSize: 12.5 }}>
                   {' '}
@@ -833,6 +1272,25 @@ function HdisDetail({ jdId }: { jdId: string }) {
           </div>
         </div>
       </div>
+
+      {rec.status === 'Pending' && (
+        <div style={{ marginBottom: 16 }}>
+          <Card>
+            <SectionTitle color="var(--gold)">Not active yet</SectionTitle>
+            <p style={{ marginTop: 10 }}>
+              This requirement stays "Pending" — excluded from live tiles and reports — until the
+              requirement questionnaire is complete
+              {rec.attachments.length === 0 ? ' and at least one attachment is on file' : ''}.
+              {editable && ' Fill it in below to unlock Active.'}
+            </p>
+            {editable && (
+              <Btn small onClick={() => setShowDetails(true)}>
+                Complete requirement details
+              </Btn>
+            )}
+          </Card>
+        </div>
+      )}
 
       {rec.remarks && (
         <div style={{ marginBottom: 16 }}>
@@ -887,6 +1345,7 @@ function HdisDetail({ jdId }: { jdId: string }) {
       </div>
 
       {editing && <HdisFormModal mode="edit" initial={rec} onClose={() => setEditing(false)} />}
+      {showDetails && <RequirementDetailModal record={rec} onClose={() => setShowDetails(false)} />}
     </AppShell>
   );
 }

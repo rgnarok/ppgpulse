@@ -5,14 +5,63 @@ import { getConfig } from '../../config.js';
 import { ensureClient } from '../clients/service.js';
 import { loadDirectory, scopeNames, can, type CurrentUser } from '../rbac/index.js';
 import { computeAging } from './aging.js';
-import type { CreateHdisInput, UpdateHdisInput, PipelineInput } from './schema.js';
+import type {
+  CreateHdisInput,
+  UpdateHdisInput,
+  PipelineInput,
+  RequirementDetailInput,
+} from './schema.js';
 
 const detailInclude = {
   owners: true,
   pipeline: true,
   attachments: { orderBy: { at: 'desc' } },
   stageEvents: true,
+  detail: true,
 } as const satisfies Prisma.HdisInclude;
+
+/** The questionnaire fields that must be filled in before a requirement can go
+ * "Active" — everything else on HdisRequirementDetail is optional context. Kept as
+ * a single list so the completeness check and the frontend's progress indicator
+ * can't drift apart from each other. */
+export const REQUIRED_DETAIL_FIELDS = [
+  'bigMemberName',
+  'requirementsReceived',
+  'requirementName',
+  'engagementType',
+  'clientType',
+  'roleBackground',
+  'positionOpenDuration',
+  'hiringDeadline',
+  'interviewRoundsCount',
+  'interviewRoundsDefinition',
+  'positionsAlreadyFilled',
+  'clientAttemptedInternalHiring',
+  'vayuzExclusive',
+  'vendorCount',
+  'vendorsSharingProfiles',
+  'vendorSubmissionDuration',
+  'duplicateProfileTimeline',
+  'commercialRates',
+  'clientPocDetails',
+  'additionalInsights',
+  'closureConfidence',
+  'atsUsed',
+] as const;
+
+/** Completeness also requires at least one attachment — the questionnaire's "Screenshot
+ * Attachment - Requirement Receiving Email from Client" is satisfied by the record's
+ * existing Attachments feature rather than a separate upload field. */
+function isDetailComplete(
+  detail: Partial<Record<(typeof REQUIRED_DETAIL_FIELDS)[number], unknown>> | null | undefined,
+  hasAttachment: boolean,
+): boolean {
+  if (!detail || !hasAttachment) return false;
+  return REQUIRED_DETAIL_FIELDS.every((f) => {
+    const v = detail[f];
+    return v !== null && v !== undefined && v !== '';
+  });
+}
 
 /** Matches isClosed() in report/metrics.ts, at the whole-record level (no per-owner
  * onboard split needed here — pipeline.r5 already IS the onboard count). */
@@ -33,6 +82,7 @@ function initialStage(status: string): string {
 }
 
 export function toHdisDto(h: HdisDetail) {
+  const detailsComplete = isDetailComplete(h.detail, h.attachments.length > 0);
   return {
     jdId: h.jdId,
     title: h.title,
@@ -46,6 +96,42 @@ export function toHdisDto(h: HdisDetail) {
     confidence: h.confidence,
     reqDate: h.reqDate,
     jdLink: h.jdLink,
+    detailsComplete,
+    requirementDetail: h.detail
+      ? {
+          bigMemberName: h.detail.bigMemberName,
+          requirementsReceived: h.detail.requirementsReceived,
+          requirementName: h.detail.requirementName,
+          engagementType: h.detail.engagementType,
+          clientType: h.detail.clientType,
+          roleBackground: h.detail.roleBackground,
+          positionOpenDuration: h.detail.positionOpenDuration,
+          hiringDeadline: h.detail.hiringDeadline,
+          interviewRoundsCount: h.detail.interviewRoundsCount,
+          interviewRoundsDefinition: h.detail.interviewRoundsDefinition,
+          positionsAlreadyFilled: h.detail.positionsAlreadyFilled,
+          clientAttemptedInternalHiring: h.detail.clientAttemptedInternalHiring,
+          internalHiringDuration: h.detail.internalHiringDuration,
+          internalHiringChannels: h.detail.internalHiringChannels,
+          internalHiringStageReached: h.detail.internalHiringStageReached,
+          internalHiringChallenges: h.detail.internalHiringChallenges,
+          ctcBlockerGap: h.detail.ctcBlockerGap,
+          maxNoticePeriod: h.detail.maxNoticePeriod,
+          targetCompaniesSuggested: h.detail.targetCompaniesSuggested,
+          vayuzExclusive: h.detail.vayuzExclusive,
+          vendorCount: h.detail.vendorCount,
+          vendorsSharingProfiles: h.detail.vendorsSharingProfiles,
+          vendorSubmissionDuration: h.detail.vendorSubmissionDuration,
+          duplicateProfileTimeline: h.detail.duplicateProfileTimeline,
+          commercialRates: h.detail.commercialRates,
+          clientPocDetails: h.detail.clientPocDetails,
+          additionalInsights: h.detail.additionalInsights,
+          closureConfidence: h.detail.closureConfidence,
+          exceptionNotes: h.detail.exceptionNotes,
+          atsUsed: h.detail.atsUsed,
+          isComplete: h.detail.isComplete,
+        }
+      : null,
     owners: h.owners.map((o) => o.consultantOrName),
     pipeline: h.pipeline
       ? {
@@ -181,7 +267,9 @@ export async function createHdis(prisma: PrismaClient, actorId: string, input: C
         client: input.client,
         type: input.type as HdisType,
         openings: input.openings,
-        status: input.status,
+        // Every requirement is born "Pending" — it can only move to "Active" once its
+        // questionnaire (HdisRequirementDetail) is complete. See updateHdis() below.
+        status: 'Pending',
         statusReason: input.statusReason ?? null,
         remarks: input.remarks ?? null,
         priority: input.priority,
@@ -196,7 +284,7 @@ export async function createHdis(prisma: PrismaClient, actorId: string, input: C
       });
     }
     await tx.hdisPipeline.create({
-      data: { jdId: input.jdId, stage: initialStage(input.status) },
+      data: { jdId: input.jdId, stage: initialStage('Pending') },
     });
     await logActivity(tx, input.jdId, actorId, 'create', `Created ${input.title} (${input.jdId})`);
     return tx.hdis.findUniqueOrThrow({ where: { jdId: input.jdId }, include: detailInclude });
@@ -211,6 +299,15 @@ export async function updateHdis(
   input: UpdateHdisInput,
 ) {
   const current = await getHdis(prisma, jdId);
+  if (input.status === 'Active' && current.status !== 'Active') {
+    const complete = isDetailComplete(current.detail, current.attachments.length > 0);
+    if (!complete) {
+      throw new BadRequestError(
+        'Complete the requirement questionnaire before activating this record',
+        'details_incomplete',
+      );
+    }
+  }
   const diffs: string[] = [];
   const data: Prisma.HdisUpdateInput = {};
   const scalarFields: (keyof UpdateHdisInput)[] = [
@@ -278,7 +375,16 @@ export async function setPipeline(
   const prevStage = prev?.stage;
   if (prevStage !== input.stage) changes.push(`stage ${prevStage ?? '—'}→${input.stage}`);
 
-  const nextStatus = statusForStage(input.stage);
+  let nextStatus = statusForStage(input.stage);
+  // A "Pending" record can still have its pipeline worked on (sourcing, etc.), but
+  // recording progress must not silently promote it to "Active" behind the
+  // questionnaire gate — that's a deliberate action via updateHdis(), not a side
+  // effect of logging R0-R5 counts. Any other stage transition (On Hold/Closed) is
+  // unaffected since those aren't gated.
+  if (nextStatus === 'Active' && current.status === 'Pending') {
+    const complete = isDetailComplete(current.detail, current.attachments.length > 0);
+    if (!complete) nextStatus = 'Pending';
+  }
 
   // "Profile aging" input: the first time each stage's headcount goes from 0 to
   // positive. Recorded once per jdId+stage (unique constraint), inside this same
@@ -331,6 +437,47 @@ export async function setLink(
     return tx.hdis.findUniqueOrThrow({ where: { jdId }, include: detailInclude });
   });
   return toHdisDto(updated);
+}
+
+/**
+ * Save (upsert) the requirement questionnaire — every field is optional so this can be
+ * called as a partial "save draft", any number of times, before all required fields are
+ * present. `isComplete` is recomputed from REQUIRED_DETAIL_FIELDS + attachments on every
+ * save, which is what unlocks the "Active" status in updateHdis()/setPipeline() above.
+ */
+export async function saveRequirementDetail(
+  prisma: PrismaClient,
+  actorId: string,
+  jdId: string,
+  input: RequirementDetailInput,
+) {
+  const current = await getHdis(prisma, jdId);
+  const merged = { ...current.detail, ...input };
+  const complete = isDetailComplete(merged, current.attachments.length > 0);
+
+  const updated = await prisma.$transaction(async (tx) => {
+    await tx.hdisRequirementDetail.upsert({
+      where: { jdId },
+      update: { ...input, isComplete: complete },
+      create: { jdId, ...input, isComplete: complete },
+    });
+    await logActivity(
+      tx,
+      jdId,
+      actorId,
+      'requirement_detail',
+      complete ? 'Saved requirement details (complete)' : 'Saved requirement details (draft)',
+    );
+    return tx.hdis.findUniqueOrThrow({ where: { jdId }, include: detailInclude });
+  });
+  return toHdisDto(updated);
+}
+
+/** Fetch just the requirement-detail record (used by the frontend to prefill the
+ * questionnaire form) — 404s the same way getHdis() does if the JD itself doesn't exist. */
+export async function getRequirementDetail(prisma: PrismaClient, jdId: string) {
+  const h = await getHdis(prisma, jdId);
+  return h.detail;
 }
 
 export async function addAttachment(

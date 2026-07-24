@@ -8,6 +8,7 @@ import {
   updateHdisSchema,
   pipelineSchema,
   linkSchema,
+  requirementDetailSchema,
 } from './schema.js';
 import {
   listHdis,
@@ -22,6 +23,7 @@ import {
   addAttachment,
   getAttachment,
   listActivity,
+  saveRequirementDetail,
 } from './service.js';
 
 export default async function hdisRoutes(app: FastifyInstance) {
@@ -152,6 +154,20 @@ export default async function hdisRoutes(app: FastifyInstance) {
       assertCan(request.currentUser, 'hdis', 'view');
       await getHdisForUser(app.prisma, request.currentUser, request.params.jdId);
       return listActivity(app.prisma, request.params.jdId);
+    },
+  );
+
+  // Requirement questionnaire ("BIG RAPYD Requirement Questionnaire") — same edit
+  // rights as the record itself. Reads the full record's DTO since the questionnaire
+  // is embedded there (requirementDetail + detailsComplete); saving just PUTs whatever
+  // subset of fields the caller has so far, draft or complete.
+  app.put<{ Params: { jdId: string } }>(
+    '/hdis/:jdId/details',
+    { preHandler: app.authenticate },
+    async (request) => {
+      await assertCanEditHdisRecord(app.prisma, request.currentUser, request.params.jdId);
+      const input = requirementDetailSchema.parse(request.body);
+      return saveRequirementDetail(app.prisma, request.currentUser.id, request.params.jdId, input);
     },
   );
 

@@ -54,6 +54,7 @@ button{font-family:inherit}
 .mini .s{font-size:11.5px;color:var(--faint);margin-top:2px}
 .pill{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:700}
 .p-green{background:#E7F7F0;color:#0a8a54}.p-amber{background:#FEF3E2;color:#b8790a}.p-blue{background:#EBEEFE;color:#4F46E5}.p-red{background:#FDECEC;color:#dc2626}.p-grey{background:#EEF1F6;color:#64748B}.p-violet{background:#F1EBFE;color:#7C3AED}
+.p-gold{background:#FBF3DF;color:#a1780f}
 .tag{display:inline-block;font-size:10px;font-weight:700;padding:1px 7px;border-radius:6px;letter-spacing:.3px}
 .tbl{width:100%;border-collapse:collapse}
 .tbl th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--faint);font-weight:700;padding:10px 12px;border-bottom:1px solid var(--border)}

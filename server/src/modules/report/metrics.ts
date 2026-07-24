@@ -129,7 +129,7 @@ export interface StatusReasonSlice {
   count: number;
 }
 
-const STATUS_ORDER = ['Active', 'On Hold', 'Fulfilled', 'Closed'];
+const STATUS_ORDER = ['Pending', 'Active', 'On Hold', 'Fulfilled', 'Closed'];
 
 /**
  * Status mix broken down by the HDIS status-reason detail rather than just the bare
@@ -188,10 +188,12 @@ export interface HdisTypeStatusLite {
   status: string;
 }
 
-/** Whether an HDIS record's status counts as still-open work (not yet resolved) —
- * mirrors isClosed()'s bucketing but at the bare-status level for whole-record tiles. */
+/** Whether an HDIS record's status counts as still-open, actually-being-worked
+ * requirement — mirrors isClosed()'s bucketing but at the bare-status level for
+ * whole-record tiles. Excludes "Pending" too: a record whose intake questionnaire
+ * isn't complete yet isn't live work, it just exists. */
 export function isLiveHdisStatus(status: string): boolean {
-  return status !== 'Fulfilled' && status !== 'Closed';
+  return status !== 'Fulfilled' && status !== 'Closed' && status !== 'Pending';
 }
 
 /** Dhruva's "RAPYD Active" tile: live RADC (contract) + RADF (full-time) records only.

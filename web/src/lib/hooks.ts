@@ -129,6 +129,20 @@ export function useHdisActivity(jdId: string | null) {
   });
 }
 
+/** Save (partial or complete) the requirement questionnaire — returns the full record,
+ * so `detailsComplete` is always fresh right after a save. */
+export function useSaveRequirementDetail(jdId: string) {
+  return useApiMutation(
+    (body: Record<string, unknown>) =>
+      api<HdisRecord>(`/hdis/${jdId}/details`, { method: 'PUT', body }),
+    [
+      ['hdis', {}],
+      ['hdis-record', jdId],
+      ['hdis-activity', jdId],
+    ],
+  );
+}
+
 export interface ClientRow {
   id: string;
   name: string;

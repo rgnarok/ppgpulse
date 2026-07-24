@@ -156,9 +156,63 @@ model Hdis {
   activity     HdisActivity[]
   requirements Requirement[]
   stageEvents  HdisStageEvent[]
+  detail       HdisRequirementDetail?
 
   @@index([reqDate])
   @@index([status])
+}
+
+/// The "BIG RAPYD Requirement Questionnaire" — the deeper intake details a requirement
+/// needs before it's allowed to go "Active" (see hdis/service.ts's completeness check).
+/// Every field is optional here so the questionnaire can be saved as a partial draft;
+/// `isComplete` is recomputed and stored every time it's saved, from the subset of
+/// fields the questionnaire itself marks as required.
+model HdisRequirementDetail {
+  jdId String @id
+  hdis Hdis   @relation(fields: [jdId], references: [jdId], onDelete: Cascade)
+
+  // Requirement overview
+  bigMemberName          String?
+  requirementsReceived   Int?
+  requirementName        String?
+  engagementType         String?
+  clientType             String?
+  roleBackground         String?
+
+  // Timeline & openings
+  positionOpenDuration      String?
+  hiringDeadline            String?
+  interviewRoundsCount      Int?
+  interviewRoundsDefinition String?
+  positionsAlreadyFilled    Int?
+
+  // Client's internal hiring effort
+  clientAttemptedInternalHiring Boolean?
+  internalHiringDuration         String?
+  internalHiringChannels         String?
+  internalHiringStageReached     String?
+  internalHiringChallenges       String?
+  ctcBlockerGap                  String?
+  maxNoticePeriod                String?
+  targetCompaniesSuggested       String?
+
+  // Vendor & market info
+  vayuzExclusive             Boolean?
+  vendorCount                String?
+  vendorsSharingProfiles     String?
+  vendorSubmissionDuration   String?
+  duplicateProfileTimeline   String?
+
+  // Commercial & closure
+  commercialRates    String?
+  clientPocDetails   String?
+  additionalInsights String?
+  closureConfidence  String?
+  exceptionNotes     String?
+  atsUsed            String?
+
+  isComplete Boolean  @default(false)
+  updatedAt  DateTime @updatedAt
 }
 
 /// Client master list — grown organically as HDIS records are created/edited with a new

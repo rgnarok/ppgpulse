@@ -198,8 +198,49 @@ export interface HdisRecord {
     totalDays: number;
     transitions: Record<AgingTransition, number | null>;
   };
+  /** Whether the requirement questionnaire's required fields (+ at least one
+   * attachment) are all filled in — the gate for moving status to "Active". */
+  detailsComplete: boolean;
+  requirementDetail: RequirementDetail | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** The "BIG RAPYD Requirement Questionnaire" — deeper intake details captured after a
+ * requirement is created, grouped into sections in the UI (see HdisPage.tsx's
+ * DETAIL_SECTIONS). Every field is optional so it can be saved as a partial draft. */
+export interface RequirementDetail {
+  bigMemberName: string | null;
+  requirementsReceived: number | null;
+  requirementName: string | null;
+  engagementType: string | null;
+  clientType: string | null;
+  roleBackground: string | null;
+  positionOpenDuration: string | null;
+  hiringDeadline: string | null;
+  interviewRoundsCount: number | null;
+  interviewRoundsDefinition: string | null;
+  positionsAlreadyFilled: number | null;
+  clientAttemptedInternalHiring: boolean | null;
+  internalHiringDuration: string | null;
+  internalHiringChannels: string | null;
+  internalHiringStageReached: string | null;
+  internalHiringChallenges: string | null;
+  ctcBlockerGap: string | null;
+  maxNoticePeriod: string | null;
+  targetCompaniesSuggested: string | null;
+  vayuzExclusive: boolean | null;
+  vendorCount: string | null;
+  vendorsSharingProfiles: string | null;
+  vendorSubmissionDuration: string | null;
+  duplicateProfileTimeline: string | null;
+  commercialRates: string | null;
+  clientPocDetails: string | null;
+  additionalInsights: string | null;
+  closureConfidence: string | null;
+  exceptionNotes: string | null;
+  atsUsed: string | null;
+  isComplete: boolean;
 }
 
 export interface HdisActivityEntry {

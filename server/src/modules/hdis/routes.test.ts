@@ -22,9 +22,35 @@ const sampleJd = {
   title: 'QA Engineer',
   client: 'Testify',
   type: 'RADC',
-  status: 'Active',
   reqDate: '2026-06-01',
   owners: ['Abha Sharma', 'External Person'],
+};
+
+// Every REQUIRED_DETAIL_FIELDS key from hdis/service.ts, filled in — used to prove a
+// requirement CAN reach "Active" once the questionnaire (+ an attachment) is complete.
+const completeDetail = {
+  bigMemberName: 'Abha Sharma',
+  requirementsReceived: 1,
+  requirementName: 'QA Engineer',
+  engagementType: 'FTE',
+  clientType: 'Existing',
+  roleBackground: 'Replacement',
+  positionOpenDuration: '6-10 days',
+  hiringDeadline: 'End of month',
+  interviewRoundsCount: 3,
+  interviewRoundsDefinition: 'Assessment, Technical, HR',
+  positionsAlreadyFilled: 0,
+  clientAttemptedInternalHiring: false,
+  vayuzExclusive: true,
+  vendorCount: '0',
+  vendorsSharingProfiles: 'No',
+  vendorSubmissionDuration: 'N/A',
+  duplicateProfileTimeline: '48 hours',
+  commercialRates: '18 LPA',
+  clientPocDetails: 'Jane Doe, jane@testify.com',
+  additionalInsights: 'Client is flexible on start date.',
+  closureConfidence: 'High',
+  atsUsed: 'Greenhouse',
 };
 
 describe('T5.1 HDIS list + CRUD', () => {
@@ -129,6 +155,17 @@ describe('T5.3 pipeline recorder', () => {
   });
 });
 
+function multipart(fileName: string, contentType: string, content: string) {
+  const boundary = '----ppgtestboundary';
+  const body =
+    `--${boundary}\r\n` +
+    `Content-Disposition: form-data; name="file"; filename="${fileName}"\r\n` +
+    `Content-Type: ${contentType}\r\n\r\n` +
+    `${content}\r\n` +
+    `--${boundary}--\r\n`;
+  return { body, headers: { 'content-type': `multipart/form-data; boundary=${boundary}` } };
+}
+
 describe('T5.4 JD link + attachments', () => {
   it('sets a JD link', async () => {
     const res = await app.inject({
@@ -140,17 +177,6 @@ describe('T5.4 JD link + attachments', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().jdLink).toBe('https://example.com/jd.pdf');
   });
-
-  function multipart(fileName: string, contentType: string, content: string) {
-    const boundary = '----ppgtestboundary';
-    const body =
-      `--${boundary}\r\n` +
-      `Content-Disposition: form-data; name="file"; filename="${fileName}"\r\n` +
-      `Content-Type: ${contentType}\r\n\r\n` +
-      `${content}\r\n` +
-      `--${boundary}--\r\n`;
-    return { body, headers: { 'content-type': `multipart/form-data; boundary=${boundary}` } };
-  }
 
   it('rejects a disallowed mime type (.exe)', async () => {
     const mp = multipart('malware.exe', 'application/x-msdownload', 'MZ...');
@@ -190,6 +216,94 @@ describe('T5.4 JD link + attachments', () => {
       url: `/api/hdis/${sampleJd.jdId}/attachments/does-not-matter`,
     });
     expect(res.statusCode).toBe(401);
+  });
+});
+
+describe('T5.5 Pending status + requirement questionnaire', () => {
+  const jdId = 'TST_PEND_20260601';
+  const jd = {
+    jdId,
+    title: 'Backend Engineer',
+    client: 'Testify',
+    type: 'RADF',
+    reqDate: '2026-06-05',
+    owners: ['Abha Sharma'],
+  };
+
+  it('a new record always starts Pending, regardless of any status sent', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/hdis',
+      headers: auth(adminToken),
+      payload: { ...jd, status: 'Active' },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().status).toBe('Pending');
+    expect(res.json().detailsComplete).toBe(false);
+  });
+
+  it('cannot be moved to Active before the questionnaire is complete (400)', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/hdis/${jdId}`,
+      headers: auth(adminToken),
+      payload: { status: 'Active' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('details_incomplete');
+  });
+
+  it('recording pipeline progress on a Pending record does not silently promote it to Active', async () => {
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/api/hdis/${jdId}/pipeline`,
+      headers: auth(adminToken),
+      payload: { r0: 3, r1: 0, r2: 0, r3: 0, r4: 0, r5: 0, stage: 'R0 · Sourcing' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().status).toBe('Pending');
+  });
+
+  it('a partial questionnaire save persists as a draft without completing it', async () => {
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/api/hdis/${jdId}/details`,
+      headers: auth(adminToken),
+      payload: { bigMemberName: 'Abha Sharma', requirementName: 'Backend Engineer' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().detailsComplete).toBe(false);
+    expect(res.json().requirementDetail.bigMemberName).toBe('Abha Sharma');
+  });
+
+  it('completing the questionnaire + an attachment unlocks Active', async () => {
+    const detailRes = await app.inject({
+      method: 'PUT',
+      url: `/api/hdis/${jdId}/details`,
+      headers: auth(adminToken),
+      payload: completeDetail,
+    });
+    // No attachment uploaded yet — still incomplete.
+    expect(detailRes.json().detailsComplete).toBe(false);
+
+    const mp = multipart('email.png', 'image/png', 'fake-png-bytes');
+    const uploadRes = await app.inject({
+      method: 'POST',
+      url: `/api/hdis/${jdId}/attachments`,
+      headers: { ...auth(adminToken), ...mp.headers },
+      payload: mp.body,
+    });
+    expect(uploadRes.statusCode).toBe(201);
+
+    const activateRes = await app.inject({
+      method: 'PATCH',
+      url: `/api/hdis/${jdId}`,
+      headers: auth(adminToken),
+      payload: { status: 'Active' },
+    });
+    expect(activateRes.statusCode).toBe(200);
+    expect(activateRes.json().status).toBe('Active');
+    expect(activateRes.json().detailsComplete).toBe(true);
   });
 });
 

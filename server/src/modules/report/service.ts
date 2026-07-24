@@ -396,9 +396,11 @@ export async function requirementDetail(prisma: PrismaClient, user: CurrentUser,
 
 /** A record is "live" (still open work, not yet resolved) when its status hasn't
  * reached Fulfilled or Closed — mirrors isClosed()'s bucketing but at the bare-status
- * level, since the Dhruva tiles work off whole HDIS records rather than per-owner rows. */
+ * level, since the Dhruva tiles work off whole HDIS records rather than per-owner rows.
+ * Excludes "Pending" too — a requirement whose intake questionnaire isn't complete yet
+ * isn't live work. */
 function isLiveStatus(status: string): boolean {
-  return status !== 'Fulfilled' && status !== 'Closed';
+  return status !== 'Fulfilled' && status !== 'Closed' && status !== 'Pending';
 }
 
 export interface DhruvaFilters {
