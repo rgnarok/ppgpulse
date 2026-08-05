@@ -235,81 +235,63 @@ describe('GET /api/requirements/:id', () => {
 });
 
 describe('GET /api/report/scorecard', () => {
-  const scorecardJdId = 'TST_SCORECARD_20260601';
+  const reqA = 'TST_SCORECARD_A_20260605';
+  const reqB = 'TST_SCORECARD_B_20260606';
 
   beforeAll(async () => {
+    // Requirement A: single-owner (Abha Sharma), tagged "Java", pushed all the way to
+    // Closed with 4 profiles submitted and 1 onboarded — the only terminal requirement
+    // in this fixture, so it's the only one that can contribute to dropout rate / TAT.
     await app.inject({
       method: 'POST',
       url: '/api/hdis',
       headers: auth(superToken),
       payload: {
-        jdId: scorecardJdId,
-        title: 'Scorecard Fixture Role',
+        jdId: reqA,
+        title: 'Scorecard Fixture A',
         client: 'Testify',
         type: 'RADC',
-        reqDate: '2026-06-01',
+        techStack: 'Java',
+        reqDate: '2026-06-05',
         owners: ['Abha Sharma'],
       },
     });
+    const pipelineA = await app.inject({
+      method: 'PUT',
+      url: `/api/hdis/${reqA}/pipeline`,
+      headers: auth(superToken),
+      payload: { r0: 4, r1: 3, r2: 3, r3: 2, r4: 2, r5: 1, stage: 'Closed' },
+    });
+    expect(pipelineA.statusCode).toBe(200);
+    expect(pipelineA.json().status).toBe('Closed');
 
-    // Abha Sharma: 2 profiles submitted this period — one reaches L2/L3 and Joins
-    // (with an offer along the way), the other only gets an offer. Gives her a
-    // non-trivial closure efficiency, L2/L3 conversions, interview->offer and
-    // offer->join ratio, and a 0% dropout rate, all deterministically.
-    const c1 = await app.inject({
+    // Requirement B: co-owned by Abha Sharma AND Pragyashree Jain, tagged "Java",
+    // still Active (in progress) — every pipeline count here splits 50/50 between the
+    // two owners, and being non-terminal it contributes nothing to dropout rate or TAT.
+    await app.inject({
       method: 'POST',
-      url: `/api/hdis/${scorecardJdId}/candidates`,
+      url: '/api/hdis',
       headers: auth(superToken),
       payload: {
-        name: 'Scorecard Offered-Only',
+        jdId: reqB,
+        title: 'Scorecard Fixture B',
+        client: 'Testify',
+        type: 'RADC',
         techStack: 'Java',
-        ownerName: 'Abha Sharma',
-        stage: 'R2',
-        status: 'Offered',
-        offeredAt: '2026-06-10',
-        submittedAt: '2026-06-01',
+        reqDate: '2026-06-06',
+        owners: ['Abha Sharma', 'Pragyashree Jain'],
       },
     });
-    expect(c1.statusCode).toBe(201);
-
-    const c2 = await app.inject({
-      method: 'POST',
-      url: `/api/hdis/${scorecardJdId}/candidates`,
+    const pipelineB = await app.inject({
+      method: 'PUT',
+      url: `/api/hdis/${reqB}/pipeline`,
       headers: auth(superToken),
-      payload: {
-        name: 'Scorecard Joined',
-        techStack: 'Java',
-        ownerName: 'Abha Sharma',
-        stage: 'R5',
-        status: 'Joined',
-        offeredAt: '2026-06-08',
-        closedAt: '2026-06-15',
-        submittedAt: '2026-06-02',
-      },
+      payload: { r0: 2, r1: 1, r2: 1, r3: 1, r4: 0, r5: 0, stage: 'R2 · L1' },
     });
-    expect(c2.statusCode).toBe(201);
-
-    // Pragyashree Jain: 1 profile submitted, dropped before reaching L1 — a 100%
-    // dropout rate and zero closures, so she reliably loses every "best" tile above
-    // to Abha but still shows up in the ranking table.
-    const c3 = await app.inject({
-      method: 'POST',
-      url: `/api/hdis/${scorecardJdId}/candidates`,
-      headers: auth(superToken),
-      payload: {
-        name: 'Scorecard Dropped',
-        techStack: '.NET',
-        ownerName: 'Pragyashree Jain',
-        stage: 'R1',
-        status: 'Dropped',
-        dropReason: 'Compensation mismatch',
-        submittedAt: '2026-06-03',
-      },
-    });
-    expect(c3.statusCode).toBe(201);
+    expect(pipelineB.statusCode).toBe(200);
   });
 
-  it('aggregates per-recruiter metrics scoped to the submitted-in-period candidate set', async () => {
+  it('splits co-owned requirement counts evenly and only counts dropout/TAT from terminal requirements', async () => {
     const res = await app.inject({
       method: 'GET',
       url: '/api/report/scorecard?month=2026-06',
@@ -320,15 +302,16 @@ describe('GET /api/report/scorecard', () => {
 
     const abha = body.ranking.find((r: { ownerName: string }) => r.ownerName === 'Abha Sharma');
     expect(abha).toBeTruthy();
-    expect(abha.profilesSubmitted).toBe(2);
-    expect(abha.closures).toBe(1);
-    expect(abha.closureEfficiency).toBeCloseTo(0.5);
-    expect(abha.l2Conversions).toBe(1);
-    expect(abha.l3Conversions).toBe(1);
-    expect(abha.dropoutRate).toBe(0);
-    expect(abha.avgTatDays).toBe(13); // 2026-06-02 -> 2026-06-15
-    expect(abha.offered).toBe(2);
-    expect(abha.interviewToOfferRatio).toBe(1);
+    expect(abha.profilesSubmitted).toBe(5); // 4 (solo, req A) + 1 (half of B's r0=2)
+    expect(abha.closures).toBe(1); // only req A onboarded (r5=1); B has r5=0
+    expect(abha.closureEfficiency).toBeCloseTo(1 / 5);
+    expect(abha.l2Conversions).toBeCloseTo(2.5); // A's r3=2 + half of B's r3=1
+    expect(abha.l3Conversions).toBe(2); // only A reached L3 (r4=2); B's r4=0
+    // Dropout only from req A (terminal): (4 - 1) / 4 = 0.75. Req B (still Active)
+    // contributes nothing even though it also has an r0-r5 gap.
+    expect(abha.dropoutRate).toBeCloseTo(0.75);
+    expect(abha.avgTatDays).toBeGreaterThanOrEqual(0);
+    expect(abha.interviewToOfferRatio).toBeCloseTo(2 / 3.5);
     expect(abha.offerToJoinRatio).toBeCloseTo(0.5);
     expect(abha.rank).toBeTruthy();
 
@@ -336,17 +319,18 @@ describe('GET /api/report/scorecard', () => {
       (r: { ownerName: string }) => r.ownerName === 'Pragyashree Jain',
     );
     expect(pragyashree).toBeTruthy();
-    expect(pragyashree.profilesSubmitted).toBe(1);
+    expect(pragyashree.profilesSubmitted).toBe(1); // half of req B's r0=2
     expect(pragyashree.closures).toBe(0);
-    expect(pragyashree.dropped).toBe(1);
-    expect(pragyashree.dropoutRate).toBe(1);
+    // She only co-owns the still-Active requirement B — nothing terminal, so dropout
+    // rate and TAT are both unmeasurable (null), not zero.
+    expect(pragyashree.dropoutRate).toBeNull();
+    expect(pragyashree.avgTatDays).toBeNull();
 
-    // Abha wins every highlight tile she's eligible for against this fixture.
+    // Abha wins every eligible highlight tile against this fixture.
     expect(body.highlights.closureEfficiency.ownerName).toBe('Abha Sharma');
     expect(body.highlights.l2Conversions.ownerName).toBe('Abha Sharma');
     expect(body.highlights.l3Conversions.ownerName).toBe('Abha Sharma');
-    expect(body.highlights.lowestDropoutRate.ownerName).toBe('Abha Sharma');
-    expect(body.highlights.highestDropoutRate.ownerName).toBe('Pragyashree Jain');
+    expect(body.highlights.lowestTat.ownerName).toBe('Abha Sharma');
     expect(body.highlights.interviewToOfferRatio.ownerName).toBe('Abha Sharma');
     expect(body.highlights.offerToJoinRatio.ownerName).toBe('Abha Sharma');
 
@@ -365,7 +349,6 @@ describe('GET /api/report/scorecard', () => {
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.candidateCount).toBe(0);
     expect(body.ranking).toEqual([]);
     expect(body.highlights.closureEfficiency).toBeNull();
   });

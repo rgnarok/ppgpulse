@@ -27,6 +27,7 @@ const record: HdisRecord = {
   title: 'QA Engineer',
   client: 'Testify',
   type: 'RADC',
+  techStack: null,
   openings: 1,
   status: 'Active',
   statusReason: null,
@@ -1076,122 +1077,5 @@ describe('HDIS Pending status + requirement questionnaire', () => {
     await screen.findAllByText('Backend Engineer');
     expect(screen.getByText('Not active yet')).toBeInTheDocument();
     expect(screen.getByText('Complete requirement details')).toBeInTheDocument();
-  });
-});
-
-describe('HDIS Candidates', () => {
-  const candidate = {
-    id: 'cand_1',
-    jdId: record.jdId,
-    name: 'Priya Kumar',
-    techStack: 'Java',
-    ownerName: 'Abha Sharma',
-    stage: 'R2',
-    status: 'Active',
-    dropReason: null,
-    submittedAt: '2026-06-10',
-    offeredAt: null,
-    closedAt: null,
-    updatedAt: '2026-06-10T00:00:00.000Z',
-  };
-
-  it('lists candidates logged against the requirement', async () => {
-    mockFetch([
-      jsonRoute('/api/me', superAdminMe),
-      jsonRoute('/api/hdis/TST_QA_20260601/activity', []),
-      jsonRoute('/api/hdis/TST_QA_20260601/candidates', [candidate]),
-      jsonRoute('/api/hdis/TST_QA_20260601', record),
-      jsonRoute('/api/hdis', [record]),
-      jsonRoute('/api/clients', clients),
-      jsonRoute('/api/consultants', consultants),
-    ]);
-    renderApp(
-      <Routes>
-        <Route path="/hdis/:jdId" element={<HdisPage />} />
-      </Routes>,
-      { route: '/hdis/TST_QA_20260601' },
-    );
-    await screen.findByText('Candidates');
-    expect(await screen.findByText('Priya Kumar')).toBeInTheDocument();
-    expect(screen.getByText('Java')).toBeInTheDocument();
-  });
-
-  it('shows an empty state when no candidates have been logged yet', async () => {
-    mockFetch([
-      jsonRoute('/api/me', superAdminMe),
-      jsonRoute('/api/hdis/TST_QA_20260601/activity', []),
-      jsonRoute('/api/hdis/TST_QA_20260601/candidates', []),
-      jsonRoute('/api/hdis/TST_QA_20260601', record),
-      jsonRoute('/api/hdis', [record]),
-      jsonRoute('/api/clients', clients),
-      jsonRoute('/api/consultants', consultants),
-    ]);
-    renderApp(
-      <Routes>
-        <Route path="/hdis/:jdId" element={<HdisPage />} />
-      </Routes>,
-      { route: '/hdis/TST_QA_20260601' },
-    );
-    await screen.findByText('No candidates logged yet');
-  });
-
-  it('adding a candidate POSTs the entered fields', async () => {
-    const { calls } = mockFetch([
-      jsonRoute('/api/me', superAdminMe),
-      jsonRoute('/api/hdis/TST_QA_20260601/activity', []),
-      jsonRoute('/api/hdis/TST_QA_20260601/candidates', []),
-      jsonRoute('/api/hdis/TST_QA_20260601', record),
-      jsonRoute('/api/hdis', [record]),
-      jsonRoute('/api/clients', clients),
-      jsonRoute('/api/consultants', consultants),
-      jsonRoute('/api/hdis/TST_QA_20260601/candidates', candidate, { method: 'POST' }),
-    ]);
-    renderApp(
-      <Routes>
-        <Route path="/hdis/:jdId" element={<HdisPage />} />
-      </Routes>,
-      { route: '/hdis/TST_QA_20260601' },
-    );
-    await screen.findByText('Candidates');
-    await userEvent.click(screen.getByText('+ Add candidate'));
-    const dialog = await screen.findByRole('dialog');
-    await userEvent.type(within(dialog).getByLabelText('Name *'), 'Priya Kumar');
-    await userEvent.type(within(dialog).getByLabelText('Tech stack'), 'Java');
-    await userEvent.clear(within(dialog).getByLabelText('Owner (recruiter) *'));
-    await userEvent.type(within(dialog).getByLabelText('Owner (recruiter) *'), 'Abha Sharma');
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Add candidate' }));
-
-    const posted = calls.find(
-      (c) => c.url.endsWith('/api/hdis/TST_QA_20260601/candidates') && c.method === 'POST',
-    );
-    expect(posted).toBeTruthy();
-    expect((posted!.body as { name: string }).name).toBe('Priya Kumar');
-    expect((posted!.body as { ownerName: string }).ownerName).toBe('Abha Sharma');
-  });
-
-  it('requires a drop reason before saving a candidate marked Dropped', async () => {
-    mockFetch([
-      jsonRoute('/api/me', superAdminMe),
-      jsonRoute('/api/hdis/TST_QA_20260601/activity', []),
-      jsonRoute('/api/hdis/TST_QA_20260601/candidates', []),
-      jsonRoute('/api/hdis/TST_QA_20260601', record),
-      jsonRoute('/api/hdis', [record]),
-      jsonRoute('/api/clients', clients),
-      jsonRoute('/api/consultants', consultants),
-    ]);
-    renderApp(
-      <Routes>
-        <Route path="/hdis/:jdId" element={<HdisPage />} />
-      </Routes>,
-      { route: '/hdis/TST_QA_20260601' },
-    );
-    await screen.findByText('Candidates');
-    await userEvent.click(screen.getByText('+ Add candidate'));
-    const dialog = await screen.findByRole('dialog');
-    await userEvent.type(within(dialog).getByLabelText('Name *'), 'Someone Else');
-    await userEvent.selectOptions(within(dialog).getByLabelText('Status'), 'Dropped');
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Add candidate' }));
-
-    expect(await screen.findByText('Add a reason for the drop')).toBeInTheDocument();
   });
 });

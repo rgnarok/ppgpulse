@@ -137,6 +137,11 @@ model Hdis {
   title        String
   client       String
   type         HdisType
+  /// Free-text technology tag (e.g. "Java", ".NET", "DevOps", "Data Engineering") —
+  /// captured once per requirement so the Performance Scorecard's tech-stack
+  /// expertise breakdown has something to group closures by. Optional and
+  /// back-fillable: older requirements won't have it until someone edits them.
+  techStack    String?
   openings     Int                    @default(1)
   status       String
   /// Free-text reason shown alongside "On Hold"/"Closed" statuses — e.g. "Hold By

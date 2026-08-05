@@ -592,24 +592,25 @@ export async function dhruvaDashboard(
 }
 
 // ---------------------------------------------------------------------------
-// Performance Scorecard — highlights the month's top performers across a set of
-// recruiting metrics, sourced entirely from HdisCandidate (the per-person tracking
-// grain HdisPipeline never had). See docs on scorecardDashboard() below for the exact
-// formulas and period-scoping rule.
+// Performance Scorecard — highlights the period's top performers across a set of
+// recruiting metrics. Sourced from Hdis + HdisPipeline (aggregate R0-R5 headcounts)
+// plus stage-entry events for aging, NOT from named per-candidate records — HDIS
+// doesn't track individual candidates, only per-requirement stage counts. See the
+// formula notes on scorecardDashboard() below for exactly what that means for each
+// metric and where the approximations are.
 // ---------------------------------------------------------------------------
 
 export type ScorecardFilters = PeriodInput;
 
-const STAGE_RANK: Record<string, number> = { R0: 0, R1: 1, R2: 2, R3: 3, R4: 4, R5: 5 };
+/** A requirement only counts toward dropout-rate / TAT once it's actually finished —
+ * while it's still Active/On Hold/Pending, an unfilled gap between R0 and R5 might
+ * still convert, so it isn't a "dropout" yet, and its aging hasn't ended yet either. */
+const SCORECARD_TERMINAL_STATUSES = new Set(['Closed', 'Fulfilled']);
 
-function daysBetween(fromIso: string, toIso: string): number {
-  return Math.round((new Date(toIso).getTime() - new Date(fromIso).getTime()) / 86_400_000);
-}
-
-/** Min-max normalize `value` to a 0-1 band against the full candidate set for this
+/** Min-max normalize `value` to a 0-1 band against the full requirement set for this
  * period — "best in period" always scores 1 regardless of the metric's absolute
- * scale, so the seven metrics below can be combined into one composite score. Returns
- * 0 for a null value or when every candidate has the same value (nothing to compare). */
+ * scale, so the metrics below can be combined into one composite score. Returns 0 for
+ * a null value or when every recruiter has the same value (nothing to compare). */
 function normalize(value: number | null, all: (number | null)[]): number {
   if (value == null) return 0;
   const finite = all.filter((v): v is number => v != null);
@@ -663,25 +664,40 @@ function topBy(
   return best;
 }
 
+function round1(n: number): number {
+  return Math.round(n * 10) / 10;
+}
+
 /**
- * Performance Scorecard — one row per recruiter (HdisCandidate.ownerName), scoped to
- * every candidate *submitted* within the resolved period (mirrors Dhruva's
- * reqDate-based period scoping: one consistent population per recruiter per period,
- * rather than mixing "submitted this period" with "closed this period" cohorts).
+ * Performance Scorecard — one row per recruiter (an HDIS requirement's owner), scoped
+ * to every requirement *raised* within the resolved period (reqDate — mirrors
+ * Dhruva's period scoping). Every metric is derived from each requirement's Pipeline
+ * (aggregate R0-R5 headcounts) rather than named candidates, since that's the only
+ * data HDIS actually tracks. A requirement with N co-owners has every one of its
+ * counts split evenly N ways — there's no way to know which owner sourced which
+ * portion of an aggregate count, so this is an even-split approximation, not a
+ * measurement. Requirements with no owners at all don't contribute to anyone.
  *
- * Metric definitions (all computed from that one candidate set per recruiter):
- *  - closureEfficiency = Joined / Submitted — "max closures with min profiles submitted"
- *  - l2Conversions / l3Conversions = candidates who reached stage R3 (L2) / R4 (L3) or beyond
- *  - dropoutRate = Dropped / (Joined + Dropped) — only counts candidates who finished
- *  - avgTatDays = mean(closedAt - submittedAt) across Joined candidates with a closedAt
- *  - interviewToOfferRatio = candidates with an offeredAt / candidates who reached L1 (R2+)
- *  - offerToJoinRatio = Joined / candidates with an offeredAt
+ * Metric definitions:
+ *  - profilesSubmitted = pipeline.r0 (profiles shared) share
+ *  - l2Conversions / l3Conversions = pipeline.r3 (L2) / r4 (L3) share
+ *  - closures = pipeline.r5 (Onboarded) share; closureEfficiency = closures / profilesSubmitted
+ *  - interviewToOfferRatio and offerToJoinRatio are PROXIES: Pipeline has no "Offer"
+ *    stage, so r4 (L3 reached) stands in for "offered" and r2 (L1 reached) stands in
+ *    for "interviewed". Read these as L1-to-L3 and L3-to-Onboarded conversion, not a
+ *    literal offer rate.
+ *  - dropoutRate = (r0 - r5) / r0, but ONLY computed from requirements that are
+ *    already Closed/Fulfilled — for a requirement still open, an r0-r5 gap might
+ *    still convert, so it isn't a dropout yet.
+ *  - avgTatDays = mean of each Closed/Fulfilled requirement's total R0->R5 aging (the
+ *    same aging.ts used on the HDIS detail page), one full value per owner — not
+ *    split by ownership share, since a duration isn't a count.
  *
  * The overall ranking is a composite of 7 of those metrics, each min-max normalized
- * to 0-1 within the period (see normalize()) and weighted: closure efficiency 20%,
- * L2/L3 conversions 15% each, interview-to-offer 15%, offer-to-join 15%, dropout rate
- * (inverted — lower is better) 10%, TAT (inverted — lower is better) 10%. Recruiters
- * with zero submitted profiles in the period aren't ranked.
+ * to 0-1 within the period and weighted: closure efficiency 20%, L2/L3 conversions
+ * 15% each, interview-to-offer 15%, offer-to-join 15%, dropout rate (inverted — lower
+ * is better) 10%, TAT (inverted — lower is better) 10%. Recruiters with zero
+ * submitted profiles in the period aren't ranked.
  */
 export async function scorecardDashboard(
   prisma: PrismaClient,
@@ -690,21 +706,21 @@ export async function scorecardDashboard(
 ) {
   const period = resolvePeriod(filters);
 
-  // Same org-vs-team visibility split every other org-wide dashboard in this module
-  // uses: org-scope roles see every candidate; anyone else only sees candidates
-  // attributed to a recruiter within their own team scope.
-  const candidates =
+  const requirements =
     user.role.scope === 'org'
-      ? await prisma.hdisCandidate.findMany()
+      ? await prisma.hdis.findMany({
+          include: { owners: true, pipeline: true, stageEvents: true },
+        })
       : await (async () => {
           const directory = await loadDirectory(prisma);
           const names = scopeNames(user, directory);
-          return prisma.hdisCandidate.findMany({
-            where: { ownerName: { in: [...names] } },
+          return prisma.hdis.findMany({
+            where: { owners: { some: { consultantOrName: { in: [...names] } } } },
+            include: { owners: true, pipeline: true, stageEvents: true },
           });
         })();
 
-  const periodCandidates = candidates.filter((c) => inPeriod(c.submittedAt, period));
+  const periodReqs = requirements.filter((r) => inPeriod(r.reqDate, period));
 
   interface Agg {
     ownerName: string;
@@ -713,10 +729,12 @@ export async function scorecardDashboard(
     l2Conversions: number;
     l3Conversions: number;
     offered: number;
-    joined: number;
+    closures: number;
+    finishedSubmitted: number;
+    finishedClosures: number;
     dropped: number;
     tatDays: number[];
-    techStack: Map<string, number>; // techStack -> Joined count
+    techStack: Map<string, number>; // techStack -> closures credited
   }
   const byOwner = new Map<string, Agg>();
   function agg(ownerName: string): Agg {
@@ -729,7 +747,9 @@ export async function scorecardDashboard(
         l2Conversions: 0,
         l3Conversions: 0,
         offered: 0,
-        joined: 0,
+        closures: 0,
+        finishedSubmitted: 0,
+        finishedClosures: 0,
         dropped: 0,
         tatDays: [],
         techStack: new Map(),
@@ -739,43 +759,57 @@ export async function scorecardDashboard(
     return a;
   }
 
-  for (const c of periodCandidates) {
-    const a = agg(c.ownerName);
-    a.profilesSubmitted++;
-    const rank = STAGE_RANK[c.stage] ?? 0;
-    if (rank >= 2) a.l1Reached++;
-    if (rank >= 3) a.l2Conversions++;
-    if (rank >= 4) a.l3Conversions++;
-    if (c.offeredAt) a.offered++;
-    if (c.status === 'Joined') {
-      a.joined++;
-      if (c.closedAt) a.tatDays.push(daysBetween(c.submittedAt, c.closedAt));
-      const tech = (c.techStack ?? '').trim() || 'Unspecified';
-      a.techStack.set(tech, (a.techStack.get(tech) ?? 0) + 1);
+  const now = new Date();
+  for (const r of periodReqs) {
+    const ownerNames = r.owners.map((o) => o.consultantOrName);
+    if (ownerNames.length === 0) continue;
+    const share = 1 / ownerNames.length;
+    const p = r.pipeline ?? { r0: 0, r1: 0, r2: 0, r3: 0, r4: 0, r5: 0 };
+    const terminal = SCORECARD_TERMINAL_STATUSES.has(r.status);
+
+    let tatDaysForReq: number | null = null;
+    if (terminal) {
+      tatDaysForReq = computeAging(r.reqDate, r.stageEvents, now, true).totalDays;
     }
-    if (c.status === 'Dropped') a.dropped++;
+
+    for (const ownerName of ownerNames) {
+      const a = agg(ownerName);
+      a.profilesSubmitted += p.r0 * share;
+      a.l1Reached += p.r2 * share;
+      a.l2Conversions += p.r3 * share;
+      a.l3Conversions += p.r4 * share;
+      a.offered += p.r4 * share; // proxy — see doc comment above
+      a.closures += p.r5 * share;
+      if (terminal) {
+        a.finishedSubmitted += p.r0 * share;
+        a.finishedClosures += p.r5 * share;
+        a.dropped += Math.max(0, p.r0 - p.r5) * share;
+      }
+      if (tatDaysForReq != null) a.tatDays.push(tatDaysForReq);
+      if (r.techStack && p.r5 > 0) {
+        const tech = r.techStack.trim();
+        if (tech) a.techStack.set(tech, (a.techStack.get(tech) ?? 0) + p.r5 * share);
+      }
+    }
   }
 
   const rows: ScorecardRow[] = [...byOwner.values()]
-    .map((a) => {
-      const finished = a.joined + a.dropped;
-      return {
-        ownerName: a.ownerName,
-        profilesSubmitted: a.profilesSubmitted,
-        closures: a.joined,
-        closureEfficiency: a.profilesSubmitted > 0 ? a.joined / a.profilesSubmitted : null,
-        l2Conversions: a.l2Conversions,
-        l3Conversions: a.l3Conversions,
-        dropped: a.dropped,
-        dropoutRate: finished > 0 ? a.dropped / finished : null,
-        avgTatDays: a.tatDays.length > 0 ? average(a.tatDays) : null,
-        offered: a.offered,
-        interviewToOfferRatio: a.l1Reached > 0 ? a.offered / a.l1Reached : null,
-        offerToJoinRatio: a.offered > 0 ? a.joined / a.offered : null,
-        score: null,
-        rank: null,
-      };
-    })
+    .map((a) => ({
+      ownerName: a.ownerName,
+      profilesSubmitted: round1(a.profilesSubmitted),
+      closures: round1(a.closures),
+      closureEfficiency: a.profilesSubmitted > 0 ? a.closures / a.profilesSubmitted : null,
+      l2Conversions: round1(a.l2Conversions),
+      l3Conversions: round1(a.l3Conversions),
+      dropped: round1(a.dropped),
+      dropoutRate: a.finishedSubmitted > 0 ? a.dropped / a.finishedSubmitted : null,
+      avgTatDays: a.tatDays.length > 0 ? average(a.tatDays) : null,
+      offered: round1(a.offered),
+      interviewToOfferRatio: a.l1Reached > 0 ? a.offered / a.l1Reached : null,
+      offerToJoinRatio: a.offered > 0 ? a.closures / a.offered : null,
+      score: null,
+      rank: null,
+    }))
     .sort((a, b) => a.ownerName.localeCompare(b.ownerName));
 
   const effValues = rows.map((r) => r.closureEfficiency);
@@ -841,14 +875,14 @@ export async function scorecardDashboard(
     ),
   };
 
-  // Tech-stack expertise — per stack, whoever has the most Joined candidates against
-  // it this period. Sourced only from Joined candidates: sourcing-but-not-closing a
-  // stack isn't "expertise" yet.
+  // Tech-stack expertise — per stack, whoever has the most credited closures against
+  // it this period (see the r.techStack requirement-level field). Only requirements
+  // with at least one onboard and a tech stack tag contribute.
   const stackAgg = new Map<string, Map<string, number>>();
   for (const a of byOwner.values()) {
     for (const [stack, count] of a.techStack) {
       const m = stackAgg.get(stack) ?? new Map<string, number>();
-      m.set(a.ownerName, count);
+      m.set(a.ownerName, (m.get(a.ownerName) ?? 0) + count);
       stackAgg.set(stack, m);
     }
   }
@@ -858,8 +892,8 @@ export async function scorecardDashboard(
       return {
         techStack,
         topOwnerName: top[0],
-        closures: top[1],
-        totalClosures: [...owners.values()].reduce((s, v) => s + v, 0),
+        closures: round1(top[1]),
+        totalClosures: round1([...owners.values()].reduce((s, v) => s + v, 0)),
       };
     })
     .sort((a, b) => b.totalClosures - a.totalClosures);
@@ -870,6 +904,9 @@ export async function scorecardDashboard(
     ranking,
     techStackExpertise,
     recruiterCount: rows.length,
-    candidateCount: periodCandidates.length,
+    // "Candidates" here means requirements contributing to the period, i.e. the
+    // denominator the empty-state check on the frontend uses — kept as the same
+    // field name/shape the frontend already expects.
+    candidateCount: periodReqs.filter((r) => r.owners.length > 0).length,
   };
 }

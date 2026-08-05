@@ -223,6 +223,9 @@ export interface HdisRecord {
   title: string;
   client: string;
   type: 'RADC' | 'RADF' | 'Internal';
+  /// Free-text technology tag (e.g. "Java", ".NET", "DevOps") — captured once per
+  /// requirement, used by the Performance Scorecard's tech-stack expertise breakdown.
+  techStack: string | null;
   openings: number;
   status: string;
   statusReason: string | null;

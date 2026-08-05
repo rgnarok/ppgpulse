@@ -90,6 +90,7 @@ export function toHdisDto(h: HdisDetail) {
     title: h.title,
     client: h.client,
     type: h.type,
+    techStack: h.techStack,
     openings: h.openings,
     status: h.status,
     statusReason: h.statusReason,
@@ -285,6 +286,7 @@ export async function createHdis(prisma: PrismaClient, actorId: string, input: C
         title: input.title,
         client: input.client,
         type: input.type as HdisType,
+        techStack: input.techStack ?? null,
         openings: input.openings,
         // Every requirement is born "Pending" — it can only move to "Active" once its
         // questionnaire (HdisRequirementDetail) is complete. See updateHdis() below.
@@ -337,6 +339,7 @@ export async function updateHdis(
     'title',
     'client',
     'type',
+    'techStack',
     'openings',
     'status',
     'statusReason',

@@ -313,8 +313,9 @@ export default function ScorecardPage() {
       {isLoading || !data ? (
         <Card>Loading…</Card>
       ) : data.candidateCount === 0 ? (
-        <Empty title="No candidates tracked in this period" icon="★">
-          Add candidates on HDIS requirement pages to start populating the scorecard.
+        <Empty title="No requirements in this period yet" icon="★">
+          Raise HDIS requirements with owners and log Pipeline activity (add a Tech Stack tag too,
+          for the expertise breakdown) to start populating the scorecard.
         </Empty>
       ) : (
         <>

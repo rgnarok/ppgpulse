@@ -17,15 +17,11 @@ import {
   useApiMutation,
   useSetHdisLink,
   useSaveRequirementDetail,
-  useCandidates,
-  useCreateCandidate,
-  useUpdateCandidate,
-  useDeleteCandidate,
 } from '../lib/hooks';
 import { formatDate, formatMonth, formatDateTime, todayISO } from '../lib/format';
 import { fyOfMonth, fyLabel, fyMonths, fiscalYearsFor, currentFy, currentMonth } from '../lib/fy';
 import { DEFAULT_PAGE_SIZE } from '../lib/pagination';
-import type { Candidate, HdisRecord, RequirementDetail } from '../lib/types';
+import type { HdisRecord, RequirementDetail } from '../lib/types';
 
 const TYPE_OPTIONS = ['RADC', 'RADF', 'Internal'];
 const STATUS_OPTIONS = ['Pending', 'Active', 'On Hold', 'Fulfilled', 'Closed'];
@@ -533,6 +529,7 @@ function HdisFormModal({
     title: initial?.title ?? '',
     client: initial?.client ?? '',
     type: initial?.type ?? 'RADC',
+    techStack: initial?.techStack ?? '',
     priority: initial?.priority ?? 'NA',
     status: initial?.status ?? 'Active',
     statusReason: initial?.statusReason ?? '',
@@ -570,6 +567,7 @@ function HdisFormModal({
           title: form.title,
           client: form.client,
           type: form.type,
+          techStack: form.techStack.trim() || null,
           priority: form.priority,
           status: form.status,
           statusReason: form.statusReason || null,
@@ -592,6 +590,7 @@ function HdisFormModal({
     create.mutate(
       {
         ...createFields,
+        techStack: form.techStack.trim() || null,
         remarks: form.remarks.trim() || null,
         jdLink: form.jdLink || null,
         openings,
@@ -664,6 +663,15 @@ function HdisFormModal({
                 <option key={t}>{t}</option>
               ))}
             </select>
+          </div>
+          <div className="field">
+            <label htmlFor="hdis-form-techstack">Tech stack</label>
+            <input
+              id="hdis-form-techstack"
+              value={form.techStack}
+              onChange={(e) => set('techStack', e.target.value)}
+              placeholder="e.g. Java, .NET, DevOps"
+            />
           </div>
           {mode === 'edit' && (
             <div className="field">
@@ -1266,6 +1274,10 @@ function HdisDetail({ jdId }: { jdId: string }) {
             <div className="dv">{priorityLabel(rec.priority)}</div>
           </div>
           <div className="db-item">
+            <div className="dl">Tech stack</div>
+            <div className="dv">{rec.techStack || '—'}</div>
+          </div>
+          <div className="db-item">
             <div className="dl">Positions</div>
             <div className="dv">{rec.openings}</div>
           </div>
@@ -1323,8 +1335,6 @@ function HdisDetail({ jdId }: { jdId: string }) {
       <div style={{ marginBottom: 24 }}>
         <Attachments rec={rec} editable={editable} />
       </div>
-
-      <CandidatesCard rec={rec} editable={editable} />
 
       <div className="grid g-58">
         {editable ? (
@@ -1483,336 +1493,6 @@ function Attachments({ rec, editable }: { rec: HdisRecord; editable: boolean }) 
         ) : null}
       </div>
     </Card>
-  );
-}
-
-const CANDIDATE_STAGES = ['R0', 'R1', 'R2', 'R3', 'R4', 'R5'] as const;
-const CANDIDATE_STAGE_LABELS: Record<string, string> = {
-  R0: 'R0 · Sourcing',
-  R1: 'R1 · Shortlist',
-  R2: 'R2 · L1',
-  R3: 'R3 · L2',
-  R4: 'R4 · L3',
-  R5: 'R5 · Onboarded',
-};
-const CANDIDATE_STATUSES = ['Active', 'Offered', 'Joined', 'Dropped'] as const;
-const CANDIDATE_STATUS_TONE: Record<string, string> = {
-  Active: 'p-blue',
-  Offered: 'p-amber',
-  Joined: 'p-green',
-  Dropped: 'p-red',
-};
-
-/** Named candidates submitted against this requirement — the granular data behind the
- * (future) Performance Scorecard: closures, L2/L3 conversion, TAT, dropout rate,
- * tech-stack expertise, interview->offer / offer->joining ratios. Distinct from the
- * Pipeline card above, which only tracks aggregate R0-R5 headcounts with no notion of
- * who each person is. */
-function CandidatesCard({ rec, editable }: { rec: HdisRecord; editable: boolean }) {
-  const { data: candidates = [], isLoading } = useCandidates(rec.jdId);
-  const [adding, setAdding] = useState(false);
-  const [editingCandidate, setEditingCandidate] = useState<Candidate | null>(null);
-  const remove = useDeleteCandidate(rec.jdId);
-
-  function removeCandidate(c: Candidate) {
-    if (!window.confirm(`Remove candidate "${c.name}" from this requirement?`)) return;
-    remove.mutate(c.id);
-  }
-
-  return (
-    <div style={{ marginBottom: 24 }}>
-      <Card pad={false}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '16px 16px 0',
-          }}
-        >
-          <SectionTitle color="var(--violet)">Candidates</SectionTitle>
-          {editable && (
-            <Btn small onClick={() => setAdding(true)}>
-              + Add candidate
-            </Btn>
-          )}
-        </div>
-        <div style={{ padding: 16 }}>
-          {isLoading ? (
-            <p className="muted">Loading…</p>
-          ) : candidates.length === 0 ? (
-            <Empty title="No candidates logged yet" icon="🧑‍💼">
-              Add named candidates as they're submitted — this powers per-recruiter performance
-              metrics like closures, L2/L3 conversion, and dropout rate.
-            </Empty>
-          ) : (
-            <div className="tbl-wrap">
-              <table className="tbl hover plain">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Tech stack</th>
-                    <th>Owner</th>
-                    <th>Stage</th>
-                    <th>Status</th>
-                    <th>Submitted</th>
-                    <th>Closed</th>
-                    {editable && <th />}
-                  </tr>
-                </thead>
-                <tbody>
-                  {candidates.map((c) => (
-                    <tr key={c.id}>
-                      <td>{c.name}</td>
-                      <td className="muted">{c.techStack || '—'}</td>
-                      <td>{c.ownerName}</td>
-                      <td>{CANDIDATE_STAGE_LABELS[c.stage] ?? c.stage}</td>
-                      <td>
-                        <span className={`pill ${CANDIDATE_STATUS_TONE[c.status] ?? ''}`}>
-                          {c.status}
-                        </span>
-                        {c.status === 'Dropped' && c.dropReason && (
-                          <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-                            {c.dropReason}
-                          </div>
-                        )}
-                      </td>
-                      <td className="muted">{formatDate(c.submittedAt)}</td>
-                      <td className="muted">{c.closedAt ? formatDate(c.closedAt) : '—'}</td>
-                      {editable && (
-                        <td>
-                          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                            <button
-                              type="button"
-                              className="lnk"
-                              onClick={() => setEditingCandidate(c)}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              className="lnk"
-                              style={{ color: 'var(--danger, #c0392b)' }}
-                              onClick={() => removeCandidate(c)}
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </Card>
-      {adding && <CandidateFormModal rec={rec} mode="create" onClose={() => setAdding(false)} />}
-      {editingCandidate && (
-        <CandidateFormModal
-          rec={rec}
-          mode="edit"
-          initial={editingCandidate}
-          onClose={() => setEditingCandidate(null)}
-        />
-      )}
-    </div>
-  );
-}
-
-interface CandidateFormState {
-  name: string;
-  techStack: string;
-  ownerName: string;
-  stage: string;
-  status: string;
-  dropReason: string;
-  submittedAt: string;
-  offeredAt: string;
-  closedAt: string;
-}
-
-function candidateToForm(rec: HdisRecord, initial?: Candidate): CandidateFormState {
-  return {
-    name: initial?.name ?? '',
-    techStack: initial?.techStack ?? '',
-    ownerName: initial?.ownerName ?? rec.owners[0] ?? '',
-    stage: initial?.stage ?? 'R0',
-    status: initial?.status ?? 'Active',
-    dropReason: initial?.dropReason ?? '',
-    submittedAt: initial?.submittedAt ?? todayISO(),
-    offeredAt: initial?.offeredAt ?? '',
-    closedAt: initial?.closedAt ?? '',
-  };
-}
-
-function CandidateFormModal({
-  rec,
-  mode,
-  initial,
-  onClose,
-}: {
-  rec: HdisRecord;
-  mode: 'create' | 'edit';
-  initial?: Candidate;
-  onClose: () => void;
-}) {
-  const [form, setForm] = useState<CandidateFormState>(() => candidateToForm(rec, initial));
-  const [error, setError] = useState<string | null>(null);
-  const create = useCreateCandidate(rec.jdId);
-  const update = useUpdateCandidate(rec.jdId);
-  const pending = create.isPending || update.isPending;
-
-  function set<K extends keyof CandidateFormState>(k: K, v: string) {
-    setForm((f) => ({ ...f, [k]: v }));
-  }
-
-  function submit() {
-    if (!form.name.trim() || !form.ownerName.trim() || !form.submittedAt) return;
-    if (form.status === 'Dropped' && !form.dropReason.trim()) {
-      setError('Add a reason for the drop');
-      return;
-    }
-    setError(null);
-    const payload = {
-      name: form.name.trim(),
-      techStack: form.techStack.trim() || null,
-      ownerName: form.ownerName.trim(),
-      stage: form.stage,
-      status: form.status,
-      dropReason: form.status === 'Dropped' ? form.dropReason.trim() : null,
-      submittedAt: form.submittedAt,
-      offeredAt: form.offeredAt || null,
-      closedAt: form.closedAt || null,
-    };
-    const onErr = (err: unknown) =>
-      setError(err instanceof Error ? err.message : 'Could not save this candidate');
-    if (mode === 'create') {
-      create.mutate(payload, { onSuccess: onClose, onError: onErr });
-    } else if (initial) {
-      update.mutate({ id: initial.id, ...payload }, { onSuccess: onClose, onError: onErr });
-    }
-  }
-
-  return (
-    <div role="dialog" onClick={onClose} style={overlay}>
-      <div
-        className="card pad"
-        style={{ width: 560, maxWidth: '100%' }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <SectionTitle>{mode === 'create' ? 'Add candidate' : 'Edit candidate'}</SectionTitle>
-        <div className="form-grid" style={{ marginTop: 14 }}>
-          <div className="field">
-            <label htmlFor="cand-name">Name *</label>
-            <input id="cand-name" value={form.name} onChange={(e) => set('name', e.target.value)} />
-          </div>
-          <div className="field">
-            <label htmlFor="cand-tech">Tech stack</label>
-            <input
-              id="cand-tech"
-              value={form.techStack}
-              onChange={(e) => set('techStack', e.target.value)}
-              placeholder="Java, .NET, DevOps…"
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="cand-owner">Owner (recruiter) *</label>
-            <input
-              id="cand-owner"
-              list="cand-owner-options"
-              value={form.ownerName}
-              onChange={(e) => set('ownerName', e.target.value)}
-            />
-            <datalist id="cand-owner-options">
-              {rec.owners.map((o) => (
-                <option key={o} value={o} />
-              ))}
-            </datalist>
-          </div>
-          <div className="field">
-            <label htmlFor="cand-stage">Stage</label>
-            <select
-              id="cand-stage"
-              value={form.stage}
-              onChange={(e) => set('stage', e.target.value)}
-            >
-              {CANDIDATE_STAGES.map((s) => (
-                <option key={s} value={s}>
-                  {CANDIDATE_STAGE_LABELS[s]}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="cand-status">Status</label>
-            <select
-              id="cand-status"
-              value={form.status}
-              onChange={(e) => set('status', e.target.value)}
-            >
-              {CANDIDATE_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="cand-submitted">Submitted *</label>
-            <input
-              id="cand-submitted"
-              type="date"
-              value={form.submittedAt}
-              onChange={(e) => set('submittedAt', e.target.value)}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="cand-offered">Offered</label>
-            <input
-              id="cand-offered"
-              type="date"
-              value={form.offeredAt}
-              onChange={(e) => set('offeredAt', e.target.value)}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="cand-closed">Closed (joined/dropped)</label>
-            <input
-              id="cand-closed"
-              type="date"
-              value={form.closedAt}
-              onChange={(e) => set('closedAt', e.target.value)}
-            />
-          </div>
-          {form.status === 'Dropped' && (
-            <div className="field full">
-              <label htmlFor="cand-drop-reason">Drop reason *</label>
-              <input
-                id="cand-drop-reason"
-                value={form.dropReason}
-                onChange={(e) => set('dropReason', e.target.value)}
-                placeholder="e.g. Candidate accepted another offer"
-              />
-            </div>
-          )}
-        </div>
-        {error && (
-          <div className="pill p-red" style={{ marginTop: 12, display: 'inline-block' }}>
-            {error}
-          </div>
-        )}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
-          <Btn variant="gho" onClick={onClose}>
-            Cancel
-          </Btn>
-          <Btn onClick={submit} disabled={pending}>
-            {mode === 'create' ? 'Add candidate' : 'Save changes'}
-          </Btn>
-        </div>
-      </div>
-    </div>
   );
 }
 

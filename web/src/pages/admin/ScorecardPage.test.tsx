@@ -121,6 +121,6 @@ describe('Performance Scorecard', () => {
       { route: '/admin/scorecard' },
     );
 
-    expect(await screen.findByText('No candidates tracked in this period')).toBeInTheDocument();
+    expect(await screen.findByText('No requirements in this period yet')).toBeInTheDocument();
   });
 });
