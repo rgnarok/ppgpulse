@@ -9,6 +9,8 @@ import {
   pipelineSchema,
   linkSchema,
   requirementDetailSchema,
+  createCandidateSchema,
+  updateCandidateSchema,
 } from './schema.js';
 import {
   listHdis,
@@ -24,6 +26,10 @@ import {
   getAttachment,
   listActivity,
   saveRequirementDetail,
+  listCandidates,
+  createCandidate,
+  updateCandidate,
+  deleteCandidate,
 } from './service.js';
 
 export default async function hdisRoutes(app: FastifyInstance) {
@@ -168,6 +174,65 @@ export default async function hdisRoutes(app: FastifyInstance) {
       await assertCanEditHdisRecord(app.prisma, request.currentUser, request.params.jdId);
       const input = requirementDetailSchema.parse(request.body);
       return saveRequirementDetail(app.prisma, request.currentUser.id, request.params.jdId, input);
+    },
+  );
+
+  // Named candidates submitted against a requirement — the data the (future)
+  // Performance Scorecard reads from. Same view/edit rights as the record itself.
+  app.get<{ Params: { jdId: string } }>(
+    '/hdis/:jdId/candidates',
+    { preHandler: app.authenticate },
+    async (request) => {
+      assertCan(request.currentUser, 'hdis', 'view');
+      await getHdisForUser(app.prisma, request.currentUser, request.params.jdId);
+      return listCandidates(app.prisma, request.params.jdId);
+    },
+  );
+
+  app.post<{ Params: { jdId: string } }>(
+    '/hdis/:jdId/candidates',
+    { preHandler: app.authenticate },
+    async (request, reply) => {
+      await assertCanEditHdisRecord(app.prisma, request.currentUser, request.params.jdId);
+      const input = createCandidateSchema.parse(request.body);
+      const created = await createCandidate(
+        app.prisma,
+        request.currentUser.id,
+        request.params.jdId,
+        input,
+      );
+      return reply.status(201).send(created);
+    },
+  );
+
+  app.patch<{ Params: { jdId: string; candidateId: string } }>(
+    '/hdis/:jdId/candidates/:candidateId',
+    { preHandler: app.authenticate },
+    async (request) => {
+      await assertCanEditHdisRecord(app.prisma, request.currentUser, request.params.jdId);
+      const input = updateCandidateSchema.parse(request.body);
+      return updateCandidate(
+        app.prisma,
+        request.currentUser.id,
+        request.params.jdId,
+        request.params.candidateId,
+        input,
+      );
+    },
+  );
+
+  app.delete<{ Params: { jdId: string; candidateId: string } }>(
+    '/hdis/:jdId/candidates/:candidateId',
+    { preHandler: app.authenticate },
+    async (request, reply) => {
+      await assertCanEditHdisRecord(app.prisma, request.currentUser, request.params.jdId);
+      await deleteCandidate(
+        app.prisma,
+        request.currentUser.id,
+        request.params.jdId,
+        request.params.candidateId,
+      );
+      return reply.status(204).send();
     },
   );
 

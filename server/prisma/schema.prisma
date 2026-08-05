@@ -50,24 +50,24 @@ model RolePermission {
 }
 
 model User {
-  id           String         @id @default(cuid())
-  name         String
-  email        String         @unique
-  passwordHash String
-  roleId       String
-  team         String
-  managerId    String?
-  isActive     Boolean        @default(true)
-  createdAt    DateTime       @default(now())
-  role         Role           @relation(fields: [roleId], references: [id])
-  manager      User?          @relation("Reports", fields: [managerId], references: [id])
-  reports      User[]         @relation("Reports")
-  overrides    UserOverride[]
-  consultant   Consultant?
-  hdisActivity HdisActivity[]
-  interviews   Interview[]
+  id            String         @id @default(cuid())
+  name          String
+  email         String         @unique
+  passwordHash  String
+  roleId        String
+  team          String
+  managerId     String?
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  role          Role           @relation(fields: [roleId], references: [id])
+  manager       User?          @relation("Reports", fields: [managerId], references: [id])
+  reports       User[]         @relation("Reports")
+  overrides     UserOverride[]
+  consultant    Consultant?
+  hdisActivity  HdisActivity[]
+  interviews    Interview[]
   refreshTokens RefreshToken[]
-  auditLogs    AuditLog[]
+  auditLogs     AuditLog[]
 
   @@index([email])
   @@index([managerId])
@@ -97,16 +97,16 @@ model UserOverride {
 }
 
 model Consultant {
-  id                  String        @id @default(cuid())
-  userId              String        @unique
-  pod                 String
-  eventsHosted        Int           @default(0)
-  eventsParticipated  Int           @default(0)
-  insights            Int           @default(0)
-  user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  requirements        Requirement[]
-  kpiTargets          KpiConsultantTarget[]
-  logs                ConsultantLog[]
+  id                 String                @id @default(cuid())
+  userId             String                @unique
+  pod                String
+  eventsHosted       Int                   @default(0)
+  eventsParticipated Int                   @default(0)
+  insights           Int                   @default(0)
+  user               User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requirements       Requirement[]
+  kpiTargets         KpiConsultantTarget[]
+  logs               ConsultantLog[]
 }
 
 model Requirement {
@@ -133,23 +133,23 @@ model Requirement {
 }
 
 model Hdis {
-  jdId         String           @id
+  jdId         String                 @id
   title        String
   client       String
   type         HdisType
-  openings     Int              @default(1)
+  openings     Int                    @default(1)
   status       String
   /// Free-text reason shown alongside "On Hold"/"Closed" statuses — e.g. "Hold By
   /// client", "Closed by VAYUZ". Not meaningful while status is "Active".
   statusReason String?
   /// Optional freeform note captured with the status, shown on the record detail page.
   remarks      String?
-  priority     String           @default("NA")
-  confidence   String           @default("Medium")
+  priority     String                 @default("NA")
+  confidence   String                 @default("Medium")
   reqDate      String // ISO YYYY-MM-DD
   jdLink       String?
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
   owners       HdisOwner[]
   pipeline     HdisPipeline?
   attachments  HdisAttachment[]
@@ -157,6 +157,7 @@ model Hdis {
   requirements Requirement[]
   stageEvents  HdisStageEvent[]
   detail       HdisRequirementDetail?
+  candidates   HdisCandidate[]
 
   @@index([reqDate])
   @@index([status])
@@ -172,12 +173,12 @@ model HdisRequirementDetail {
   hdis Hdis   @relation(fields: [jdId], references: [jdId], onDelete: Cascade)
 
   // Requirement overview
-  bigMemberName          String?
-  requirementsReceived   Int?
-  requirementName        String?
-  engagementType         String?
-  clientType             String?
-  roleBackground         String?
+  bigMemberName        String?
+  requirementsReceived Int?
+  requirementName      String?
+  engagementType       String?
+  clientType           String?
+  roleBackground       String?
 
   // Timeline & openings
   positionOpenDuration      String?
@@ -188,20 +189,20 @@ model HdisRequirementDetail {
 
   // Client's internal hiring effort
   clientAttemptedInternalHiring Boolean?
-  internalHiringDuration         String?
-  internalHiringChannels         String?
-  internalHiringStageReached     String?
-  internalHiringChallenges       String?
-  ctcBlockerGap                  String?
-  maxNoticePeriod                String?
-  targetCompaniesSuggested       String?
+  internalHiringDuration        String?
+  internalHiringChannels        String?
+  internalHiringStageReached    String?
+  internalHiringChallenges      String?
+  ctcBlockerGap                 String?
+  maxNoticePeriod               String?
+  targetCompaniesSuggested      String?
 
   // Vendor & market info
-  vayuzExclusive             Boolean?
-  vendorCount                String?
-  vendorsSharingProfiles     String?
-  vendorSubmissionDuration   String?
-  duplicateProfileTimeline   String?
+  vayuzExclusive           Boolean?
+  vendorCount              String?
+  vendorsSharingProfiles   String?
+  vendorSubmissionDuration String?
+  duplicateProfileTimeline String?
 
   // Commercial & closure
   commercialRates    String?
@@ -213,6 +214,40 @@ model HdisRequirementDetail {
 
   isComplete Boolean  @default(false)
   updatedAt  DateTime @updatedAt
+}
+
+/// Named candidates submitted against a requirement — the granular data the
+/// Performance Scorecard (recruiter closures, L2/L3 conversion, TAT, dropout rate,
+/// tech-stack expertise, interview->offer / offer->joining ratios) reads from. This is
+/// distinct from HdisPipeline, which only tracks aggregate R0-R5 headcounts per
+/// requirement with no notion of who each person is or who submitted them.
+model HdisCandidate {
+  id          String   @id @default(cuid())
+  jdId        String
+  hdis        Hdis     @relation(fields: [jdId], references: [jdId], onDelete: Cascade)
+  name        String
+  techStack   String?
+  /// The recruiter this candidate is attributed to — free text, matching
+  /// HdisOwner.consultantOrName the same way the rest of HDIS attributes work.
+  ownerName   String
+  /// Highest pipeline stage this candidate has reached: 'R0'..'R5' (mirrors the
+  /// existing HdisPipeline stage labels — R5 == Onboarded/Joined).
+  stage       String   @default("R0")
+  /// 'Active' | 'Offered' | 'Joined' | 'Dropped' — independent of `stage` because a
+  /// candidate can be dropped/rejected at any stage, and an offer can be extended
+  /// before the candidate is marked Onboarded (R5).
+  status      String   @default("Active")
+  dropReason  String?
+  submittedAt String // ISO YYYY-MM-DD — when this candidate was sourced/submitted
+  offeredAt   String? // ISO YYYY-MM-DD
+  /// ISO YYYY-MM-DD — set when status becomes Joined or Dropped; the end of the
+  /// candidate's turnaround-time window (closedAt - submittedAt = TAT).
+  closedAt    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([jdId])
+  @@index([ownerName])
 }
 
 /// Client master list — grown organically as HDIS records are created/edited with a new
@@ -312,28 +347,28 @@ model AuditLog {
 /// profile-submission speed, HDIS discipline, etc). Super-admin managed; consultants
 /// are measured against these but don't edit them.
 model Kpi {
-  id             String   @id @default(cuid())
+  id            String                @id @default(cuid())
   /// Display order / sheet row number — not a database identity, just the "KPI_no"
   /// column from the source scorecard so the table can be sorted the way HR expects.
-  kpiNo          Int      @unique
-  symbol         String // short emoji/glyph shown next to the title
-  title          String
-  target         String // free text — thresholds vary in shape ("≥ 5 / day", "0", "100%")
-  description    String
+  kpiNo         Int                   @unique
+  symbol        String // short emoji/glyph shown next to the title
+  title         String
+  target        String // free text — thresholds vary in shape ("≥ 5 / day", "0", "100%")
+  description   String
   /// 'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Incidental' — kept as free text
   /// (validated at the API layer) rather than a DB enum so new cadences don't need a migration.
-  periodicity    String
-  whyItMatters   String?
+  periodicity   String
+  whyItMatters  String?
   /// Links this KPI to a computed data source instead of manual entry, e.g.
   /// 'interviews_per_day' (counted live from the Interview table). Null for KPIs
   /// that aren't wired to an automated metric yet.
-  trackedMetric  String?
+  trackedMetric String?
   /// Default per-consultant daily target for the tracked metric (e.g. 4 interviews/day).
   /// Individual consultants can override this via KpiConsultantTarget.
-  numericTarget  Int?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  targets        KpiConsultantTarget[]
+  numericTarget Int?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  targets       KpiConsultantTarget[]
 
   @@index([kpiNo])
 }
@@ -374,28 +409,28 @@ model ConsultantLog {
 }
 
 model Interview {
-  id             String           @id @default(cuid())
-  date           String // ISO YYYY-MM-DD
-  session        InterviewSession
-  time           String?
+  id              String           @id @default(cuid())
+  date            String // ISO YYYY-MM-DD
+  session         InterviewSession
+  time            String?
   /// "RAPYD(F)" | "RAPYD(C)" | "Internal" — free text to match the HDIS Type picker
   /// without forcing a hard enum dependency between the two modules.
-  type           String?
-  candidate      String
-  candidateEmail String?
-  ref            String? // interview update code, e.g. 2026090701
-  round          String? // L0–L5
-  client         String? // client name, from the Client master list
-  profile        String? // role/position the candidate interviewed for — sourced from an HDIS record's title
-  interviewer    String? // "With" — the interviewer's name
-  requirementRef String? // the HDIS jdId this interview's Profile was picked from
+  type            String?
+  candidate       String
+  candidateEmail  String?
+  ref             String? // interview update code, e.g. 2026090701
+  round           String? // L0–L5
+  client          String? // client name, from the Client master list
+  profile         String? // role/position the candidate interviewed for — sourced from an HDIS record's title
+  interviewer     String? // "With" — the interviewer's name
+  requirementRef  String? // the HDIS jdId this interview's Profile was picked from
   ppgConsultantId String? // "Sourcing" — the PPG consultant running it
-  stage          String?
-  status         String?
-  notes          String?
-  createdBy      String
-  createdAt      DateTime         @default(now())
-  creator        User             @relation(fields: [createdBy], references: [id])
+  stage           String?
+  status          String?
+  notes           String?
+  createdBy       String
+  createdAt       DateTime         @default(now())
+  creator         User             @relation(fields: [createdBy], references: [id])
 
   @@index([date])
 }

@@ -55,8 +55,14 @@ export function getStorage(): StorageService {
   return instance;
 }
 
+// PDF/Word for JD documents, plus common image types — the requirement questionnaire's
+// "Screenshot Attachment (Requirement Receiving Email from Client)" question is satisfied
+// by uploading a screenshot here, so images have to be accepted too.
 export const ALLOWED_UPLOAD_MIME = new Set([
   'application/pdf',
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
 ]);

@@ -96,7 +96,40 @@ export const requirementDetailSchema = z.object({
   atsUsed: z.string().min(1).nullable().optional(),
 });
 
+export const candidateStageEnum = z.enum(['R0', 'R1', 'R2', 'R3', 'R4', 'R5']);
+export const candidateStatusEnum = z.enum(['Active', 'Offered', 'Joined', 'Dropped']);
+
+const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+export const createCandidateSchema = z.object({
+  name: z.string().min(1),
+  techStack: z.string().min(1).nullable().optional(),
+  ownerName: z.string().min(1),
+  stage: candidateStageEnum.default('R0'),
+  status: candidateStatusEnum.default('Active'),
+  dropReason: z.string().min(1).nullable().optional(),
+  submittedAt: dateStr,
+  offeredAt: dateStr.nullable().optional(),
+  closedAt: dateStr.nullable().optional(),
+});
+
+export const updateCandidateSchema = z
+  .object({
+    name: z.string().min(1).optional(),
+    techStack: z.string().min(1).nullable().optional(),
+    ownerName: z.string().min(1).optional(),
+    stage: candidateStageEnum.optional(),
+    status: candidateStatusEnum.optional(),
+    dropReason: z.string().min(1).nullable().optional(),
+    submittedAt: dateStr.optional(),
+    offeredAt: dateStr.nullable().optional(),
+    closedAt: dateStr.nullable().optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, { message: 'No fields to update' });
+
 export type CreateHdisInput = z.infer<typeof createHdisSchema>;
 export type UpdateHdisInput = z.infer<typeof updateHdisSchema>;
 export type PipelineInput = z.infer<typeof pipelineSchema>;
 export type RequirementDetailInput = z.infer<typeof requirementDetailSchema>;
+export type CreateCandidateInput = z.infer<typeof createCandidateSchema>;
+export type UpdateCandidateInput = z.infer<typeof updateCandidateSchema>;

@@ -54,16 +54,87 @@ const completeDetail = {
 };
 
 describe('T5.1 HDIS list + CRUD', () => {
-  it('lists HDIS by month', async () => {
+  it('lists HDIS by month, carrying forward any still-open requirement from earlier months', async () => {
     const res = await app.inject({
       method: 'GET',
       url: '/api/hdis?month=2026-05',
       headers: auth(adminToken),
     });
     expect(res.statusCode).toBe(200);
-    const rows = res.json();
+    const rows = res.json() as { reqDate: string; status: string }[];
     expect(rows.length).toBeGreaterThan(0);
-    expect(rows.every((r: { reqDate: string }) => r.reqDate.startsWith('2026-05'))).toBe(true);
+    expect(rows.some((r) => r.reqDate.startsWith('2026-05'))).toBe(true);
+    // Anything outside the selected month only belongs here because it's still open —
+    // never a Fulfilled/Closed record from a prior month.
+    for (const r of rows) {
+      if (!r.reqDate.startsWith('2026-05')) {
+        expect(r.reqDate < '2026-05-01').toBe(true);
+        expect(['Fulfilled', 'Closed']).not.toContain(r.status);
+      }
+    }
+  });
+
+  it('does not carry a Fulfilled/Closed requirement forward into a later month filter', async () => {
+    const jdId = 'TST_CARRYFWD_20260301';
+    await app.inject({
+      method: 'POST',
+      url: '/api/hdis',
+      headers: auth(adminToken),
+      payload: { ...sampleJd, jdId, reqDate: '2026-03-01' },
+    });
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/hdis/${jdId}`,
+      headers: auth(adminToken),
+      payload: { status: 'Closed', statusReason: 'Cancelled by client' },
+    });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/hdis?month=2026-05',
+      headers: auth(adminToken),
+    });
+    const rows = res.json() as { jdId: string }[];
+    expect(rows.some((r) => r.jdId === jdId)).toBe(false);
+  });
+
+  it('carries an Active requirement from an earlier month into the current month filter', async () => {
+    const jdId = 'TST_CARRYFWD_20260302';
+    await app.inject({
+      method: 'POST',
+      url: '/api/hdis',
+      headers: auth(adminToken),
+      payload: { ...sampleJd, jdId, reqDate: '2026-03-02' },
+    });
+    await app.inject({
+      method: 'PUT',
+      url: `/api/hdis/${jdId}/details`,
+      headers: auth(adminToken),
+      payload: completeDetail,
+    });
+    const { body: fileBody, headers: fileHeaders } = multipart(
+      'req-email.png',
+      'image/png',
+      'fake-screenshot-bytes',
+    );
+    await app.inject({
+      method: 'POST',
+      url: `/api/hdis/${jdId}/attachments`,
+      headers: { ...auth(adminToken), ...fileHeaders },
+      payload: fileBody,
+    });
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/hdis/${jdId}`,
+      headers: auth(adminToken),
+      payload: { status: 'Active' },
+    });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/hdis?month=2026-05',
+      headers: auth(adminToken),
+    });
+    const rows = res.json() as { jdId: string }[];
+    expect(rows.some((r) => r.jdId === jdId)).toBe(true);
   });
 
   it('a consultant cannot create (403)', async () => {
@@ -189,6 +260,18 @@ describe('T5.4 JD link + attachments', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it("accepts a PNG screenshot — needed for the requirement questionnaire's email screenshot", async () => {
+    const mp = multipart('req-email.png', 'image/png', 'fake-png-bytes');
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/hdis/${sampleJd.jdId}/attachments`,
+      headers: { ...auth(adminToken), ...mp.headers },
+      payload: mp.body,
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().fileName).toBe('req-email.png');
+  });
+
   it('uploads a PDF and downloads it back (roundtrip)', async () => {
     const mp = multipart('jd.pdf', 'application/pdf', '%PDF-1.4 fake content');
     const up = await app.inject({
@@ -304,6 +387,97 @@ describe('T5.5 Pending status + requirement questionnaire', () => {
     expect(activateRes.statusCode).toBe(200);
     expect(activateRes.json().status).toBe('Active');
     expect(activateRes.json().detailsComplete).toBe(true);
+  });
+});
+
+describe('T5.6 Candidates', () => {
+  const jdId = sampleJd.jdId;
+  let candidateId: string;
+
+  it('a consultant (owner) can add a candidate', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/hdis/${jdId}/candidates`,
+      headers: auth(consultantToken),
+      payload: {
+        name: 'Priya Kumar',
+        techStack: 'Java',
+        ownerName: 'Abha Sharma',
+        stage: 'R1',
+        submittedAt: '2026-06-05',
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    const body = res.json();
+    expect(body.name).toBe('Priya Kumar');
+    expect(body.status).toBe('Active');
+    candidateId = body.id;
+  });
+
+  it('lists candidates for a requirement', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/hdis/${jdId}/candidates`,
+      headers: auth(adminToken),
+    });
+    expect(res.statusCode).toBe(200);
+    const rows = res.json();
+    expect(rows.some((c: { id: string }) => c.id === candidateId)).toBe(true);
+  });
+
+  it('marking a candidate Dropped without a reason is rejected (400)', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/hdis/${jdId}/candidates/${candidateId}`,
+      headers: auth(adminToken),
+      payload: { status: 'Dropped' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('drop_reason_required');
+  });
+
+  it('marking a candidate Joined auto-fills closedAt when not supplied', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/hdis/${jdId}/candidates/${candidateId}`,
+      headers: auth(adminToken),
+      payload: { status: 'Joined', stage: 'R5' },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.status).toBe('Joined');
+    expect(body.closedAt).toBeTruthy();
+  });
+
+  it('a candidate can be logged for a different tech stack/recruiter than the requirement owner', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/hdis/${jdId}/candidates`,
+      headers: auth(consultantToken),
+      payload: {
+        name: 'Someone Else',
+        techStack: '.NET',
+        ownerName: 'External Person',
+        submittedAt: '2026-06-06',
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().ownerName).toBe('External Person');
+  });
+
+  it('an admin removes a candidate (204)', async () => {
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/api/hdis/${jdId}/candidates/${candidateId}`,
+      headers: auth(adminToken),
+    });
+    expect(res.statusCode).toBe(204);
+    const after = await app.inject({
+      method: 'GET',
+      url: `/api/hdis/${jdId}/candidates`,
+      headers: auth(adminToken),
+    });
+    expect(after.json().some((c: { id: string }) => c.id === candidateId)).toBe(false);
   });
 });
 

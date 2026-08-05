@@ -10,6 +10,8 @@ import type {
   UpdateHdisInput,
   PipelineInput,
   RequirementDetailInput,
+  CreateCandidateInput,
+  UpdateCandidateInput,
 } from './schema.js';
 
 const detailInclude = {
@@ -189,6 +191,10 @@ async function visibilityWhere(
   return { owners: { some: { consultantOrName: { in: [...names] } } } };
 }
 
+// Statuses that mean "this requirement is done" — once here, it no longer carries
+// forward into later months just because it's still sitting in the system.
+const TERMINAL_STATUSES = ['Fulfilled', 'Closed'];
+
 export async function listHdis(
   prisma: PrismaClient,
   user: CurrentUser,
@@ -197,18 +203,31 @@ export async function listHdis(
   const scoped = await visibilityWhere(prisma, user);
   const narrowed: Prisma.HdisWhereInput = {};
   if (filter.month) {
-    narrowed.reqDate = { gte: `${filter.month}-01`, lte: `${filter.month}-31` };
-  }
-  if (filter.status) narrowed.status = filter.status;
-  if (filter.q) {
+    // A requirement raised in an earlier month but still open (not Fulfilled/Closed)
+    // should keep showing up when the user filters to the current month — otherwise
+    // it silently drops off the list the moment the calendar turns over, even though
+    // nobody has closed it. So "in this month" now means: raised in this month, OR
+    // raised earlier and still open.
     narrowed.OR = [
-      { title: { contains: filter.q, mode: 'insensitive' } },
-      { client: { contains: filter.q, mode: 'insensitive' } },
-      { jdId: { contains: filter.q, mode: 'insensitive' } },
+      { reqDate: { gte: `${filter.month}-01`, lte: `${filter.month}-31` } },
+      { reqDate: { lt: `${filter.month}-01` }, status: { notIn: TERMINAL_STATUSES } },
     ];
   }
+  if (filter.status) narrowed.status = filter.status;
+  // filter.q narrows title/client/jdId within whatever the month/status filters already
+  // matched — kept as its own AND branch so it doesn't clobber the OR built above for
+  // the month carry-forward.
+  const search: Prisma.HdisWhereInput | undefined = filter.q
+    ? {
+        OR: [
+          { title: { contains: filter.q, mode: 'insensitive' } },
+          { client: { contains: filter.q, mode: 'insensitive' } },
+          { jdId: { contains: filter.q, mode: 'insensitive' } },
+        ],
+      }
+    : undefined;
   const rows = await prisma.hdis.findMany({
-    where: { AND: [scoped, narrowed] },
+    where: { AND: [scoped, narrowed, ...(search ? [search] : [])] },
     include: detailInclude,
     orderBy: { reqDate: 'desc' },
   });
@@ -478,6 +497,125 @@ export async function saveRequirementDetail(
 export async function getRequirementDetail(prisma: PrismaClient, jdId: string) {
   const h = await getHdis(prisma, jdId);
   return h.detail;
+}
+
+function toCandidateDto(c: {
+  id: string;
+  jdId: string;
+  name: string;
+  techStack: string | null;
+  ownerName: string;
+  stage: string;
+  status: string;
+  dropReason: string | null;
+  submittedAt: string;
+  offeredAt: string | null;
+  closedAt: string | null;
+  updatedAt: Date;
+}) {
+  return {
+    id: c.id,
+    jdId: c.jdId,
+    name: c.name,
+    techStack: c.techStack,
+    ownerName: c.ownerName,
+    stage: c.stage,
+    status: c.status,
+    dropReason: c.dropReason,
+    submittedAt: c.submittedAt,
+    offeredAt: c.offeredAt,
+    closedAt: c.closedAt,
+    updatedAt: c.updatedAt.toISOString(),
+  };
+}
+
+/** Today as an ISO YYYY-MM-DD string — used to auto-fill closedAt when a candidate is
+ * marked Joined/Dropped without the caller specifying an exact date. */
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Shared validation for create/update: a "Dropped" candidate must say why, and both
+ * terminal statuses (Joined/Dropped) need a closedAt for turnaround-time math — default
+ * it to today if the caller didn't supply one. Mutates and returns the merged fields. */
+function normalizeCandidateFields<
+  T extends { status?: string; dropReason?: string | null; closedAt?: string | null },
+>(fields: T): T {
+  if (fields.status === 'Dropped' && !fields.dropReason) {
+    throw new BadRequestError('Add a reason for the drop', 'drop_reason_required');
+  }
+  if ((fields.status === 'Dropped' || fields.status === 'Joined') && !fields.closedAt) {
+    fields.closedAt = todayIso();
+  }
+  return fields;
+}
+
+export async function listCandidates(prisma: PrismaClient, jdId: string) {
+  await getHdis(prisma, jdId);
+  const rows = await prisma.hdisCandidate.findMany({
+    where: { jdId },
+    orderBy: { submittedAt: 'desc' },
+  });
+  return rows.map(toCandidateDto);
+}
+
+export async function createCandidate(
+  prisma: PrismaClient,
+  actorId: string,
+  jdId: string,
+  input: CreateCandidateInput,
+) {
+  await getHdis(prisma, jdId);
+  const fields = normalizeCandidateFields({ ...input });
+  const created = await prisma.$transaction(async (tx) => {
+    const c = await tx.hdisCandidate.create({ data: { jdId, ...fields } });
+    await logActivity(tx, jdId, actorId, 'candidate', `Added candidate "${c.name}" (${c.stage})`);
+    return c;
+  });
+  return toCandidateDto(created);
+}
+
+export async function updateCandidate(
+  prisma: PrismaClient,
+  actorId: string,
+  jdId: string,
+  candidateId: string,
+  input: UpdateCandidateInput,
+) {
+  const existing = await prisma.hdisCandidate.findFirst({ where: { id: candidateId, jdId } });
+  if (!existing) throw new NotFoundError('Candidate not found');
+  const fields = normalizeCandidateFields({
+    status: existing.status,
+    dropReason: existing.dropReason,
+    closedAt: existing.closedAt,
+    ...input,
+  });
+  const updated = await prisma.$transaction(async (tx) => {
+    const c = await tx.hdisCandidate.update({ where: { id: candidateId }, data: fields });
+    await logActivity(
+      tx,
+      jdId,
+      actorId,
+      'candidate',
+      `Updated candidate "${c.name}" (${c.stage}/${c.status})`,
+    );
+    return c;
+  });
+  return toCandidateDto(updated);
+}
+
+export async function deleteCandidate(
+  prisma: PrismaClient,
+  actorId: string,
+  jdId: string,
+  candidateId: string,
+) {
+  const existing = await prisma.hdisCandidate.findFirst({ where: { id: candidateId, jdId } });
+  if (!existing) throw new NotFoundError('Candidate not found');
+  await prisma.$transaction(async (tx) => {
+    await tx.hdisCandidate.delete({ where: { id: candidateId } });
+    await logActivity(tx, jdId, actorId, 'candidate', `Removed candidate "${existing.name}"`);
+  });
 }
 
 export async function addAttachment(

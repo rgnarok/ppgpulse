@@ -2,6 +2,7 @@ import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/rea
 import { api } from './api';
 import type {
   AuditLogEntry,
+  Candidate,
   ConsultantReport,
   DhruvaDashboard,
   HdisActivityEntry,
@@ -138,6 +139,46 @@ export function useSaveRequirementDetail(jdId: string) {
     [
       ['hdis', {}],
       ['hdis-record', jdId],
+      ['hdis-activity', jdId],
+    ],
+  );
+}
+
+export function useCandidates(jdId: string | null) {
+  return useQuery({
+    queryKey: ['hdis-candidates', jdId],
+    queryFn: () => api<Candidate[]>(`/hdis/${jdId}/candidates`),
+    enabled: !!jdId,
+  });
+}
+
+export function useCreateCandidate(jdId: string) {
+  return useApiMutation(
+    (body: Record<string, unknown>) =>
+      api<Candidate>(`/hdis/${jdId}/candidates`, { method: 'POST', body }),
+    [
+      ['hdis-candidates', jdId],
+      ['hdis-activity', jdId],
+    ],
+  );
+}
+
+export function useUpdateCandidate(jdId: string) {
+  return useApiMutation(
+    ({ id, ...body }: { id: string } & Record<string, unknown>) =>
+      api<Candidate>(`/hdis/${jdId}/candidates/${id}`, { method: 'PATCH', body }),
+    [
+      ['hdis-candidates', jdId],
+      ['hdis-activity', jdId],
+    ],
+  );
+}
+
+export function useDeleteCandidate(jdId: string) {
+  return useApiMutation(
+    (id: string) => api<void>(`/hdis/${jdId}/candidates/${id}`, { method: 'DELETE' }),
+    [
+      ['hdis-candidates', jdId],
       ['hdis-activity', jdId],
     ],
   );

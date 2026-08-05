@@ -251,6 +251,27 @@ export interface HdisActivityEntry {
   at: string;
 }
 
+export type CandidateStage = 'R0' | 'R1' | 'R2' | 'R3' | 'R4' | 'R5';
+export type CandidateStatus = 'Active' | 'Offered' | 'Joined' | 'Dropped';
+
+/** A named candidate submitted against an HDIS requirement — the data the (future)
+ * Performance Scorecard reads from (closures, L2/L3 conversion, TAT, dropout rate,
+ * tech-stack expertise, offer/joining ratios), one row per person. */
+export interface Candidate {
+  id: string;
+  jdId: string;
+  name: string;
+  techStack: string | null;
+  ownerName: string;
+  stage: CandidateStage;
+  status: CandidateStatus;
+  dropReason: string | null;
+  submittedAt: string;
+  offeredAt: string | null;
+  closedAt: string | null;
+  updatedAt: string;
+}
+
 export interface UserRow {
   id: string;
   name: string;
