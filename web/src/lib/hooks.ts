@@ -12,6 +12,7 @@ import type {
   RequirementRow,
   RoleRow,
   ScopedConsultant,
+  ScorecardDashboard,
   TeamRosterRow,
   UserRow,
 } from './types';
@@ -67,6 +68,15 @@ export function useDhruva(filters: DhruvaFilterParams) {
   return useQuery({
     queryKey: ['dhruva', filters],
     queryFn: () => api<DhruvaDashboard>(`/report/dhruva${qs({ ...filters })}`),
+  });
+}
+
+/** The Performance Scorecard (super-admin only) — top-performer highlights, tech
+ * stack expertise, and the overall ranking table, scoped to the resolved period. */
+export function useScorecard(filters: PeriodParams) {
+  return useQuery({
+    queryKey: ['scorecard', filters],
+    queryFn: () => api<ScorecardDashboard>(`/report/scorecard${qs({ ...filters })}`),
   });
 }
 

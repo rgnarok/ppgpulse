@@ -15,6 +15,9 @@ export const SECTIONS = [
   'dhruva',
   // Super-admin-only KPI scorecard master list (CRUD).
   'kpis',
+  // Super-admin-only Performance Scorecard — top-performer highlights + ranking,
+  // sourced from HdisCandidate.
+  'scorecard',
 ] as const;
 export type Section = (typeof SECTIONS)[number];
 export type Capability = 'view' | 'add' | 'edit' | 'delete' | 'export';

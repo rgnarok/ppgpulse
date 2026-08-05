@@ -234,6 +234,152 @@ describe('GET /api/requirements/:id', () => {
   });
 });
 
+describe('GET /api/report/scorecard', () => {
+  const scorecardJdId = 'TST_SCORECARD_20260601';
+
+  beforeAll(async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/api/hdis',
+      headers: auth(superToken),
+      payload: {
+        jdId: scorecardJdId,
+        title: 'Scorecard Fixture Role',
+        client: 'Testify',
+        type: 'RADC',
+        reqDate: '2026-06-01',
+        owners: ['Abha Sharma'],
+      },
+    });
+
+    // Abha Sharma: 2 profiles submitted this period — one reaches L2/L3 and Joins
+    // (with an offer along the way), the other only gets an offer. Gives her a
+    // non-trivial closure efficiency, L2/L3 conversions, interview->offer and
+    // offer->join ratio, and a 0% dropout rate, all deterministically.
+    const c1 = await app.inject({
+      method: 'POST',
+      url: `/api/hdis/${scorecardJdId}/candidates`,
+      headers: auth(superToken),
+      payload: {
+        name: 'Scorecard Offered-Only',
+        techStack: 'Java',
+        ownerName: 'Abha Sharma',
+        stage: 'R2',
+        status: 'Offered',
+        offeredAt: '2026-06-10',
+        submittedAt: '2026-06-01',
+      },
+    });
+    expect(c1.statusCode).toBe(201);
+
+    const c2 = await app.inject({
+      method: 'POST',
+      url: `/api/hdis/${scorecardJdId}/candidates`,
+      headers: auth(superToken),
+      payload: {
+        name: 'Scorecard Joined',
+        techStack: 'Java',
+        ownerName: 'Abha Sharma',
+        stage: 'R5',
+        status: 'Joined',
+        offeredAt: '2026-06-08',
+        closedAt: '2026-06-15',
+        submittedAt: '2026-06-02',
+      },
+    });
+    expect(c2.statusCode).toBe(201);
+
+    // Pragyashree Jain: 1 profile submitted, dropped before reaching L1 — a 100%
+    // dropout rate and zero closures, so she reliably loses every "best" tile above
+    // to Abha but still shows up in the ranking table.
+    const c3 = await app.inject({
+      method: 'POST',
+      url: `/api/hdis/${scorecardJdId}/candidates`,
+      headers: auth(superToken),
+      payload: {
+        name: 'Scorecard Dropped',
+        techStack: '.NET',
+        ownerName: 'Pragyashree Jain',
+        stage: 'R1',
+        status: 'Dropped',
+        dropReason: 'Compensation mismatch',
+        submittedAt: '2026-06-03',
+      },
+    });
+    expect(c3.statusCode).toBe(201);
+  });
+
+  it('aggregates per-recruiter metrics scoped to the submitted-in-period candidate set', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/report/scorecard?month=2026-06',
+      headers: auth(superToken),
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+
+    const abha = body.ranking.find((r: { ownerName: string }) => r.ownerName === 'Abha Sharma');
+    expect(abha).toBeTruthy();
+    expect(abha.profilesSubmitted).toBe(2);
+    expect(abha.closures).toBe(1);
+    expect(abha.closureEfficiency).toBeCloseTo(0.5);
+    expect(abha.l2Conversions).toBe(1);
+    expect(abha.l3Conversions).toBe(1);
+    expect(abha.dropoutRate).toBe(0);
+    expect(abha.avgTatDays).toBe(13); // 2026-06-02 -> 2026-06-15
+    expect(abha.offered).toBe(2);
+    expect(abha.interviewToOfferRatio).toBe(1);
+    expect(abha.offerToJoinRatio).toBeCloseTo(0.5);
+    expect(abha.rank).toBeTruthy();
+
+    const pragyashree = body.ranking.find(
+      (r: { ownerName: string }) => r.ownerName === 'Pragyashree Jain',
+    );
+    expect(pragyashree).toBeTruthy();
+    expect(pragyashree.profilesSubmitted).toBe(1);
+    expect(pragyashree.closures).toBe(0);
+    expect(pragyashree.dropped).toBe(1);
+    expect(pragyashree.dropoutRate).toBe(1);
+
+    // Abha wins every highlight tile she's eligible for against this fixture.
+    expect(body.highlights.closureEfficiency.ownerName).toBe('Abha Sharma');
+    expect(body.highlights.l2Conversions.ownerName).toBe('Abha Sharma');
+    expect(body.highlights.l3Conversions.ownerName).toBe('Abha Sharma');
+    expect(body.highlights.lowestDropoutRate.ownerName).toBe('Abha Sharma');
+    expect(body.highlights.highestDropoutRate.ownerName).toBe('Pragyashree Jain');
+    expect(body.highlights.interviewToOfferRatio.ownerName).toBe('Abha Sharma');
+    expect(body.highlights.offerToJoinRatio.ownerName).toBe('Abha Sharma');
+
+    const javaStack = body.techStackExpertise.find(
+      (t: { techStack: string }) => t.techStack === 'Java',
+    );
+    expect(javaStack.topOwnerName).toBe('Abha Sharma');
+    expect(javaStack.closures).toBe(1);
+  });
+
+  it('a month outside the fixture returns an empty (but well-shaped) scorecard', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/report/scorecard?month=2019-01',
+      headers: auth(superToken),
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.candidateCount).toBe(0);
+    expect(body.ranking).toEqual([]);
+    expect(body.highlights.closureEfficiency).toBeNull();
+  });
+
+  it('forbids a non-super-admin (403)', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/report/scorecard',
+      headers: auth(consultantToken),
+    });
+    expect(res.statusCode).toBe(403);
+  });
+});
+
 describe('GET /api/report/dhruva', () => {
   it('returns the RAPYD/priority/funnel/top-clients shape for a super admin', async () => {
     const res = await app.inject({

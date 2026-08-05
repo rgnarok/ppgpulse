@@ -590,3 +590,286 @@ export async function dhruvaDashboard(
     closureTarget,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Performance Scorecard — highlights the month's top performers across a set of
+// recruiting metrics, sourced entirely from HdisCandidate (the per-person tracking
+// grain HdisPipeline never had). See docs on scorecardDashboard() below for the exact
+// formulas and period-scoping rule.
+// ---------------------------------------------------------------------------
+
+export type ScorecardFilters = PeriodInput;
+
+const STAGE_RANK: Record<string, number> = { R0: 0, R1: 1, R2: 2, R3: 3, R4: 4, R5: 5 };
+
+function daysBetween(fromIso: string, toIso: string): number {
+  return Math.round((new Date(toIso).getTime() - new Date(fromIso).getTime()) / 86_400_000);
+}
+
+/** Min-max normalize `value` to a 0-1 band against the full candidate set for this
+ * period — "best in period" always scores 1 regardless of the metric's absolute
+ * scale, so the seven metrics below can be combined into one composite score. Returns
+ * 0 for a null value or when every candidate has the same value (nothing to compare). */
+function normalize(value: number | null, all: (number | null)[]): number {
+  if (value == null) return 0;
+  const finite = all.filter((v): v is number => v != null);
+  if (finite.length === 0) return 0;
+  const min = Math.min(...finite);
+  const max = Math.max(...finite);
+  if (max === min) return 1;
+  return (value - min) / (max - min);
+}
+
+export interface ScorecardRow {
+  ownerName: string;
+  profilesSubmitted: number;
+  closures: number;
+  closureEfficiency: number | null;
+  l2Conversions: number;
+  l3Conversions: number;
+  dropped: number;
+  dropoutRate: number | null;
+  avgTatDays: number | null;
+  offered: number;
+  interviewToOfferRatio: number | null;
+  offerToJoinRatio: number | null;
+  score: number | null;
+  rank: number | null;
+}
+
+interface ScorecardHighlight {
+  ownerName: string;
+  value: number;
+}
+
+/** Highest `pick(row)` (or lowest, with direction:'min') among rows where `eligible`
+ * holds and the picked value isn't null. Ties keep whichever recruiter is encountered
+ * first. Returns null if nobody in the period qualifies. */
+function topBy(
+  rows: ScorecardRow[],
+  pick: (r: ScorecardRow) => number | null,
+  eligible: (r: ScorecardRow) => boolean = () => true,
+  direction: 'max' | 'min' = 'max',
+): ScorecardHighlight | null {
+  let best: ScorecardHighlight | null = null;
+  for (const r of rows) {
+    if (!eligible(r)) continue;
+    const v = pick(r);
+    if (v == null) continue;
+    if (!best || (direction === 'max' ? v > best.value : v < best.value)) {
+      best = { ownerName: r.ownerName, value: v };
+    }
+  }
+  return best;
+}
+
+/**
+ * Performance Scorecard — one row per recruiter (HdisCandidate.ownerName), scoped to
+ * every candidate *submitted* within the resolved period (mirrors Dhruva's
+ * reqDate-based period scoping: one consistent population per recruiter per period,
+ * rather than mixing "submitted this period" with "closed this period" cohorts).
+ *
+ * Metric definitions (all computed from that one candidate set per recruiter):
+ *  - closureEfficiency = Joined / Submitted — "max closures with min profiles submitted"
+ *  - l2Conversions / l3Conversions = candidates who reached stage R3 (L2) / R4 (L3) or beyond
+ *  - dropoutRate = Dropped / (Joined + Dropped) — only counts candidates who finished
+ *  - avgTatDays = mean(closedAt - submittedAt) across Joined candidates with a closedAt
+ *  - interviewToOfferRatio = candidates with an offeredAt / candidates who reached L1 (R2+)
+ *  - offerToJoinRatio = Joined / candidates with an offeredAt
+ *
+ * The overall ranking is a composite of 7 of those metrics, each min-max normalized
+ * to 0-1 within the period (see normalize()) and weighted: closure efficiency 20%,
+ * L2/L3 conversions 15% each, interview-to-offer 15%, offer-to-join 15%, dropout rate
+ * (inverted — lower is better) 10%, TAT (inverted — lower is better) 10%. Recruiters
+ * with zero submitted profiles in the period aren't ranked.
+ */
+export async function scorecardDashboard(
+  prisma: PrismaClient,
+  user: CurrentUser,
+  filters: ScorecardFilters,
+) {
+  const period = resolvePeriod(filters);
+
+  // Same org-vs-team visibility split every other org-wide dashboard in this module
+  // uses: org-scope roles see every candidate; anyone else only sees candidates
+  // attributed to a recruiter within their own team scope.
+  const candidates =
+    user.role.scope === 'org'
+      ? await prisma.hdisCandidate.findMany()
+      : await (async () => {
+          const directory = await loadDirectory(prisma);
+          const names = scopeNames(user, directory);
+          return prisma.hdisCandidate.findMany({
+            where: { ownerName: { in: [...names] } },
+          });
+        })();
+
+  const periodCandidates = candidates.filter((c) => inPeriod(c.submittedAt, period));
+
+  interface Agg {
+    ownerName: string;
+    profilesSubmitted: number;
+    l1Reached: number;
+    l2Conversions: number;
+    l3Conversions: number;
+    offered: number;
+    joined: number;
+    dropped: number;
+    tatDays: number[];
+    techStack: Map<string, number>; // techStack -> Joined count
+  }
+  const byOwner = new Map<string, Agg>();
+  function agg(ownerName: string): Agg {
+    let a = byOwner.get(ownerName);
+    if (!a) {
+      a = {
+        ownerName,
+        profilesSubmitted: 0,
+        l1Reached: 0,
+        l2Conversions: 0,
+        l3Conversions: 0,
+        offered: 0,
+        joined: 0,
+        dropped: 0,
+        tatDays: [],
+        techStack: new Map(),
+      };
+      byOwner.set(ownerName, a);
+    }
+    return a;
+  }
+
+  for (const c of periodCandidates) {
+    const a = agg(c.ownerName);
+    a.profilesSubmitted++;
+    const rank = STAGE_RANK[c.stage] ?? 0;
+    if (rank >= 2) a.l1Reached++;
+    if (rank >= 3) a.l2Conversions++;
+    if (rank >= 4) a.l3Conversions++;
+    if (c.offeredAt) a.offered++;
+    if (c.status === 'Joined') {
+      a.joined++;
+      if (c.closedAt) a.tatDays.push(daysBetween(c.submittedAt, c.closedAt));
+      const tech = (c.techStack ?? '').trim() || 'Unspecified';
+      a.techStack.set(tech, (a.techStack.get(tech) ?? 0) + 1);
+    }
+    if (c.status === 'Dropped') a.dropped++;
+  }
+
+  const rows: ScorecardRow[] = [...byOwner.values()]
+    .map((a) => {
+      const finished = a.joined + a.dropped;
+      return {
+        ownerName: a.ownerName,
+        profilesSubmitted: a.profilesSubmitted,
+        closures: a.joined,
+        closureEfficiency: a.profilesSubmitted > 0 ? a.joined / a.profilesSubmitted : null,
+        l2Conversions: a.l2Conversions,
+        l3Conversions: a.l3Conversions,
+        dropped: a.dropped,
+        dropoutRate: finished > 0 ? a.dropped / finished : null,
+        avgTatDays: a.tatDays.length > 0 ? average(a.tatDays) : null,
+        offered: a.offered,
+        interviewToOfferRatio: a.l1Reached > 0 ? a.offered / a.l1Reached : null,
+        offerToJoinRatio: a.offered > 0 ? a.joined / a.offered : null,
+        score: null,
+        rank: null,
+      };
+    })
+    .sort((a, b) => a.ownerName.localeCompare(b.ownerName));
+
+  const effValues = rows.map((r) => r.closureEfficiency);
+  const l2Values = rows.map((r): number | null => r.l2Conversions);
+  const l3Values = rows.map((r): number | null => r.l3Conversions);
+  const i2oValues = rows.map((r) => r.interviewToOfferRatio);
+  const o2jValues = rows.map((r) => r.offerToJoinRatio);
+  const dropoutValues = rows.map((r) => (r.dropoutRate != null ? -r.dropoutRate : null));
+  const tatValues = rows.map((r) => (r.avgTatDays != null ? -r.avgTatDays : null));
+
+  for (const [i, r] of rows.entries()) {
+    if (r.profilesSubmitted === 0) continue;
+    r.score =
+      0.2 * normalize(effValues[i], effValues) +
+      0.15 * normalize(l2Values[i], l2Values) +
+      0.15 * normalize(l3Values[i], l3Values) +
+      0.15 * normalize(i2oValues[i], i2oValues) +
+      0.15 * normalize(o2jValues[i], o2jValues) +
+      0.1 * normalize(r.dropoutRate != null ? -r.dropoutRate : null, dropoutValues) +
+      0.1 * normalize(r.avgTatDays != null ? -r.avgTatDays : null, tatValues);
+  }
+  const ranked = rows
+    .filter((r) => r.score != null)
+    .sort((a, b) => (b.score as number) - (a.score as number));
+  ranked.forEach((r, i) => (r.rank = i + 1));
+  const ranking = [...ranked, ...rows.filter((r) => r.score == null)];
+
+  const highlights = {
+    closureEfficiency: topBy(
+      rows,
+      (r) => r.closureEfficiency,
+      (r) => r.profilesSubmitted > 0,
+    ),
+    l2Conversions: topBy(rows, (r) => r.l2Conversions),
+    l3Conversions: topBy(rows, (r) => r.l3Conversions),
+    lowestTat: topBy(
+      rows,
+      (r) => r.avgTatDays,
+      (r) => r.avgTatDays != null,
+      'min',
+    ),
+    lowestDropoutRate: topBy(
+      rows,
+      (r) => r.dropoutRate,
+      (r) => r.dropoutRate != null,
+      'min',
+    ),
+    highestDropoutRate: topBy(
+      rows,
+      (r) => r.dropoutRate,
+      (r) => r.dropoutRate != null,
+      'max',
+    ),
+    interviewToOfferRatio: topBy(
+      rows,
+      (r) => r.interviewToOfferRatio,
+      (r) => r.interviewToOfferRatio != null,
+    ),
+    offerToJoinRatio: topBy(
+      rows,
+      (r) => r.offerToJoinRatio,
+      (r) => r.offerToJoinRatio != null,
+    ),
+  };
+
+  // Tech-stack expertise — per stack, whoever has the most Joined candidates against
+  // it this period. Sourced only from Joined candidates: sourcing-but-not-closing a
+  // stack isn't "expertise" yet.
+  const stackAgg = new Map<string, Map<string, number>>();
+  for (const a of byOwner.values()) {
+    for (const [stack, count] of a.techStack) {
+      const m = stackAgg.get(stack) ?? new Map<string, number>();
+      m.set(a.ownerName, count);
+      stackAgg.set(stack, m);
+    }
+  }
+  const techStackExpertise = [...stackAgg.entries()]
+    .map(([techStack, owners]) => {
+      const top = [...owners.entries()].sort((a, b) => b[1] - a[1])[0];
+      return {
+        techStack,
+        topOwnerName: top[0],
+        closures: top[1],
+        totalClosures: [...owners.values()].reduce((s, v) => s + v, 0),
+      };
+    })
+    .sort((a, b) => b.totalClosures - a.totalClosures);
+
+  return {
+    period,
+    highlights,
+    ranking,
+    techStackExpertise,
+    recruiterCount: rows.length,
+    candidateCount: periodCandidates.length,
+  };
+}

@@ -18,6 +18,7 @@ const SECTION_LABELS: Record<string, string> = {
   auditlog: 'Activity Log',
   dhruva: 'Dhruva',
   kpis: 'KPIs',
+  scorecard: 'Scorecard',
 };
 
 export default function AuditLogPage() {

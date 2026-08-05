@@ -8,6 +8,7 @@ import {
   requirementDetail,
   teamRoster,
   dhruvaDashboard,
+  scorecardDashboard,
 } from './service.js';
 
 const periodQuery = z.object({
@@ -67,5 +68,11 @@ export default async function reportRoutes(app: FastifyInstance) {
     assertCan(request.currentUser, 'dhruva', 'view');
     const q = dhruvaQuery.parse(request.query);
     return dhruvaDashboard(app.prisma, request.currentUser, q);
+  });
+
+  app.get('/report/scorecard', { preHandler: app.authenticate }, async (request) => {
+    assertCan(request.currentUser, 'scorecard', 'view');
+    const q = periodQuery.parse(request.query);
+    return scorecardDashboard(app.prisma, request.currentUser, q);
   });
 }

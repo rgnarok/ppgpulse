@@ -32,6 +32,16 @@ export const NAV_ITEMS: NavItem[] = [
     group: 'Workspace',
   },
   {
+    // Same placement rationale as Dhruva above — an org-wide analytics view, gated to
+    // super_admin via the 'scorecard' section.
+    key: 'scorecard',
+    label: 'Scorecard',
+    path: '/admin/scorecard',
+    section: 'scorecard',
+    icon: '★',
+    group: 'Workspace',
+  },
+  {
     key: 'interviews',
     label: 'Interviews',
     path: '/interviews',

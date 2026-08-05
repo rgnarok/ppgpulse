@@ -15,6 +15,7 @@ const SECTIONS = [
   'auditlog',
   'dhruva',
   'kpis',
+  'scorecard',
 ];
 const CAPS = ['view', 'add', 'edit', 'delete'];
 

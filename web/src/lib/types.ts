@@ -169,6 +169,55 @@ export interface DhruvaDashboard {
   };
 }
 
+export interface ScorecardRow {
+  ownerName: string;
+  profilesSubmitted: number;
+  closures: number;
+  closureEfficiency: number | null;
+  l2Conversions: number;
+  l3Conversions: number;
+  dropped: number;
+  dropoutRate: number | null;
+  avgTatDays: number | null;
+  offered: number;
+  interviewToOfferRatio: number | null;
+  offerToJoinRatio: number | null;
+  score: number | null;
+  rank: number | null;
+}
+
+export interface ScorecardHighlight {
+  ownerName: string;
+  value: number;
+}
+
+export interface ScorecardTechStack {
+  techStack: string;
+  topOwnerName: string;
+  closures: number;
+  totalClosures: number;
+}
+
+/** GET /report/scorecard — super-admin-only Performance Scorecard, sourced from
+ * HdisCandidate and scoped to whichever period a candidate was submitted in. */
+export interface ScorecardDashboard {
+  period: { lo: string; hi: string };
+  highlights: {
+    closureEfficiency: ScorecardHighlight | null;
+    l2Conversions: ScorecardHighlight | null;
+    l3Conversions: ScorecardHighlight | null;
+    lowestTat: ScorecardHighlight | null;
+    lowestDropoutRate: ScorecardHighlight | null;
+    highestDropoutRate: ScorecardHighlight | null;
+    interviewToOfferRatio: ScorecardHighlight | null;
+    offerToJoinRatio: ScorecardHighlight | null;
+  };
+  ranking: ScorecardRow[];
+  techStackExpertise: ScorecardTechStack[];
+  recruiterCount: number;
+  candidateCount: number;
+}
+
 export interface HdisRecord {
   jdId: string;
   title: string;
