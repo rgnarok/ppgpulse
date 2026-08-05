@@ -1539,7 +1539,7 @@ function CandidatesCard({ rec, editable }: { rec: HdisRecord; editable: boolean 
           {isLoading ? (
             <p className="muted">Loading…</p>
           ) : candidates.length === 0 ? (
-            <Empty title="No candidates logged yet" icon="🧑\u200d💼">
+            <Empty title="No candidates logged yet" icon="🧑‍💼">
               Add named candidates as they're submitted — this powers per-recruiter performance
               metrics like closures, L2/L3 conversion, and dropout rate.
             </Empty>
