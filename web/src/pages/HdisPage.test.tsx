@@ -128,11 +128,14 @@ describe('HDIS list (T10.1)', () => {
     // suite happens to run, so a fresh /hdis visit (no URL params at all) should default
     // to the current month/FY and hide it -- matching Dhruva's "defaults to now"
     // convention -- while a deliberately-cleared URL (Reset) still shows everything.
+    // Closed rather than Active/on-inherited-default status, since an open record from
+    // an earlier month is now expected to carry forward into the current month view —
+    // this test is specifically about a record that's done, not a still-open one.
     const now = new Date();
     const expectedMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     const expectedFy = String(now.getMonth() + 1 >= 4 ? now.getFullYear() : now.getFullYear() - 1);
 
-    mockFetch(routesFor(superAdminMe, [record2]));
+    mockFetch(routesFor(superAdminMe, [{ ...record2, status: 'Closed' }]));
     renderApp(
       <Routes>
         <Route path="/hdis" element={<HdisPage />} />
@@ -827,6 +830,40 @@ describe('HDIS fiscal year + month filter', () => {
     // Both June records remain since the month select only has one "Jun 2026" bucket.
     expect(screen.getByText('QA Engineer')).toBeInTheDocument();
     expect(screen.getByText('Business Analyst')).toBeInTheDocument();
+  });
+
+  it('carries a still-open requirement forward from an earlier month, but not a closed one', async () => {
+    const openEarlier: HdisRecord = {
+      ...record,
+      jdId: 'TST_CARRY_20260501',
+      title: 'Carried Forward Role',
+      reqDate: '2026-05-01',
+      status: 'Active',
+    };
+    const closedEarlier: HdisRecord = {
+      ...record,
+      jdId: 'TST_NOCARRY_20260502',
+      title: 'Already Closed Role',
+      reqDate: '2026-05-02',
+      status: 'Closed',
+    };
+    mockFetch(routesFor(superAdminMe, [record, openEarlier, closedEarlier]));
+    renderApp(
+      <Routes>
+        <Route path="/hdis" element={<HdisPage />} />
+      </Routes>,
+      { route: '/hdis?fy=&month=' },
+    );
+    await screen.findByText('QA Engineer');
+
+    await userEvent.selectOptions(screen.getByLabelText('Fiscal year'), 'FY 2026-27');
+    await userEvent.selectOptions(screen.getByLabelText('Month'), 'Jun 2026');
+
+    // June's own record, plus May's still-open one, both show...
+    expect(screen.getByText('QA Engineer')).toBeInTheDocument();
+    expect(screen.getByText('Carried Forward Role')).toBeInTheDocument();
+    // ...but the closed May record does not carry forward.
+    expect(screen.queryByText('Already Closed Role')).not.toBeInTheDocument();
   });
 });
 

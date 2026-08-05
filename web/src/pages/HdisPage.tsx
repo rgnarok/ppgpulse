@@ -29,6 +29,10 @@ import type { Candidate, HdisRecord, RequirementDetail } from '../lib/types';
 
 const TYPE_OPTIONS = ['RADC', 'RADF', 'Internal'];
 const STATUS_OPTIONS = ['Pending', 'Active', 'On Hold', 'Fulfilled', 'Closed'];
+/** Mirrors the server's listHdis() carry-forward rule: a requirement only stops
+ * showing up in earlier months' view once it's reached one of these — see
+ * TERMINAL_STATUSES in server/src/modules/hdis/service.ts. */
+const TERMINAL_HDIS_STATUSES = new Set(['Fulfilled', 'Closed']);
 /** A record is "live" for tile-counting purposes (RAPYD Active, Total Live
  * Requirements, Priority tiles, etc. — see isLiveHdisStatus/isLiveStatus server-side)
  * once it hasn't reached Fulfilled or Closed — that includes both Active AND On Hold.
@@ -201,7 +205,14 @@ function HdisList() {
     return rows.filter((r) => {
       const month = r.reqDate.slice(0, 7);
       if (filters.fy && fyOfMonth(month) !== filters.fy) return false;
-      if (filters.month && month !== filters.month) return false;
+      if (filters.month) {
+        // A requirement raised in an earlier month but still open (not Fulfilled/
+        // Closed) should keep showing up once the calendar turns over — matches the
+        // server's listHdis() carry-forward rule (see hdis/service.ts).
+        const raisedThisMonth = month === filters.month;
+        const carriedForward = month < filters.month && !TERMINAL_HDIS_STATUSES.has(r.status);
+        if (!raisedThisMonth && !carriedForward) return false;
+      }
       if (filters.client && r.client !== filters.client) return false;
       if (filters.owner && !r.owners.includes(filters.owner)) return false;
       if (filters.type && r.type !== filters.type) return false;
