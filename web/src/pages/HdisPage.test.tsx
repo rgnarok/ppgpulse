@@ -993,6 +993,41 @@ describe('HDIS Pending status + requirement questionnaire', () => {
     ).toBeInTheDocument();
   });
 
+  it('Active is NOT disabled for an On Hold record, even with an incomplete questionnaire — the gate is only for a first activation out of Pending', async () => {
+    const onHoldRecord: HdisRecord = {
+      ...pendingRecord,
+      jdId: 'TST_ONHOLD_20260702',
+      status: 'On Hold',
+      statusReason: 'Hold By VAYUZ',
+    };
+    mockFetch([
+      jsonRoute('/api/me', superAdminMe),
+      jsonRoute(`/api/hdis/${onHoldRecord.jdId}/activity`, []),
+      jsonRoute(`/api/hdis/${onHoldRecord.jdId}/candidates`, []),
+      jsonRoute(`/api/hdis/${onHoldRecord.jdId}`, onHoldRecord),
+      jsonRoute('/api/hdis', [onHoldRecord]),
+      jsonRoute('/api/clients', clients),
+      jsonRoute('/api/consultants', consultants),
+    ]);
+    renderApp(
+      <Routes>
+        <Route path="/hdis" element={<HdisPage />} />
+      </Routes>,
+      { route: '/hdis?fy=&month=' },
+    );
+    await screen.findByText('Backend Engineer');
+    await userEvent.click(screen.getByText('Edit'));
+    const dialog = screen.getByRole('dialog');
+    const statusSelect = within(dialog).getByLabelText('Status') as HTMLSelectElement;
+    const activeOption = within(statusSelect).getByRole('option', {
+      name: 'Active',
+    }) as HTMLOptionElement;
+    expect(activeOption.disabled).toBe(false);
+    expect(
+      screen.queryByText('Complete the requirement questionnaire to unlock Active.'),
+    ).not.toBeInTheDocument();
+  });
+
   it('saving the questionnaire PUTs the entered values to /hdis/:jdId/details', async () => {
     const { calls } = mockFetch([
       jsonRoute('/api/me', superAdminMe),

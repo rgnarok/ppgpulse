@@ -318,7 +318,11 @@ export async function updateHdis(
   input: UpdateHdisInput,
 ) {
   const current = await getHdis(prisma, jdId);
-  if (input.status === 'Active' && current.status !== 'Active') {
+  // The questionnaire gate only applies to a record's *first* activation out of
+  // "Pending" — once a record has been Active at least once (e.g. it's now On Hold
+  // and is being reactivated), re-activating it must not be blocked by a
+  // questionnaire that didn't even exist when many older records were created.
+  if (input.status === 'Active' && current.status === 'Pending') {
     const complete = isDetailComplete(current.detail, current.attachments.length > 0);
     if (!complete) {
       throw new BadRequestError(

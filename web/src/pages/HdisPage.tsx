@@ -678,14 +678,14 @@ function HdisFormModal({
                     key={s}
                     value={s}
                     disabled={
-                      s === 'Active' && !initial?.detailsComplete && initial?.status !== 'Active'
+                      s === 'Active' && initial?.status === 'Pending' && !initial?.detailsComplete
                     }
                   >
                     {s}
                   </option>
                 ))}
               </select>
-              {!initial?.detailsComplete && initial?.status !== 'Active' && (
+              {initial?.status === 'Pending' && !initial?.detailsComplete && (
                 <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
                   Complete the requirement questionnaire to unlock Active.
                 </p>

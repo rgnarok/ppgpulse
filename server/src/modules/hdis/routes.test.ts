@@ -388,6 +388,34 @@ describe('T5.5 Pending status + requirement questionnaire', () => {
     expect(activateRes.json().status).toBe('Active');
     expect(activateRes.json().detailsComplete).toBe(true);
   });
+
+  it("reactivating an On Hold record is NOT blocked by an incomplete questionnaire — the gate is only for a record's first activation out of Pending", async () => {
+    const onHoldJdId = 'TST_ONHOLD_REACTIVATE_20260601';
+    await app.inject({
+      method: 'POST',
+      url: '/api/hdis',
+      headers: auth(adminToken),
+      payload: { ...jd, jdId: onHoldJdId },
+    });
+    // Put it On Hold — this record never had its questionnaire completed, matching
+    // the many pre-existing records created before the questionnaire feature shipped.
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/hdis/${onHoldJdId}`,
+      headers: auth(adminToken),
+      payload: { status: 'On Hold', statusReason: 'Hold By VAYUZ' },
+    });
+
+    const reactivateRes = await app.inject({
+      method: 'PATCH',
+      url: `/api/hdis/${onHoldJdId}`,
+      headers: auth(adminToken),
+      payload: { status: 'Active' },
+    });
+    expect(reactivateRes.statusCode).toBe(200);
+    expect(reactivateRes.json().status).toBe('Active');
+    expect(reactivateRes.json().detailsComplete).toBe(false);
+  });
 });
 
 describe('T5.6 Candidates', () => {
