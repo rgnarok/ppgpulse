@@ -1223,7 +1223,7 @@ function HdisDetail({ jdId }: { jdId: string }) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          marginBottom: 12,
+          marginBottom: 20,
         }}
       >
         <button className="lnk" onClick={() => navigate(backTo)}>
@@ -1238,7 +1238,7 @@ function HdisDetail({ jdId }: { jdId: string }) {
           {editable && <Btn onClick={() => setEditing(true)}>Edit record</Btn>}
         </div>
       </div>
-      <div className="dbanner" style={{ marginBottom: 16 }}>
+      <div className="dbanner" style={{ marginBottom: 24 }}>
         <div className="db-eyebrow">{rec.type}</div>
         <div className="db-title">{rec.title}</div>
         <div className="db-sub">
@@ -1289,7 +1289,7 @@ function HdisDetail({ jdId }: { jdId: string }) {
       </div>
 
       {rec.status === 'Pending' && (
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 24 }}>
           <Card>
             <SectionTitle color="var(--gold)">Not active yet</SectionTitle>
             <p style={{ marginTop: 10 }}>
@@ -1308,7 +1308,7 @@ function HdisDetail({ jdId }: { jdId: string }) {
       )}
 
       {rec.remarks && (
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 24 }}>
           <Card>
             <SectionTitle color="var(--gold)">Remarks</SectionTitle>
             <p style={{ marginTop: 10, whiteSpace: 'pre-wrap' }}>{rec.remarks}</p>
@@ -1316,11 +1316,13 @@ function HdisDetail({ jdId }: { jdId: string }) {
         </div>
       )}
 
-      <div style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 24 }}>
         <ProfileAgingCard rec={rec} />
       </div>
 
-      <Attachments rec={rec} editable={editable} />
+      <div style={{ marginBottom: 24 }}>
+        <Attachments rec={rec} editable={editable} />
+      </div>
 
       <CandidatesCard rec={rec} editable={editable} />
 
@@ -1518,7 +1520,7 @@ function CandidatesCard({ rec, editable }: { rec: HdisRecord; editable: boolean 
   }
 
   return (
-    <div style={{ marginBottom: 16 }}>
+    <div style={{ marginBottom: 24 }}>
       <Card pad={false}>
         <div
           style={{
