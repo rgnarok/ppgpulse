@@ -148,13 +148,13 @@ function HighlightTiles({ data }: { data: ScorecardDashboard }) {
         icon="▲"
         label="Most L2 Conversions"
         highlight={data.highlights.l2Conversions}
-        format={(v) => `${v} candidates reached L2`}
+        format={(v) => `${v} profiles reached L2`}
       />
       <HighlightTile
         icon="▲"
         label="Most L3 Conversions"
         highlight={data.highlights.l3Conversions}
-        format={(v) => `${v} candidates reached L3`}
+        format={(v) => `${v} profiles reached L3`}
       />
       <HighlightTile
         icon="◷"
@@ -201,7 +201,7 @@ function TechStackExpertise({ data }: { data: ScorecardDashboard }) {
         <div style={{ padding: '16px 20px 0' }}>
           <SectionTitle color="var(--violet)">Expertise by Tech Stack</SectionTitle>
           <div className="skc-sub" style={{ marginTop: 2 }}>
-            who&apos;s closed the most candidates against each stack this period
+            who&apos;s onboarded the most profiles against each stack this period
           </div>
         </div>
         <div className="tbl-wrap">
@@ -234,7 +234,7 @@ function TechStackExpertise({ data }: { data: ScorecardDashboard }) {
 const RANK_TONE = ['p-gold', 'p-blue', 'p-blue'];
 
 function RankingTable({ ranking }: { ranking: ScorecardRow[] }) {
-  if (ranking.length === 0) return <Empty title="No candidates in this period" icon="★" />;
+  if (ranking.length === 0) return <Empty title="No requirements in this period" icon="★" />;
   return (
     <Card pad={false}>
       <div style={{ padding: '16px 20px 0' }}>
