@@ -21,6 +21,7 @@ import {
   type DayColor,
 } from '../lib/hooks';
 import { formatDate, formatMonth } from '../lib/format';
+import { parseInterviewText, type ParsedInterviewFields } from '../lib/parseInterviewText';
 
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const ROUND_OPTIONS = ['L0', 'L1', 'L2', 'L3', 'L4', 'L5'];
@@ -534,6 +535,50 @@ function DayTable({
   );
 }
 
+// ---- "Paste to fill" matching helpers ----
+// The parser hands back raw label text; these turn that into the app's actual
+// option values (round codes, dropdown ids, etc.) by loose case/substring
+// matching against whatever's currently loaded, rather than a strict lookup.
+function normText(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function matchStatus(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  const n = normText(raw);
+  return STATUS_OPTIONS.find((o) => normText(o) === n || n.includes(normText(o)));
+}
+
+/** "Face 2 Face" → RAPYD(F), "Virtual/phone/call" → RAPYD(C), else Internal
+ *  if said explicitly. No confident guess → undefined (left for the user). */
+function matchType(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  const n = raw.toLowerCase();
+  if (TYPE_OPTIONS.some((o) => normText(o) === normText(raw))) {
+    return TYPE_OPTIONS.find((o) => normText(o) === normText(raw));
+  }
+  if (n.includes('internal')) return 'Internal';
+  if (n.includes('face')) return 'RAPYD(F)';
+  if (n.includes('call') || n.includes('phone') || n.includes('virtual') || n.includes('video')) {
+    return 'RAPYD(C)';
+  }
+  return undefined;
+}
+
+/** Best-effort match of a free-text name against {id, label} choices — exact
+ *  (case/space-insensitive) match first, then "label contains the raw text". */
+function matchByLabel<T extends { label: string }>(
+  raw: string | undefined,
+  choices: T[],
+): T | undefined {
+  if (!raw) return undefined;
+  const n = normText(raw);
+  return (
+    choices.find((c) => normText(c.label) === n) ??
+    choices.find((c) => normText(c.label).includes(n))
+  );
+}
+
 function InterviewFormModal({
   mode,
   date,
@@ -555,17 +600,6 @@ function InterviewFormModal({
     () => hdisOptions.map((h) => ({ id: h.jdId, label: `${h.title} — ${h.client} (${h.jdId})` })),
     [hdisOptions],
   );
-  const invalidate = [['interview-day', date], ['interviews']];
-  const create = useApiMutation(
-    (body: Record<string, unknown>) => api('/interviews', { method: 'POST', body }),
-    invalidate,
-  );
-  const update = useApiMutation(
-    (body: Record<string, unknown>) => api(`/interviews/${initial?.id}`, { method: 'PATCH', body }),
-    invalidate,
-  );
-  const mutation = mode === 'edit' ? update : create;
-
   const defaultConsultantId = mode === 'create' ? (me?.consultant?.id ?? '') : '';
   const [ref, setRef] = useState(initial?.ref ?? '');
   const [round, setRound] = useState(initial?.round ?? 'L1');
@@ -581,6 +615,115 @@ function InterviewFormModal({
   const [consultantId, setConsultantId] = useState(initial?.ppgConsultantId ?? defaultConsultantId);
   const [error, setError] = useState<string | null>(null);
 
+  // Normally fixed to the calendar day that was clicked to open the modal, but
+  // "Paste to fill" can carry its own date — kept as separate state (rather
+  // than always trusting the `date` prop) so a pasted date actually targets
+  // the right day instead of silently being ignored.
+  const [dateOverride, setDateOverride] = useState(date);
+
+  const invalidate = [['interview-day', date], ['interview-day', dateOverride], ['interviews']];
+  const create = useApiMutation(
+    (body: Record<string, unknown>) => api('/interviews', { method: 'POST', body }),
+    invalidate,
+  );
+  const update = useApiMutation(
+    (body: Record<string, unknown>) => api(`/interviews/${initial?.id}`, { method: 'PATCH', body }),
+    invalidate,
+  );
+  const mutation = mode === 'edit' ? update : create;
+
+  // ---- Paste to fill ----
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState('');
+  const [pasteNotes, setPasteNotes] = useState<string[]>([]);
+
+  function applyParsed(fields: ParsedInterviewFields, unmatchedLines: string[]) {
+    const filled: string[] = [];
+    const missed: string[] = [];
+
+    if (fields.ref) {
+      setRef(fields.ref);
+      filled.push('Interview update');
+    }
+    if (fields.round) {
+      setRound(fields.round);
+      filled.push('Round');
+    }
+    const typeMatch = matchType(fields.modeRaw);
+    if (typeMatch) {
+      setType(typeMatch);
+      filled.push('Type');
+    } else if (fields.modeRaw) {
+      missed.push(`Type/Mode — couldn't match "${fields.modeRaw}", pick one manually`);
+    }
+    if (fields.candidate) {
+      setCandidate(fields.candidate);
+      filled.push('Candidate');
+    }
+    if (fields.email) {
+      setEmail(fields.email);
+      filled.push('Email');
+    }
+    if (fields.dateISO) {
+      setDateOverride(fields.dateISO);
+      filled.push('Date');
+    }
+    if (fields.time) {
+      setTime(fields.time);
+      filled.push('Time');
+    }
+    if (fields.profileRaw) {
+      const match = matchByLabel(fields.profileRaw, hdisChoices);
+      if (match) {
+        selectHdis(match.id);
+        filled.push('Profile');
+      } else {
+        missed.push(`Profile — couldn't match "${fields.profileRaw}" to an HDIS requirement`);
+      }
+    }
+    if (fields.interviewer) {
+      setInterviewer(fields.interviewer);
+      filled.push('With (interviewer)');
+    }
+    if (fields.sourcingRaw) {
+      const match = matchByLabel(
+        fields.sourcingRaw,
+        consultants.map((c) => ({ id: c.id, label: c.name })),
+      );
+      if (match) {
+        setConsultantId(match.id);
+        filled.push('Sourcing (PPG)');
+      } else {
+        missed.push(`Sourcing — couldn't match "${fields.sourcingRaw}" to a PPG consultant`);
+      }
+    }
+    if (fields.statusRaw) {
+      const match = matchStatus(fields.statusRaw);
+      if (match) {
+        setStatus(match);
+        filled.push('Status');
+      } else {
+        missed.push(`Status — couldn't match "${fields.statusRaw}"`);
+      }
+    }
+
+    const notes: string[] = [];
+    if (filled.length) notes.push(`Filled: ${filled.join(', ')}.`);
+    if (missed.length) notes.push(...missed);
+    if (unmatchedLines.length) {
+      notes.push(`Not recognized: ${unmatchedLines.map((l) => `"${l}"`).join(', ')}.`);
+    }
+    if (!filled.length && !missed.length && !unmatchedLines.length) {
+      notes.push('Nothing recognizable in that text — check the format and try again.');
+    }
+    setPasteNotes(notes);
+  }
+
+  function handleParse() {
+    const { fields, unmatchedLines } = parseInterviewText(pasteText);
+    applyParsed(fields, unmatchedLines);
+  }
+
   function selectHdis(jdId: string) {
     setHdisJdId(jdId);
     // Pre-fill the client from the chosen requirement — still editable afterward.
@@ -592,6 +735,7 @@ function InterviewFormModal({
   // on close — "starting point" is the initial record's values in edit mode, or the
   // blank defaults in create mode.
   const isDirty =
+    dateOverride !== date ||
     ref.trim() !== (initial?.ref ?? '') ||
     round !== (initial?.round ?? 'L1') ||
     type !== (initial?.type ?? '') ||
@@ -649,7 +793,7 @@ function InterviewFormModal({
     setError(null);
     const selectedHdis = hdisOptions.find((h) => h.jdId === hdisJdId);
     const body = {
-      date,
+      date: dateOverride,
       session,
       time: time.trim(),
       type: type || undefined,
@@ -700,11 +844,58 @@ function InterviewFormModal({
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <SectionTitle>
-            {mode === 'edit' ? 'Edit interview' : 'Add interview'} — {formatDate(date)}
+            {mode === 'edit' ? 'Edit interview' : 'Add interview'} — {formatDate(dateOverride)}
           </SectionTitle>
           <button type="button" className="lnk" onClick={requestClose} aria-label="Close">
             ✕
           </button>
+        </div>
+
+        <div style={{ marginTop: 12 }}>
+          <button
+            type="button"
+            className="lnk"
+            onClick={() => setPasteOpen((v) => !v)}
+            aria-expanded={pasteOpen}
+          >
+            {pasteOpen ? '− Hide paste to fill' : '+ Paste interview details to fill this form'}
+          </button>
+          {pasteOpen && (
+            <div style={{ marginTop: 8 }}>
+              <textarea
+                aria-label="Paste interview details"
+                value={pasteText}
+                onChange={(e) => setPasteText(e.target.value)}
+                placeholder={
+                  'Interview Update: 2026140808(L4)\nMode - Face 2 Face\nCandidate Full Name: Tanya Garg\nEmail: tgarg1012@gmail.com\nDate: Aug 14, 2026\nTime: 3:30 PM\nProfile: Flutter VIP\nWith: Kushagra Bindra\nSourcing: Priya Pal\nStatus: Selected'
+                }
+                rows={6}
+                style={{ width: '100%', fontFamily: 'inherit', fontSize: 13 }}
+              />
+              <div style={{ marginTop: 8, display: 'flex', gap: 10, alignItems: 'center' }}>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-gho"
+                  onClick={handleParse}
+                  disabled={!pasteText.trim()}
+                >
+                  Parse &amp; fill
+                </button>
+                {pasteNotes.length > 0 && (
+                  <span className="muted" style={{ fontSize: 12 }}>
+                    Review the fields below before saving.
+                  </span>
+                )}
+              </div>
+              {pasteNotes.length > 0 && (
+                <ul style={{ marginTop: 8, fontSize: 12, paddingLeft: 18 }}>
+                  {pasteNotes.map((note, i) => (
+                    <li key={i}>{note}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
 
         <form onSubmit={submit} style={{ marginTop: 14 }}>
@@ -726,6 +917,15 @@ function InterviewFormModal({
                   </option>
                 ))}
               </select>
+            </div>
+            <div className="field">
+              <label htmlFor="iv-date">Date</label>
+              <input
+                id="iv-date"
+                type="date"
+                value={dateOverride}
+                onChange={(e) => setDateOverride(e.target.value)}
+              />
             </div>
             <div className="field">
               <label>Type</label>

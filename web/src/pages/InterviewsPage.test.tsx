@@ -175,6 +175,138 @@ describe('Interviews — Add interview modal Client + Profile (HDIS)', () => {
   });
 });
 
+describe('Interviews — Add interview modal Paste to fill', () => {
+  const pasteConsultants = [
+    ...consultants,
+    {
+      id: 'c_priya',
+      userId: 'u_priya',
+      name: 'Priya Pal',
+      email: 'priya@vayuz.com',
+      pod: 'Pod B',
+      team: 'Pod B',
+      eventsHosted: 0,
+      eventsParticipated: 0,
+      insights: 0,
+    },
+  ];
+  const pasteHdis = [
+    {
+      jdId: 'TST_FLUT_20260601',
+      title: 'Flutter VIP',
+      client: 'Testify',
+      type: 'RADC',
+      openings: 1,
+      status: 'Active',
+      statusReason: null,
+      remarks: null,
+      priority: 'NA',
+      confidence: 'Medium',
+      reqDate: '2026-06-01',
+      jdLink: null,
+      owners: ['Abha Sharma'],
+      pipeline: { r0: 0, r1: 0, r2: 0, r3: 0, r4: 0, r5: 0, stage: 'R0 · Sourcing' },
+      attachments: [],
+      createdAt: '2026-06-01T00:00:00.000Z',
+      updatedAt: '2026-06-01T00:00:00.000Z',
+    },
+  ];
+
+  it('fills every field from a pasted labeled block and posts the parsed values', async () => {
+    const user = userEvent.setup({ delay: null });
+    const { calls } = mockFetch([
+      jsonRoute('/api/me', consultantMe),
+      jsonRoute(`/api/interviews/day/${TODAY}`, emptyDay(TODAY)),
+      jsonRoute('/api/interviews', monthCounts),
+      jsonRoute('/api/consultants', pasteConsultants),
+      jsonRoute('/api/clients', clients),
+      jsonRoute('/api/hdis', pasteHdis),
+      jsonRoute('/api/interviews', { id: 'iv1' }, { method: 'POST' }),
+    ]);
+    renderApp(<InterviewsPage />);
+    await screen.findByText(TODAY_LABEL);
+    await user.click(screen.getByText('+ Add interview'));
+    const dialog = await screen.findByRole('dialog', { name: 'Add interview' });
+
+    await user.click(within(dialog).getByText('+ Paste interview details to fill this form'));
+    const pasteBox = within(dialog).getByLabelText('Paste interview details');
+    await user.click(pasteBox);
+    await user.paste(
+      [
+        'Interview Update: 2026140808(L4)',
+        'Mode - Face 2 Face',
+        'Candidate Full Name: Tanya Garg',
+        'Email: tgarg1012@gmail.com',
+        'Date: Aug 14, 2026',
+        'Time: 3:30 PM',
+        'Profile: Flutter VIP',
+        'With: Kushagra Bindra',
+        'Sourcing: Priya Pal',
+        'Status: Selected',
+      ].join('\n'),
+    );
+    await user.click(within(dialog).getByText('Parse & fill'));
+
+    expect(within(dialog).getByPlaceholderText('2026090701')).toHaveValue('2026140808');
+    expect(within(dialog).getByLabelText('Date')).toHaveValue('2026-08-14');
+    expect(within(dialog).getByPlaceholderText('Name')).toHaveValue('Tanya Garg');
+    expect(within(dialog).getByPlaceholderText('candidate@email.com')).toHaveValue(
+      'tgarg1012@gmail.com',
+    );
+    expect(within(dialog).getByPlaceholderText('12:30 PM')).toHaveValue('3:30 PM');
+    expect(within(dialog).getByPlaceholderText('Interviewer name')).toHaveValue('Kushagra Bindra');
+    expect(within(dialog).getByLabelText('Profile')).toHaveValue(
+      'Flutter VIP — Testify (TST_FLUT_20260601)',
+    );
+
+    await user.click(within(dialog).getByText('Save interview'));
+
+    const posted = calls.find((c) => c.url.endsWith('/api/interviews') && c.method === 'POST');
+    expect(posted).toBeTruthy();
+    const body = posted!.body as Record<string, unknown>;
+    expect(body.date).toBe('2026-08-14');
+    expect(body.ref).toBe('2026140808');
+    expect(body.round).toBe('L4');
+    expect(body.type).toBe('RAPYD(F)');
+    expect(body.candidate).toBe('Tanya Garg');
+    expect(body.candidateEmail).toBe('tgarg1012@gmail.com');
+    expect(body.time).toBe('3:30 PM');
+    expect(body.profile).toBe('Flutter VIP');
+    expect(body.requirementRef).toBe('TST_FLUT_20260601');
+    expect(body.interviewer).toBe('Kushagra Bindra');
+    expect(body.ppgConsultantId).toBe('c_priya');
+    expect(body.status).toBe('Selected');
+  });
+
+  it('leaves unmatched fields alone and surfaces a note instead of guessing', async () => {
+    const user = userEvent.setup({ delay: null });
+    mockFetch([
+      jsonRoute('/api/me', consultantMe),
+      jsonRoute(`/api/interviews/day/${TODAY}`, emptyDay(TODAY)),
+      jsonRoute('/api/interviews', monthCounts),
+      jsonRoute('/api/consultants', pasteConsultants),
+      jsonRoute('/api/clients', clients),
+      jsonRoute('/api/hdis', pasteHdis),
+    ]);
+    renderApp(<InterviewsPage />);
+    await screen.findByText(TODAY_LABEL);
+    await user.click(screen.getByText('+ Add interview'));
+    const dialog = await screen.findByRole('dialog', { name: 'Add interview' });
+
+    await user.click(within(dialog).getByText('+ Paste interview details to fill this form'));
+    const pasteBox = within(dialog).getByLabelText('Paste interview details');
+    await user.click(pasteBox);
+    await user.paste('Profile: Some Requirement Nobody Has\nStatus: Withdrawn');
+    await user.click(within(dialog).getByText('Parse & fill'));
+
+    expect(
+      await within(dialog).findByText(/couldn't match "Some Requirement Nobody Has"/),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByText(/couldn't match "Withdrawn"/)).toBeInTheDocument();
+    expect((within(dialog).getByLabelText('Profile') as HTMLInputElement).value).toBe('');
+  });
+});
+
 describe('Interviews — Edit interview', () => {
   const existingInterview = {
     id: 'iv1',

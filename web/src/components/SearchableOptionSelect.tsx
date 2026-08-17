@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 export interface SearchableOption {
   id: string;
@@ -33,6 +33,20 @@ export function SearchableOptionSelect({
   const selectedLabel = useMemo(() => options.find((o) => o.id === value)?.label, [options, value]);
   const [query, setQuery] = useState(selectedLabel ?? fallbackLabel ?? '');
   const [open, setOpen] = useState(false);
+
+  // Re-sync the displayed text whenever `value` itself changes from outside a user
+  // pick (e.g. a "paste to fill" flow calling onChange programmatically) — otherwise
+  // the input silently keeps showing whatever it had at mount while the real
+  // selection moves on underneath it. Deliberately keyed on `value` alone (via a
+  // ref for the label, not a dependency) rather than `selectedLabel`: options can
+  // finish loading well after mount and happen to match an unrelated `value` that
+  // hasn't changed (e.g. edit mode's fallbackLabel case) — that shouldn't retroactively
+  // overwrite text the caller intentionally showed before the option list existed.
+  const selectedLabelRef = useRef(selectedLabel);
+  selectedLabelRef.current = selectedLabel;
+  useEffect(() => {
+    if (selectedLabelRef.current !== undefined) setQuery(selectedLabelRef.current);
+  }, [value]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
