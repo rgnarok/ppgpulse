@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AppShell } from '../components/AppShell';
 import { Card, SectionTitle, Pill, Empty, Btn, SplitStatCard } from '../components/ui';
@@ -1043,9 +1043,15 @@ function formToPayload(form: DetailFormState): Record<string, unknown> {
  * attachments) happen to be filled in at save time.
  */
 function RequirementDetailModal({ record, onClose }: { record: HdisRecord; onClose: () => void }) {
+  const navigate = useNavigate();
   const [form, setForm] = useState<DetailFormState>(() => detailToForm(record.requirementDetail));
   const save = useSaveRequirementDetail(record.jdId);
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  function goToDetailPage() {
+    onClose();
+    navigate(`/hdis/${record.jdId}#hdis-attachments`);
+  }
 
   const filledRequired = REQUIRED_DETAIL_KEYS.filter((k) => (form[k] ?? '').trim() !== '').length;
   const allRequiredFilled = filledRequired === REQUIRED_DETAIL_KEYS.length;
@@ -1147,13 +1153,26 @@ function RequirementDetailModal({ record, onClose }: { record: HdisRecord; onClo
             Could not save the requirement details.
           </div>
         )}
-        <div style={{ marginTop: 16, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-          <Btn variant="gho" onClick={onClose}>
-            Close
-          </Btn>
-          <Btn onClick={submit} disabled={save.isPending}>
-            {allRequiredFilled ? 'Save details' : 'Save draft'}
-          </Btn>
+        <div
+          style={{
+            marginTop: 16,
+            display: 'flex',
+            gap: 10,
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          <button type="button" className="lnk" onClick={goToDetailPage}>
+            Go to record to attach a file →
+          </button>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Btn variant="gho" onClick={onClose}>
+              Close
+            </Btn>
+            <Btn onClick={submit} disabled={save.isPending}>
+              {allRequiredFilled ? 'Save details' : 'Save draft'}
+            </Btn>
+          </div>
         </div>
       </div>
     </div>
@@ -1212,6 +1231,12 @@ function HdisDetail({ jdId }: { jdId: string }) {
   const { data: activity = [] } = useHdisActivity(jdId);
   const [editing, setEditing] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  // Land on the Attachments card when arriving via the "go attach a file" link from
+  // the requirement-questionnaire modal (see RequirementDetailModal.goToDetailPage).
+  useEffect(() => {
+    if (!rec || location.hash !== '#hdis-attachments') return;
+    document.getElementById('hdis-attachments')?.scrollIntoView?.({ block: 'start' });
+  }, [rec, location.hash]);
   // Same rule as the list: blanket edit, or being personally listed as an owner of
   // this specific record.
   const editable = canEditAll || (!!me?.name && !!rec?.owners.includes(me.name));
@@ -1332,7 +1357,7 @@ function HdisDetail({ jdId }: { jdId: string }) {
         <ProfileAgingCard rec={rec} />
       </div>
 
-      <div style={{ marginBottom: 24 }}>
+      <div id="hdis-attachments" style={{ marginBottom: 24 }}>
         <Attachments rec={rec} editable={editable} />
       </div>
 

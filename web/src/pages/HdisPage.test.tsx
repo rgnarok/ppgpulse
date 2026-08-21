@@ -1058,6 +1058,35 @@ describe('HDIS Pending status + requirement questionnaire', () => {
     expect((put!.body as { bigMemberName: string }).bigMemberName).toBe('Abha Sharma');
   });
 
+  it('the questionnaire modal offers a way to reach the Attachments card', async () => {
+    mockFetch([
+      jsonRoute('/api/me', superAdminMe),
+      jsonRoute(`/api/hdis/${pendingRecord.jdId}/activity`, []),
+      jsonRoute(`/api/hdis/${pendingRecord.jdId}/candidates`, []),
+      jsonRoute(`/api/hdis/${pendingRecord.jdId}`, pendingRecord),
+      jsonRoute('/api/hdis', [pendingRecord]),
+      jsonRoute('/api/clients', clients),
+      jsonRoute('/api/consultants', consultants),
+    ]);
+    renderApp(
+      <Routes>
+        <Route path="/hdis/:jdId" element={<HdisPage />} />
+      </Routes>,
+      { route: `/hdis/${pendingRecord.jdId}` },
+    );
+    await screen.findAllByText('Backend Engineer');
+    await userEvent.click(screen.getByText('Requirement details'));
+    expect(await screen.findByText(/no attachment yet/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByText('Go to record to attach a file →'));
+
+    // Modal closed and the page's own Attachments card (upload input included) is
+    // now reachable — this is the one place a document can actually be attached.
+    expect(screen.queryByText(/Save draft|Save details/)).not.toBeInTheDocument();
+    expect(await screen.findByText('Attachments')).toBeInTheDocument();
+    expect(screen.getByLabelText('Upload attachment')).toBeInTheDocument();
+  });
+
   it('shows a Pending banner on the detail page with a completion CTA', async () => {
     mockFetch([
       jsonRoute('/api/me', superAdminMe),
