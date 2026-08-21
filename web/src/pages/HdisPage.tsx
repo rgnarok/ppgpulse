@@ -8,6 +8,7 @@ import { Pagination } from '../components/Pagination';
 import { useAuth } from '../lib/auth';
 import { can } from '../lib/permissions';
 import { api, apiUrl } from '../lib/api';
+import { parseHdisText } from '../lib/parseHdisText';
 import {
   useHdisList,
   useHdisRecord,
@@ -573,6 +574,30 @@ function HdisFormModal({
         : {}),
     }));
 
+  // ---- Paste to fill (create mode only) ----
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState('');
+  const [pasteNotes, setPasteNotes] = useState<string[]>([]);
+
+  function handleParse() {
+    const { fields, notes } = parseHdisText(pasteText);
+    if (fields.jdId) set('jdId', fields.jdId);
+    if (fields.title) set('title', fields.title);
+    if (fields.client) set('client', fields.client);
+    if (fields.reqDateISO) set('reqDate', fields.reqDateISO);
+    if (fields.jdLink) set('jdLink', fields.jdLink);
+    if (fields.openings) set('openings', String(fields.openings));
+    if (fields.priority) set('priority', fields.priority);
+    if (fields.owners?.length) {
+      const resolved = fields.owners.map((raw) => {
+        const match = ppgNames.find((n) => n.toLowerCase() === raw.toLowerCase());
+        return match ?? raw;
+      });
+      setOwners((prev) => Array.from(new Set([...prev, ...resolved])));
+    }
+    setPasteNotes(notes);
+  }
+
   function submit() {
     const openings = Number(form.openings) || 1;
     if (mode === 'edit') {
@@ -627,6 +652,52 @@ function HdisFormModal({
         onClick={(e) => e.stopPropagation()}
       >
         <SectionTitle>{mode === 'edit' ? `Edit ${initial?.jdId}` : 'New HDIS record'}</SectionTitle>
+        {mode === 'create' && (
+          <div style={{ marginTop: 12 }}>
+            <button
+              type="button"
+              className="lnk"
+              onClick={() => setPasteOpen((v) => !v)}
+              aria-expanded={pasteOpen}
+            >
+              {pasteOpen ? '− Hide paste to fill' : '+ Paste tracker row to fill this form'}
+            </button>
+            {pasteOpen && (
+              <div style={{ marginTop: 8 }}>
+                <textarea
+                  aria-label="Paste HDIS tracker row"
+                  value={pasteText}
+                  onChange={(e) => setPasteText(e.target.value)}
+                  placeholder="Paste the column headers, then the row of values, copied straight from the tracker sheet."
+                  rows={6}
+                  style={{ width: '100%', fontFamily: 'inherit', fontSize: 13 }}
+                />
+                <div style={{ marginTop: 8, display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-gho"
+                    onClick={handleParse}
+                    disabled={!pasteText.trim()}
+                  >
+                    Parse &amp; fill
+                  </button>
+                  {pasteNotes.length > 0 && (
+                    <span className="muted" style={{ fontSize: 12 }}>
+                      Review the fields below before saving.
+                    </span>
+                  )}
+                </div>
+                {pasteNotes.length > 0 && (
+                  <ul style={{ marginTop: 8, fontSize: 12, paddingLeft: 18 }}>
+                    {pasteNotes.map((note, i) => (
+                      <li key={i}>{note}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+        )}
         <div className="form-grid" style={{ marginTop: 14 }}>
           <div className="field">
             <label>JD ID</label>

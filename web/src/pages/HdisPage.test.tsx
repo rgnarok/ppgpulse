@@ -1304,3 +1304,105 @@ describe('HDIS Pending status + requirement questionnaire', () => {
     expect(screen.getByText('Complete requirement details')).toBeInTheDocument();
   });
 });
+
+describe('HDIS Add record — paste to fill', () => {
+  const TRACKER_PASTE = `ageing
+req_status
+priority_pm
+priority_cm
+priority_BIG
+position_title
+client_name
+client_category
+ARPD
+position_confidence
+confidence_predictor
+jd_id
+hiring_manager
+hiring_category
+new_requirement
+job_req_date
+selection_date
+target_closure_date
+position_went_on_hold
+position_type
+ppg_owner
+partners_name
+openings
+projection_BIG
+projection_PPG
+projection_date
+reason_for_projection_change_1
+no_of_flags_received
+location_type
+Location
+is_replacement
+jd_google_link
+5
+Active
+
+
+High
+Backend Engineer
+Acme Corp
+
+
+
+
+TST_PASTE_20260901
+
+
+
+Sep 1, 2026
+
+
+
+
+abha sharma
+
+3
+
+
+
+
+
+
+
+
+https://docs.google.com/document/d/test123`;
+
+  it('parses a pasted tracker row and fills the Add record form', async () => {
+    const user = userEvent.setup({ delay: null });
+    mockFetch(routesFor(superAdminMe));
+    renderApp(
+      <Routes>
+        <Route path="/hdis" element={<HdisPage />} />
+      </Routes>,
+      { route: '/hdis?fy=&month=' },
+    );
+    await screen.findByText('QA Engineer');
+    await user.click(screen.getByText('+ Add record'));
+
+    await user.click(screen.getByText('+ Paste tracker row to fill this form'));
+    const textarea = screen.getByLabelText('Paste HDIS tracker row');
+    await user.click(textarea);
+    await user.paste(TRACKER_PASTE);
+    await user.click(screen.getByText('Parse & fill'));
+
+    const dialog = screen.getByRole('dialog');
+    expect(screen.getByPlaceholderText('VAY_XX_20260601')).toHaveValue('TST_PASTE_20260901');
+    expect(screen.getByPlaceholderText('Start typing a client name…')).toHaveValue('Acme Corp');
+    expect(screen.getByLabelText('Positions')).toHaveValue(3);
+    expect(within(dialog).getByDisplayValue('Backend Engineer')).toBeInTheDocument();
+    const dateInput = dialog.querySelector('input[type="date"]');
+    expect(dateInput).toHaveValue('2026-09-01');
+    expect(
+      screen.getByDisplayValue('https://docs.google.com/document/d/test123'),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByLabelText('Priority')).toHaveValue('P1');
+    // "abha sharma" (pasted, lowercase) resolved to the consultant's canonical casing.
+    expect(within(dialog).getByText('Abha Sharma')).toBeInTheDocument();
+
+    expect(screen.getByText(/Filled:/)).toBeInTheDocument();
+  });
+});
