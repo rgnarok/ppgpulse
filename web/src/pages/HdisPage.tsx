@@ -1086,7 +1086,9 @@ function RequirementDetailModal({ record, onClose }: { record: HdisRecord; onClo
 
   const filledRequired = REQUIRED_DETAIL_KEYS.filter((k) => (form[k] ?? '').trim() !== '').length;
   const allRequiredFilled = filledRequired === REQUIRED_DETAIL_KEYS.length;
-  const hasAttachment = record.attachments.length > 0;
+  // A JD link is an equally valid way of having the requirement documented on
+  // file, so it satisfies the attachment requirement just like an uploaded file.
+  const hasAttachment = record.attachments.length > 0 || !!record.jdLink;
 
   function submit() {
     save.mutate(formToPayload(form), {
@@ -1369,8 +1371,10 @@ function HdisDetail({ jdId }: { jdId: string }) {
             <p style={{ marginTop: 10 }}>
               This requirement stays "Pending" — excluded from live tiles and reports — until the
               requirement questionnaire is complete
-              {rec.attachments.length === 0 ? ' and at least one attachment is on file' : ''}.
-              {editable && ' Fill it in below to unlock Active.'}
+              {rec.attachments.length === 0 && !rec.jdLink
+                ? ' and at least one attachment (or a JD link) is on file'
+                : ''}
+              .{editable && ' Fill it in below to unlock Active.'}
             </p>
             {editable && (
               <Btn small onClick={() => setShowDetails(true)}>
@@ -1477,7 +1481,9 @@ function Attachments({ rec, editable }: { rec: HdisRecord; editable: boolean }) 
       <div>
         {rec.attachments.length === 0 ? (
           <p className="muted" style={{ fontSize: 13 }}>
-            No documents attached.
+            {rec.jdLink
+              ? 'No files uploaded — the JD link on file covers the attachment requirement.'
+              : 'No documents attached.'}
           </p>
         ) : (
           rec.attachments.map((a) => (

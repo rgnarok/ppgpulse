@@ -389,6 +389,42 @@ describe('T5.5 Pending status + requirement questionnaire', () => {
     expect(activateRes.json().detailsComplete).toBe(true);
   });
 
+  it('a JD link satisfies the attachment requirement just like an uploaded file — no upload needed to unlock Active', async () => {
+    const linkJdId = 'TST_PEND_JDLINK_20260601';
+    await app.inject({
+      method: 'POST',
+      url: '/api/hdis',
+      headers: auth(adminToken),
+      payload: { ...jd, jdId: linkJdId },
+    });
+
+    const linkRes = await app.inject({
+      method: 'POST',
+      url: `/api/hdis/${linkJdId}/link`,
+      headers: auth(adminToken),
+      payload: { jdLink: 'https://docs.google.com/document/d/abc' },
+    });
+    expect(linkRes.statusCode).toBe(200);
+
+    const detailRes = await app.inject({
+      method: 'PUT',
+      url: `/api/hdis/${linkJdId}/details`,
+      headers: auth(adminToken),
+      payload: { ...completeDetail, requirementName: 'Backend Engineer' },
+    });
+    // No file was uploaded — the JD link alone is enough.
+    expect(detailRes.json().detailsComplete).toBe(true);
+
+    const activateRes = await app.inject({
+      method: 'PATCH',
+      url: `/api/hdis/${linkJdId}`,
+      headers: auth(adminToken),
+      payload: { status: 'Active' },
+    });
+    expect(activateRes.statusCode).toBe(200);
+    expect(activateRes.json().status).toBe('Active');
+  });
+
   it("reactivating an On Hold record is NOT blocked by an incomplete questionnaire — the gate is only for a record's first activation out of Pending", async () => {
     const onHoldJdId = 'TST_ONHOLD_REACTIVATE_20260601';
     await app.inject({

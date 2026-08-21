@@ -1168,6 +1168,56 @@ describe('HDIS Pending status + requirement questionnaire', () => {
     expect(screen.queryByText('Requirement details — TST_PEND_20260701')).not.toBeInTheDocument();
   });
 
+  it('a JD link satisfies the attachment requirement — no "no attachment yet" warning, and the modal treats it as complete', async () => {
+    const linkedRecord: HdisRecord = { ...pendingRecord, jdLink: 'https://docs.google.com/x' };
+    mockFetch([
+      jsonRoute('/api/me', superAdminMe),
+      jsonRoute(`/api/hdis/${linkedRecord.jdId}/activity`, []),
+      jsonRoute(`/api/hdis/${linkedRecord.jdId}/candidates`, []),
+      jsonRoute(`/api/hdis/${linkedRecord.jdId}`, linkedRecord),
+      jsonRoute('/api/hdis', [linkedRecord]),
+      jsonRoute('/api/clients', clients),
+      jsonRoute('/api/consultants', consultants),
+    ]);
+    renderApp(
+      <Routes>
+        <Route path="/hdis/:jdId" element={<HdisPage />} />
+      </Routes>,
+      { route: `/hdis/${linkedRecord.jdId}` },
+    );
+    await screen.findAllByText('Backend Engineer');
+    await userEvent.click(screen.getByText('Requirement details'));
+
+    expect(screen.queryByText(/no attachment yet/)).not.toBeInTheDocument();
+  });
+
+  it('the Attachments card and Pending banner do not flag a missing document when a JD link is on file', async () => {
+    const linkedRecord: HdisRecord = { ...pendingRecord, jdLink: 'https://docs.google.com/x' };
+    mockFetch([
+      jsonRoute('/api/me', superAdminMe),
+      jsonRoute(`/api/hdis/${linkedRecord.jdId}/activity`, []),
+      jsonRoute(`/api/hdis/${linkedRecord.jdId}/candidates`, []),
+      jsonRoute(`/api/hdis/${linkedRecord.jdId}`, linkedRecord),
+      jsonRoute('/api/hdis', [linkedRecord]),
+      jsonRoute('/api/clients', clients),
+      jsonRoute('/api/consultants', consultants),
+    ]);
+    renderApp(
+      <Routes>
+        <Route path="/hdis/:jdId" element={<HdisPage />} />
+      </Routes>,
+      { route: `/hdis/${linkedRecord.jdId}` },
+    );
+    await screen.findAllByText('Backend Engineer');
+
+    expect(
+      screen.getByText(/JD link on file covers the attachment requirement/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('No documents attached.')).not.toBeInTheDocument();
+    // The Pending banner's copy shouldn't demand a document when a link already covers it.
+    expect(screen.queryByText(/or a JD link\) is on file/)).not.toBeInTheDocument();
+  });
+
   it('a saved draft reopens pre-filled for further editing, and closing right after a save does not prompt', async () => {
     const savedDraft: RequirementDetail = {
       bigMemberName: 'Abha Sharma',

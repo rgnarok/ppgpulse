@@ -53,16 +53,24 @@ export const REQUIRED_DETAIL_FIELDS = [
 
 /** Completeness also requires at least one attachment — the questionnaire's "Screenshot
  * Attachment - Requirement Receiving Email from Client" is satisfied by the record's
- * existing Attachments feature rather than a separate upload field. */
+ * existing Attachments feature rather than a separate upload field. A JD link counts too:
+ * it's an equally valid way of having the requirement documented on file, so a record
+ * with a link but no uploaded file should not be treated as missing its attachment. */
 function isDetailComplete(
   detail: Partial<Record<(typeof REQUIRED_DETAIL_FIELDS)[number], unknown>> | null | undefined,
-  hasAttachment: boolean,
+  hasAttachmentOrLink: boolean,
 ): boolean {
-  if (!detail || !hasAttachment) return false;
+  if (!detail || !hasAttachmentOrLink) return false;
   return REQUIRED_DETAIL_FIELDS.every((f) => {
     const v = detail[f];
     return v !== null && v !== undefined && v !== '';
   });
+}
+
+/** A record's attachment requirement is satisfied by either an uploaded file or a JD
+ * link — see isDetailComplete() above. */
+function hasAttachmentOrLink(h: { attachments: unknown[]; jdLink: string | null }): boolean {
+  return h.attachments.length > 0 || !!h.jdLink;
 }
 
 /** Matches isClosed() in report/metrics.ts, at the whole-record level (no per-owner
@@ -84,7 +92,7 @@ function initialStage(status: string): string {
 }
 
 export function toHdisDto(h: HdisDetail) {
-  const detailsComplete = isDetailComplete(h.detail, h.attachments.length > 0);
+  const detailsComplete = isDetailComplete(h.detail, hasAttachmentOrLink(h));
   return {
     jdId: h.jdId,
     title: h.title,
@@ -325,7 +333,7 @@ export async function updateHdis(
   // and is being reactivated), re-activating it must not be blocked by a
   // questionnaire that didn't even exist when many older records were created.
   if (input.status === 'Active' && current.status === 'Pending') {
-    const complete = isDetailComplete(current.detail, current.attachments.length > 0);
+    const complete = isDetailComplete(current.detail, hasAttachmentOrLink(current));
     if (!complete) {
       throw new BadRequestError(
         'Complete the requirement questionnaire before activating this record',
@@ -408,7 +416,7 @@ export async function setPipeline(
   // effect of logging R0-R5 counts. Any other stage transition (On Hold/Closed) is
   // unaffected since those aren't gated.
   if (nextStatus === 'Active' && current.status === 'Pending') {
-    const complete = isDetailComplete(current.detail, current.attachments.length > 0);
+    const complete = isDetailComplete(current.detail, hasAttachmentOrLink(current));
     if (!complete) nextStatus = 'Pending';
   }
 
@@ -479,7 +487,7 @@ export async function saveRequirementDetail(
 ) {
   const current = await getHdis(prisma, jdId);
   const merged = { ...current.detail, ...input };
-  const complete = isDetailComplete(merged, current.attachments.length > 0);
+  const complete = isDetailComplete(merged, hasAttachmentOrLink(current));
 
   const updated = await prisma.$transaction(async (tx) => {
     await tx.hdisRequirementDetail.upsert({
