@@ -4,7 +4,7 @@ import { Routes, Route } from 'react-router-dom';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { renderApp, mockFetch, jsonRoute, superAdminMe, consultantMe } from '../tests/utils';
 import HdisPage from './HdisPage';
-import type { HdisRecord, Me } from '../lib/types';
+import type { HdisRecord, Me, RequirementDetail } from '../lib/types';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -1085,6 +1085,152 @@ describe('HDIS Pending status + requirement questionnaire', () => {
     expect(screen.queryByText(/Save draft|Save details/)).not.toBeInTheDocument();
     expect(await screen.findByText('Attachments')).toBeInTheDocument();
     expect(screen.getByLabelText('Upload attachment')).toBeInTheDocument();
+  });
+
+  it('does not close the questionnaire on backdrop click when dirty and the user cancels the confirm', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    mockFetch([
+      jsonRoute('/api/me', superAdminMe),
+      jsonRoute(`/api/hdis/${pendingRecord.jdId}/activity`, []),
+      jsonRoute(`/api/hdis/${pendingRecord.jdId}/candidates`, []),
+      jsonRoute(`/api/hdis/${pendingRecord.jdId}`, pendingRecord),
+      jsonRoute('/api/hdis', [pendingRecord]),
+      jsonRoute('/api/clients', clients),
+      jsonRoute('/api/consultants', consultants),
+    ]);
+    renderApp(
+      <Routes>
+        <Route path="/hdis/:jdId" element={<HdisPage />} />
+      </Routes>,
+      { route: `/hdis/${pendingRecord.jdId}` },
+    );
+    await screen.findAllByText('Backend Engineer');
+    await userEvent.click(screen.getByText('Requirement details'));
+    await userEvent.type(screen.getByLabelText('BIG member name *'), 'Abha Sharma');
+
+    const dialog = screen.getByRole('dialog');
+    await userEvent.click(dialog);
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(screen.getByText('Requirement details — TST_PEND_20260701')).toBeInTheDocument();
+  });
+
+  it('closes the questionnaire on Close when dirty and the user confirms discard', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    mockFetch([
+      jsonRoute('/api/me', superAdminMe),
+      jsonRoute(`/api/hdis/${pendingRecord.jdId}/activity`, []),
+      jsonRoute(`/api/hdis/${pendingRecord.jdId}/candidates`, []),
+      jsonRoute(`/api/hdis/${pendingRecord.jdId}`, pendingRecord),
+      jsonRoute('/api/hdis', [pendingRecord]),
+      jsonRoute('/api/clients', clients),
+      jsonRoute('/api/consultants', consultants),
+    ]);
+    renderApp(
+      <Routes>
+        <Route path="/hdis/:jdId" element={<HdisPage />} />
+      </Routes>,
+      { route: `/hdis/${pendingRecord.jdId}` },
+    );
+    await screen.findAllByText('Backend Engineer');
+    await userEvent.click(screen.getByText('Requirement details'));
+    await userEvent.type(screen.getByLabelText('BIG member name *'), 'Abha Sharma');
+
+    await userEvent.click(screen.getByText('Close'));
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(screen.queryByText('Requirement details — TST_PEND_20260701')).not.toBeInTheDocument();
+  });
+
+  it('closes the questionnaire without confirming when nothing has been typed', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm');
+    mockFetch([
+      jsonRoute('/api/me', superAdminMe),
+      jsonRoute(`/api/hdis/${pendingRecord.jdId}/activity`, []),
+      jsonRoute(`/api/hdis/${pendingRecord.jdId}/candidates`, []),
+      jsonRoute(`/api/hdis/${pendingRecord.jdId}`, pendingRecord),
+      jsonRoute('/api/hdis', [pendingRecord]),
+      jsonRoute('/api/clients', clients),
+      jsonRoute('/api/consultants', consultants),
+    ]);
+    renderApp(
+      <Routes>
+        <Route path="/hdis/:jdId" element={<HdisPage />} />
+      </Routes>,
+      { route: `/hdis/${pendingRecord.jdId}` },
+    );
+    await screen.findAllByText('Backend Engineer');
+    await userEvent.click(screen.getByText('Requirement details'));
+
+    await userEvent.click(screen.getByText('Close'));
+
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(screen.queryByText('Requirement details — TST_PEND_20260701')).not.toBeInTheDocument();
+  });
+
+  it('a saved draft reopens pre-filled for further editing, and closing right after a save does not prompt', async () => {
+    const savedDraft: RequirementDetail = {
+      bigMemberName: 'Abha Sharma',
+      requirementsReceived: null,
+      requirementName: null,
+      engagementType: null,
+      clientType: null,
+      roleBackground: null,
+      positionOpenDuration: null,
+      hiringDeadline: null,
+      interviewRoundsCount: null,
+      interviewRoundsDefinition: null,
+      positionsAlreadyFilled: null,
+      clientAttemptedInternalHiring: null,
+      internalHiringDuration: null,
+      internalHiringChannels: null,
+      internalHiringStageReached: null,
+      internalHiringChallenges: null,
+      ctcBlockerGap: null,
+      maxNoticePeriod: null,
+      targetCompaniesSuggested: null,
+      vayuzExclusive: null,
+      vendorCount: null,
+      vendorsSharingProfiles: null,
+      vendorSubmissionDuration: null,
+      duplicateProfileTimeline: null,
+      commercialRates: null,
+      clientPocDetails: null,
+      additionalInsights: null,
+      closureConfidence: null,
+      exceptionNotes: null,
+      atsUsed: null,
+      isComplete: false,
+    };
+    const draftRecord: HdisRecord = { ...pendingRecord, requirementDetail: savedDraft };
+    const { calls } = mockFetch([
+      jsonRoute('/api/me', superAdminMe),
+      jsonRoute(`/api/hdis/${draftRecord.jdId}/activity`, []),
+      jsonRoute(`/api/hdis/${draftRecord.jdId}/candidates`, []),
+      jsonRoute(`/api/hdis/${draftRecord.jdId}`, draftRecord),
+      jsonRoute('/api/hdis', [draftRecord]),
+      jsonRoute('/api/clients', clients),
+      jsonRoute('/api/consultants', consultants),
+      jsonRoute(`/api/hdis/${draftRecord.jdId}/details`, draftRecord, { method: 'PUT' }),
+    ]);
+    const confirmSpy = vi.spyOn(window, 'confirm');
+    renderApp(
+      <Routes>
+        <Route path="/hdis/:jdId" element={<HdisPage />} />
+      </Routes>,
+      { route: `/hdis/${draftRecord.jdId}` },
+    );
+    await screen.findAllByText('Backend Engineer');
+    await userEvent.click(screen.getByText('Requirement details'));
+
+    // Reopening the draft loads the previously saved value back into the form.
+    expect(screen.getByLabelText('BIG member name *')).toHaveValue('Abha Sharma');
+
+    await userEvent.click(screen.getByText('Save draft'));
+    expect(calls.some((c) => c.method === 'PUT')).toBe(true);
+
+    await userEvent.click(screen.getByText('Close'));
+    expect(confirmSpy).not.toHaveBeenCalled();
   });
 
   it('shows a Pending banner on the detail page with a completion CTA', async () => {

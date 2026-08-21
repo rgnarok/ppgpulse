@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AppShell } from '../components/AppShell';
 import { Card, SectionTitle, Pill, Empty, Btn, SplitStatCard } from '../components/ui';
@@ -547,6 +547,20 @@ function HdisFormModal({
   const [owners, setOwners] = useState<string[]>(
     initial?.owners ?? (mode === 'create' && me?.scope !== 'org' && me?.name ? [me.name] : []),
   );
+  // Snapshot of the form as it looked on mount, so we can tell whether the user has
+  // actually changed anything — used to gate the discard-confirmation below.
+  const initialFormRef = useRef(form);
+  const initialOwnersRef = useRef(owners);
+  const isDirty =
+    JSON.stringify(form) !== JSON.stringify(initialFormRef.current) ||
+    JSON.stringify(owners) !== JSON.stringify(initialOwnersRef.current);
+  const dirtyRef = useRef(isDirty);
+  dirtyRef.current = isDirty;
+  // Guards backdrop click / Cancel: confirms before discarding unsaved changes.
+  function requestClose() {
+    if (dirtyRef.current && !window.confirm('Discard the changes you made to this record?')) return;
+    onClose();
+  }
   const reasonOptions = STATUS_REASON_OPTIONS[form.status] ?? [];
   const set = (k: string, v: string) =>
     setForm((f) => ({
@@ -606,7 +620,7 @@ function HdisFormModal({
   }
 
   return (
-    <div role="dialog" onClick={onClose} style={overlay}>
+    <div role="dialog" onClick={requestClose} style={overlay}>
       <div
         className="card pad"
         style={{ width: 620, maxWidth: '100%', maxHeight: '88vh', overflowY: 'auto' }}
@@ -764,7 +778,7 @@ function HdisFormModal({
           </div>
         )}
         <div style={{ marginTop: 16, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-          <Btn variant="gho" onClick={onClose}>
+          <Btn variant="gho" onClick={requestClose}>
             Cancel
           </Btn>
           <Btn onClick={submit} disabled={mutation.isPending}>
@@ -1048,8 +1062,25 @@ function RequirementDetailModal({ record, onClose }: { record: HdisRecord; onClo
   const save = useSaveRequirementDetail(record.jdId);
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
-  function goToDetailPage() {
+  // Snapshot of the last-saved (or initial) form state, so we know whether the user
+  // has typed anything since the last save — drives the discard-confirmation below.
+  const initialFormRef = useRef(form);
+  const isDirty = JSON.stringify(form) !== JSON.stringify(initialFormRef.current);
+  const dirtyRef = useRef(isDirty);
+  dirtyRef.current = isDirty;
+
+  // Guards backdrop click / Close / "go to record": confirms before discarding
+  // anything typed since the last draft save.
+  function requestClose() {
+    if (dirtyRef.current && !window.confirm('Discard the requirement details you entered?')) {
+      return false;
+    }
     onClose();
+    return true;
+  }
+
+  function goToDetailPage() {
+    if (!requestClose()) return;
     navigate(`/hdis/${record.jdId}#hdis-attachments`);
   }
 
@@ -1058,11 +1089,17 @@ function RequirementDetailModal({ record, onClose }: { record: HdisRecord; onClo
   const hasAttachment = record.attachments.length > 0;
 
   function submit() {
-    save.mutate(formToPayload(form));
+    save.mutate(formToPayload(form), {
+      // A successful save (draft or complete) becomes the new "clean" baseline, so
+      // closing right after saving doesn't trigger a needless discard prompt.
+      onSuccess: () => {
+        initialFormRef.current = form;
+      },
+    });
   }
 
   return (
-    <div role="dialog" onClick={onClose} style={overlay}>
+    <div role="dialog" onClick={requestClose} style={overlay}>
       <div
         className="card pad"
         style={{ width: 760, maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto' }}
@@ -1166,7 +1203,7 @@ function RequirementDetailModal({ record, onClose }: { record: HdisRecord; onClo
             Go to record to attach a file →
           </button>
           <div style={{ display: 'flex', gap: 10 }}>
-            <Btn variant="gho" onClick={onClose}>
+            <Btn variant="gho" onClick={requestClose}>
               Close
             </Btn>
             <Btn onClick={submit} disabled={save.isPending}>
