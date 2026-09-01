@@ -10,7 +10,8 @@ Email: tgarg1012@gmail.com
 Date: Aug 14, 2026
 Time: 3:30 PM
 Profile: Flutter VIP
-With: Kushagra Bindra
+With: Vianaar Homes
+Interviewer: Kushagra Bindra
 Sourcing: Priya Pal
 Status: Selected`;
 
@@ -24,10 +25,18 @@ Status: Selected`;
     expect(fields.dateISO).toBe('2026-08-14');
     expect(fields.time).toBe('3:30 PM');
     expect(fields.profileRaw).toBe('Flutter VIP');
+    // "With" is the client the interview is with, not the interviewer.
+    expect(fields.client).toBe('Vianaar Homes');
     expect(fields.interviewer).toBe('Kushagra Bindra');
     expect(fields.sourcingRaw).toBe('Priya Pal');
     expect(fields.statusRaw).toBe('Selected');
     expect(unmatchedLines).toEqual([]);
+  });
+
+  it('treats "With" as the client, and leaves interviewer unset when omitted', () => {
+    const { fields } = parseInterviewText('With: Vianaar Homes\nAccount Manager: Chirag Sharma');
+    expect(fields.client).toBe('Vianaar Homes');
+    expect(fields.interviewer).toBeUndefined();
   });
 
   it('handles a bare interview-update ref with no round in parens', () => {

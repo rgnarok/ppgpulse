@@ -240,7 +240,8 @@ describe('Interviews — Add interview modal Paste to fill', () => {
         'Date: Aug 14, 2026',
         'Time: 3:30 PM',
         'Profile: Flutter VIP',
-        'With: Kushagra Bindra',
+        'With: Acme Corp',
+        'Interviewer: Kushagra Bindra',
         'Sourcing: Priya Pal',
         'Status: Selected',
       ].join('\n'),
@@ -258,6 +259,9 @@ describe('Interviews — Add interview modal Paste to fill', () => {
     expect(within(dialog).getByLabelText('Profile')).toHaveValue(
       'Flutter VIP — Testify (TST_FLUT_20260601)',
     );
+    // "With: Acme Corp" is a client line — it should win over the "Testify"
+    // client that selecting the Flutter VIP requirement above would imply.
+    expect(within(dialog).getByLabelText('Client')).toHaveValue('Acme Corp');
 
     await user.click(within(dialog).getByText('Save interview'));
 
@@ -273,6 +277,7 @@ describe('Interviews — Add interview modal Paste to fill', () => {
     expect(body.time).toBe('3:30 PM');
     expect(body.profile).toBe('Flutter VIP');
     expect(body.requirementRef).toBe('TST_FLUT_20260601');
+    expect(body.client).toBe('Acme Corp');
     expect(body.interviewer).toBe('Kushagra Bindra');
     expect(body.ppgConsultantId).toBe('c_priya');
     expect(body.status).toBe('Selected');

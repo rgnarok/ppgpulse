@@ -681,9 +681,27 @@ function InterviewFormModal({
         missed.push(`Profile — couldn't match "${fields.profileRaw}" to an HDIS requirement`);
       }
     }
+    // "With: <client>" — matched against the client master list. Comes after
+    // the Profile match above so an explicit Client line always wins over
+    // whatever client selectHdis() may have inferred from the matched
+    // requirement.
+    if (fields.client) {
+      const match = matchByLabel(
+        fields.client,
+        clients.map((c) => ({ id: c.id, label: c.name })),
+      );
+      if (match) {
+        setClient(match.label);
+        filled.push('Client');
+      } else {
+        missed.push(`Client — couldn't match "${fields.client}" to a known client`);
+      }
+    }
+    // Interviewer is optional — only set it when the paste actually has an
+    // "Interviewer:" line; nothing here implies or requires one.
     if (fields.interviewer) {
       setInterviewer(fields.interviewer);
-      filled.push('With (interviewer)');
+      filled.push('Interviewer');
     }
     if (fields.sourcingRaw) {
       const match = matchByLabel(
@@ -867,7 +885,7 @@ function InterviewFormModal({
                 value={pasteText}
                 onChange={(e) => setPasteText(e.target.value)}
                 placeholder={
-                  'Interview Update: 2026140808(L4)\nMode - Face 2 Face\nCandidate Full Name: Tanya Garg\nEmail: tgarg1012@gmail.com\nDate: Aug 14, 2026\nTime: 3:30 PM\nProfile: Flutter VIP\nWith: Kushagra Bindra\nSourcing: Priya Pal\nStatus: Selected'
+                  'Interview Update: 2026140808(L4)\nMode - Face 2 Face\nCandidate Full Name: Tanya Garg\nEmail: tgarg1012@gmail.com\nDate: Aug 14, 2026\nTime: 3:30 PM\nProfile: Flutter VIP\nWith: Vianaar Homes\nInterviewer: Kushagra Bindra\nSourcing: Priya Pal\nStatus: Selected'
                 }
                 rows={6}
                 style={{ width: '100%', fontFamily: 'inherit', fontSize: 13 }}

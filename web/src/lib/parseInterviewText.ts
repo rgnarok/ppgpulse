@@ -22,6 +22,9 @@ export interface ParsedInterviewFields {
   modeRaw?: string;
   candidate?: string;
   email?: string;
+  /** Raw client/company text ("Vianaar Homes") — caller fuzzy-matches this
+   *  against the app's client master list. */
+  client?: string;
   /** ISO 'YYYY-MM-DD', if the date line could be parsed. */
   dateISO?: string;
   time?: string;
@@ -123,9 +126,11 @@ const LABEL_ALIASES: Record<string, keyof ParsedInterviewFields | 'refRound' | '
   profile: 'profileRaw',
   requirement: 'profileRaw',
   jd: 'profileRaw',
-  with: 'interviewer',
+  with: 'client',
+  client: 'client',
+  company: 'client',
   interviewer: 'interviewer',
-  withinterviewer: 'interviewer',
+  interviewername: 'interviewer',
   sourcing: 'sourcingRaw',
   sourcingppg: 'sourcingRaw',
   ppg: 'sourcingRaw',
