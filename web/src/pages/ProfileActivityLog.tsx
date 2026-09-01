@@ -1,5 +1,6 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { Card, SectionTitle, Btn } from '../components/ui';
+import { useToast } from '../lib/toast';
 import {
   useConsultantLogMonth,
   useConsultantLogDay,
@@ -195,6 +196,7 @@ function ActivityFormModal({
   const create = useCreateConsultantLog();
   const update = useUpdateConsultantLog();
   const mutation = mode === 'edit' ? update : create;
+  const { showToast } = useToast();
 
   const [form, setForm] = useState(() => ({
     date: initial?.date ?? date,
@@ -220,7 +222,10 @@ function ActivityFormModal({
       remarks: form.remarks.trim() || undefined,
     };
     const onSettled = {
-      onSuccess: onClose,
+      onSuccess: () => {
+        onClose();
+        showToast(mode === 'edit' ? 'Entry updated.' : 'Entry saved.');
+      },
       onError: (err: unknown) =>
         setError(err instanceof Error ? err.message : 'Could not save this entry'),
     };
@@ -311,8 +316,8 @@ function ActivityFormModal({
           <Btn variant="gho" onClick={onClose}>
             Cancel
           </Btn>
-          <Btn onClick={submit} disabled={mutation.isPending}>
-            {mutation.isPending ? 'Saving…' : mode === 'edit' ? 'Save changes' : 'Save entry'}
+          <Btn onClick={submit} loading={mutation.isPending} loadingText="Saving…">
+            {mode === 'edit' ? 'Save changes' : 'Save entry'}
           </Btn>
         </div>
       </div>

@@ -311,8 +311,8 @@ function CreateUserForm() {
         )}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <Btn type="submit" disabled={create.isPending}>
-            {create.isPending ? 'Creating…' : 'Create user'}
+          <Btn type="submit" loading={create.isPending} loadingText="Creating…">
+            Create user
           </Btn>
         </div>
       </form>

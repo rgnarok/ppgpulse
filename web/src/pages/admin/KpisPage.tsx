@@ -2,6 +2,7 @@ import { useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { AppShell } from '../../components/AppShell';
 import { Card, SectionTitle, Empty, Btn, Pill } from '../../components/ui';
+import { useToast } from '../../lib/toast';
 import {
   useKpis,
   useCreateKpi,
@@ -157,6 +158,7 @@ function KpiFormModal({
   const create = useCreateKpi();
   const update = useUpdateKpi();
   const mutation = mode === 'edit' ? update : create;
+  const { showToast } = useToast();
 
   const [form, setForm] = useState(() => ({
     kpiNo: String(initial?.kpiNo ?? ''),
@@ -196,7 +198,10 @@ function KpiFormModal({
       whyItMatters: form.whyItMatters.trim() || undefined,
     };
     const onSettled = {
-      onSuccess: onClose,
+      onSuccess: () => {
+        onClose();
+        showToast(mode === 'edit' ? 'KPI updated.' : 'KPI saved.');
+      },
       onError: (err: unknown) =>
         setError(err instanceof Error ? err.message : 'Could not save this KPI'),
     };
@@ -307,8 +312,8 @@ function KpiFormModal({
           <Btn variant="gho" onClick={onClose}>
             Cancel
           </Btn>
-          <Btn onClick={submit} disabled={mutation.isPending}>
-            {mutation.isPending ? 'Saving…' : mode === 'edit' ? 'Save changes' : 'Save KPI'}
+          <Btn onClick={submit} loading={mutation.isPending} loadingText="Saving…">
+            {mode === 'edit' ? 'Save changes' : 'Save KPI'}
           </Btn>
         </div>
       </div>

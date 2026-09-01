@@ -23,6 +23,7 @@ import { formatDate, formatMonth, formatDateTime, todayISO } from '../lib/format
 import { fyOfMonth, fyLabel, fyMonths, fiscalYearsFor, currentFy, currentMonth } from '../lib/fy';
 import { DEFAULT_PAGE_SIZE } from '../lib/pagination';
 import type { HdisRecord, RequirementDetail } from '../lib/types';
+import { useToast } from '../lib/toast';
 
 const TYPE_OPTIONS = ['RADC', 'RADF', 'Internal'];
 const STATUS_OPTIONS = ['Pending', 'Active', 'On Hold', 'Fulfilled', 'Closed'];
@@ -509,6 +510,7 @@ function HdisFormModal({
   onCreated?: (record: HdisRecord) => void;
 }) {
   const { me } = useAuth();
+  const { showToast } = useToast();
   const { data: clientRows = [] } = useClients();
   const clientNames = useMemo(() => clientRows.map((c) => c.name), [clientRows]);
   const { data: consultants = [] } = useConsultants();
@@ -616,7 +618,12 @@ function HdisFormModal({
           openings,
           owners,
         },
-        { onSuccess: onClose },
+        {
+          onSuccess: () => {
+            onClose();
+            showToast('Record updated.');
+          },
+        },
       );
       return;
     }
@@ -639,6 +646,7 @@ function HdisFormModal({
         onSuccess: (created) => {
           onClose();
           onCreated?.(created);
+          showToast('Record created.');
         },
       },
     );
@@ -852,7 +860,7 @@ function HdisFormModal({
           <Btn variant="gho" onClick={requestClose}>
             Cancel
           </Btn>
-          <Btn onClick={submit} disabled={mutation.isPending}>
+          <Btn onClick={submit} loading={mutation.isPending} loadingText="Saving…">
             {mode === 'edit' ? 'Save changes' : 'Save record'}
           </Btn>
         </div>
@@ -1161,12 +1169,15 @@ function RequirementDetailModal({ record, onClose }: { record: HdisRecord; onClo
   // file, so it satisfies the attachment requirement just like an uploaded file.
   const hasAttachment = record.attachments.length > 0 || !!record.jdLink;
 
+  const { showToast } = useToast();
+
   function submit() {
     save.mutate(formToPayload(form), {
       // A successful save (draft or complete) becomes the new "clean" baseline, so
       // closing right after saving doesn't trigger a needless discard prompt.
       onSuccess: () => {
         initialFormRef.current = form;
+        showToast(allRequiredFilled ? 'Requirement details saved.' : 'Draft saved.');
       },
     });
   }
@@ -1279,7 +1290,7 @@ function RequirementDetailModal({ record, onClose }: { record: HdisRecord; onClo
             <Btn variant="gho" onClick={requestClose}>
               Close
             </Btn>
-            <Btn onClick={submit} disabled={save.isPending}>
+            <Btn onClick={submit} loading={save.isPending} loadingText="Saving…">
               {allRequiredFilled ? 'Save details' : 'Save draft'}
             </Btn>
           </div>
@@ -1517,6 +1528,7 @@ function HdisDetail({ jdId }: { jdId: string }) {
 }
 
 function Attachments({ rec, editable }: { rec: HdisRecord; editable: boolean }) {
+  const { showToast } = useToast();
   const qc = useApiMutation(
     async (file: File) => {
       const fd = new FormData();
@@ -1537,6 +1549,7 @@ function Attachments({ rec, editable }: { rec: HdisRecord; editable: boolean }) 
     const value = linkDraft.trim();
     setLinkError(null);
     setLink.mutate(value || null, {
+      onSuccess: () => showToast('JD link saved.'),
       onError: (err) =>
         setLinkError(err instanceof Error ? err.message : 'Could not save that link'),
     });
@@ -1581,6 +1594,7 @@ function Attachments({ rec, editable }: { rec: HdisRecord; editable: boolean }) 
                 if (f) {
                   setUploadError(null);
                   qc.mutate(f, {
+                    onSuccess: () => showToast('File uploaded.'),
                     onError: (err) =>
                       setUploadError(
                         err instanceof Error ? err.message : 'Could not upload that file',
@@ -1608,14 +1622,15 @@ function Attachments({ rec, editable }: { rec: HdisRecord; editable: boolean }) 
                 onChange={(e) => setLinkDraft(e.target.value)}
                 placeholder="https://…"
               />
-              <button
-                type="button"
-                className="btn btn-gho btn-sm"
+              <Btn
+                variant="gho"
+                small
                 onClick={saveLink}
-                disabled={setLink.isPending || linkDraft.trim() === (rec.jdLink ?? '')}
+                disabled={linkDraft.trim() === (rec.jdLink ?? '')}
+                loading={setLink.isPending}
               >
                 Save
-              </button>
+              </Btn>
             </div>
             {linkError && (
               <div className="pill p-red" style={{ marginTop: 6, display: 'inline-block' }}>
@@ -1647,6 +1662,7 @@ const PL_STAGES = [
 ];
 
 function PipelineRecorder({ rec }: { rec: HdisRecord }) {
+  const { showToast } = useToast();
   const save = useApiMutation(
     (body: Record<string, unknown>) => api(`/hdis/${rec.jdId}/pipeline`, { method: 'PUT', body }),
     [
@@ -1694,7 +1710,13 @@ function PipelineRecorder({ rec }: { rec: HdisRecord }) {
         </select>
       </div>
       <div style={{ marginTop: 14 }}>
-        <Btn onClick={() => save.mutate({ ...vals, stage })} disabled={save.isPending}>
+        <Btn
+          onClick={() =>
+            save.mutate({ ...vals, stage }, { onSuccess: () => showToast('Pipeline updated.') })
+          }
+          loading={save.isPending}
+          loadingText="Saving…"
+        >
           Log update
         </Btn>
       </div>

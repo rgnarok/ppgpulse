@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { vi } from 'vitest';
 import { makeQueryClient } from '../lib/queryClient';
 import { AuthProvider } from '../lib/auth';
+import { ToastProvider } from '../lib/toast';
 import type { Me } from '../lib/types';
 
 export const superAdminMe: Me = {
@@ -106,7 +107,9 @@ export function renderApp(ui: ReactElement, { route = '/' }: { route?: string } 
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[route]}>
-        <AuthProvider>{ui}</AuthProvider>
+        <AuthProvider>
+          <ToastProvider>{ui}</ToastProvider>
+        </AuthProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   );

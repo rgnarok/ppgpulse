@@ -89,7 +89,12 @@ export default function ClientsPage() {
                 onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), submitAdd())}
                 placeholder="New client name"
               />
-              <Btn onClick={submitAdd} disabled={create.isPending || !newName.trim()}>
+              <Btn
+                onClick={submitAdd}
+                disabled={!newName.trim()}
+                loading={create.isPending}
+                loadingText="Adding…"
+              >
                 + Add
               </Btn>
             </div>

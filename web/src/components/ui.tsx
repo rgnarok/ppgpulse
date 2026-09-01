@@ -172,6 +172,8 @@ export function Btn({
   type = 'button',
   disabled,
   small,
+  loading,
+  loadingText,
 }: {
   children: ReactNode;
   variant?: 'pri' | 'gho';
@@ -179,15 +181,23 @@ export function Btn({
   type?: 'button' | 'submit';
   disabled?: boolean;
   small?: boolean;
+  /** Shows a spinner and forces the button disabled — pass a mutation's
+   *  `isPending` flag so users get feedback that a click registered and
+   *  can't double-submit while a save is in flight. */
+  loading?: boolean;
+  /** Text shown next to the spinner while loading; defaults to unchanged children. */
+  loadingText?: ReactNode;
 }) {
   return (
     <button
       type={type}
       className={`btn btn-${variant} ${small ? 'btn-sm' : ''}`}
       onClick={onClick}
-      disabled={disabled}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
     >
-      {children}
+      {loading && <span className="btn-spin" aria-hidden="true" />}
+      {loading && loadingText !== undefined ? loadingText : children}
     </button>
   );
 }

@@ -22,6 +22,7 @@ import {
 } from '../lib/hooks';
 import { formatDate, formatMonth } from '../lib/format';
 import { parseInterviewText, type ParsedInterviewFields } from '../lib/parseInterviewText';
+import { useToast } from '../lib/toast';
 
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const ROUND_OPTIONS = ['L0', 'L1', 'L2', 'L3', 'L4', 'L5'];
@@ -631,6 +632,7 @@ function InterviewFormModal({
     invalidate,
   );
   const mutation = mode === 'edit' ? update : create;
+  const { showToast } = useToast();
 
   // ---- Paste to fill ----
   const [pasteOpen, setPasteOpen] = useState(false);
@@ -830,6 +832,7 @@ function InterviewFormModal({
       onSuccess: () => {
         closingRef.current = true;
         onClose();
+        showToast(mode === 'edit' ? 'Interview updated.' : 'Interview added.');
       },
       onError: (err) =>
         setError(
@@ -1054,8 +1057,8 @@ function InterviewFormModal({
             <button type="button" className="btn btn-gho" onClick={requestClose}>
               Cancel
             </button>
-            <Btn type="submit" disabled={mutation.isPending}>
-              {mutation.isPending ? 'Saving…' : mode === 'edit' ? 'Save changes' : 'Save interview'}
+            <Btn type="submit" loading={mutation.isPending} loadingText="Saving…">
+              {mode === 'edit' ? 'Save changes' : 'Save interview'}
             </Btn>
           </div>
         </form>
