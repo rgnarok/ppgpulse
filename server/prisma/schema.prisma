@@ -439,3 +439,36 @@ model Interview {
 
   @@index([date])
 }
+
+/// Closures scorecard — one row per logged closure line (month + recruiter + type + count),
+/// entered manually or pasted from Excel. `type` uses the HDIS categories: RADC = RAPYD
+/// Contract, RADF = RAPYD FTE, Internal. `userId` null = the unassigned "VAYUZ Internal"
+/// bucket. No FK on userId on purpose: history must survive user deletion.
+model Closure {
+  id        String   @id @default(cuid())
+  month     String // YYYY-MM
+  userId    String?
+  type      String // 'RADC' | 'RADF' | 'Internal'
+  count     Int      @default(1)
+  client    String?
+  candidate String?
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([month])
+  @@index([userId])
+}
+
+/// Closure targets. scope 'team': month '' = default per-month team target, month
+/// 'YYYY-MM' = override for that month. scope 'recruiter': recruiterKey = User.id, month ''.
+model ClosureTarget {
+  id           String   @id @default(cuid())
+  scope        String // 'team' | 'recruiter'
+  recruiterKey String   @default("")
+  month        String   @default("")
+  target       Int
+  updatedAt    DateTime @updatedAt
+
+  @@unique([scope, recruiterKey, month])
+}

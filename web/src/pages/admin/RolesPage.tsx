@@ -21,6 +21,7 @@ const SECTIONS = [
   'dhruva',
   'kpis',
   'scorecard',
+  'closures',
 ];
 const CAPS = ['view', 'add', 'edit', 'delete'];
 
@@ -37,6 +38,7 @@ const SECTION_LABELS: Record<string, string> = {
   dhruva: 'Dhruva',
   kpis: 'KPIs',
   scorecard: 'Scorecard',
+  closures: 'Closures',
 };
 
 // Sections a new "user" gets by default — the admin can toggle any of them.

@@ -18,6 +18,9 @@ export const SECTIONS = [
   // Super-admin-only Performance Scorecard — top-performer highlights + ranking,
   // sourced from HdisCandidate.
   'scorecard',
+  // Super-admin-only Closures Scorecard — month-by-month RAPYD Contract/FTE/Internal
+  // closures per recruiter against targets (manual log + HDIS cross-check).
+  'closures',
 ] as const;
 export type Section = (typeof SECTIONS)[number];
 export type Capability = 'view' | 'add' | 'edit' | 'delete' | 'export';

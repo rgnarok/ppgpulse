@@ -528,3 +528,111 @@ export function useApiMutation<TInput, TResult = unknown>(
 }
 
 export type { RequirementRow, RoleRow, UserRow };
+
+// ---- Closures scorecard (super-admin) ----
+
+export type ClosureType = 'RADC' | 'RADF' | 'Internal';
+export type PerType = Record<ClosureType, number>;
+
+export interface ClosureEntry {
+  id: string;
+  month: string;
+  userId: string | null;
+  recruiterName: string;
+  type: ClosureType;
+  count: number;
+  client: string | null;
+  candidate: string | null;
+  createdAt: string;
+}
+
+export interface ClosuresScorecard {
+  fy: string;
+  months: string[];
+  currentMonth: string;
+  benchmark: number;
+  teamDefault: number;
+  teamTargets: Record<string, number>;
+  byType: Record<string, PerType>;
+  recruiters: {
+    userId: string | null;
+    name: string;
+    target: number | null;
+    perMonth: Record<string, PerType>;
+  }[];
+  hdisOnboarded: Record<string, PerType>;
+  entries: ClosureEntry[];
+  kpis: {
+    radc: number;
+    radf: number;
+    rapyd: number;
+    internal: number;
+    all: number;
+    monthsElapsed: number;
+    monthsAt80: number;
+    targetToDate: number;
+    rapydPctOfTarget: number | null;
+  };
+  userOptions: { id: string; name: string }[];
+}
+
+export interface ClosureInput {
+  month: string;
+  userId: string | null;
+  type: ClosureType;
+  count: number;
+  client?: string | null;
+  candidate?: string | null;
+}
+
+export interface ClosureImportResult {
+  rows: number;
+  valid: number;
+  errors: { line: number; error: string }[];
+  imported: number;
+}
+
+const CLOSURE_KEYS = [['closures-scorecard']];
+
+export function useClosuresScorecard(fy: string | undefined) {
+  return useQuery({
+    queryKey: ['closures-scorecard', fy ?? ''],
+    queryFn: () => api<ClosuresScorecard>(`/closures/scorecard${qs({ fy })}`),
+  });
+}
+
+export function useCreateClosure() {
+  return useApiMutation(
+    (input: ClosureInput) => api<ClosureEntry>('/closures', { method: 'POST', body: input }),
+    CLOSURE_KEYS,
+  );
+}
+
+export function useDeleteClosure() {
+  return useApiMutation(
+    (id: string) => api<void>(`/closures/${id}`, { method: 'DELETE' }),
+    CLOSURE_KEYS,
+  );
+}
+
+export function useImportClosures() {
+  return useApiMutation(
+    ({ text, dryRun }: { text: string; dryRun: boolean }) =>
+      api<ClosureImportResult>('/closures/import', { method: 'POST', body: { text, dryRun } }),
+    CLOSURE_KEYS,
+  );
+}
+
+export interface ClosureTargetsInput {
+  teamDefault?: number;
+  teamMonths?: Record<string, number | null>;
+  recruiters?: Record<string, number | null>;
+}
+
+export function useSaveClosureTargets() {
+  return useApiMutation(
+    (input: ClosureTargetsInput) =>
+      api<{ ok: boolean }>('/closures/targets', { method: 'PUT', body: input }),
+    CLOSURE_KEYS,
+  );
+}
