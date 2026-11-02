@@ -42,6 +42,15 @@ export const NAV_ITEMS: NavItem[] = [
     group: 'Workspace',
   },
   {
+    // Closures Scorecard — gated to super_admin via the 'closures' section.
+    key: 'closures',
+    label: 'Closures',
+    path: '/admin/closures',
+    section: 'closures',
+    icon: '✔',
+    group: 'Workspace',
+  },
+  {
     key: 'interviews',
     label: 'Interviews',
     path: '/interviews',

@@ -16,6 +16,7 @@ const SECTIONS = [
   'dhruva',
   'kpis',
   'scorecard',
+  'closures',
 ];
 const CAPS = ['view', 'add', 'edit', 'delete'];
 

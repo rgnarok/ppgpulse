@@ -20,6 +20,7 @@ import reportRoutes from './modules/report/routes.js';
 import hdisRoutes from './modules/hdis/routes.js';
 import interviewsRoutes from './modules/interviews/routes.js';
 import clientsRoutes from './modules/clients/routes.js';
+import closuresRoutes from './modules/closures/routes.js';
 import auditRoutes from './modules/audit/routes.js';
 import kpisRoutes from './modules/kpis/routes.js';
 import consultantLogRoutes from './modules/consultantLog/routes.js';
@@ -114,6 +115,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(hdisRoutes, { prefix: '/api' });
   await app.register(interviewsRoutes, { prefix: '/api' });
   await app.register(clientsRoutes, { prefix: '/api' });
+  await app.register(closuresRoutes, { prefix: '/api' });
   await app.register(auditRoutes, { prefix: '/api' });
   await app.register(kpisRoutes, { prefix: '/api' });
   await app.register(consultantLogRoutes, { prefix: '/api' });

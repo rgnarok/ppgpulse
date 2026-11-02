@@ -55,6 +55,12 @@
         ],
         "scorecard": [
           "view"
+        ],
+        "closures": [
+          "view",
+          "add",
+          "edit",
+          "delete"
         ]
       }
     },

@@ -16,6 +16,7 @@ import ClientsPage from './pages/admin/ClientsPage';
 import AuditLogPage from './pages/admin/AuditLogPage';
 import DhruvaPage from './pages/admin/DhruvaPage';
 import ScorecardPage from './pages/admin/ScorecardPage';
+import ClosuresPage from './pages/admin/ClosuresPage';
 import KpisPage from './pages/admin/KpisPage';
 import KpiTrackingPage from './pages/admin/KpiTrackingPage';
 
@@ -162,6 +163,14 @@ export default function App() {
         element={
           <Protected section="scorecard">
             <ScorecardPage />
+          </Protected>
+        }
+      />
+      <Route
+        path="/admin/closures"
+        element={
+          <Protected section="closures">
+            <ClosuresPage />
           </Protected>
         }
       />

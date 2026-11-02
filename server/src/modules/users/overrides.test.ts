@@ -24,7 +24,7 @@ describe('POST /api/users/:id/overrides', () => {
       url: '/api/me',
       headers: auth(before.access),
     });
-    expect(meBefore.json().permissions.hdis).toEqual(['view']);
+    expect(meBefore.json().permissions.hdis).toEqual(['view', 'add']);
 
     const grant = await app.inject({
       method: 'POST',
